@@ -4,7 +4,7 @@ import { createClientFromRequest } from '../lib/base44.js';
 
 const ADMIN_ROLES = ['admin', 'broker', 'super_admin'];
 
-export default async (req: Request) => {
+export default async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const me = await base44.auth.me();

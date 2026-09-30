@@ -15,6 +15,6 @@ for name in sorted(os.listdir(SRC)):
     if n != 1: sys.exit(f'{name}: expected one Deno.serve, found {n}')
     s = s.replace('Deno.serve(', 'export default (', 1)
     header = f"// Ported from Base44 function `{name}`. Logic unchanged.\n"
-    open(os.path.join(DST, f'{name}.ts'), 'w').write(header + s)
+    open(os.path.join(DST, f'{name}.js'), 'w').write(header + s)
     ported.append(name)
 print(len(ported), 'ported')

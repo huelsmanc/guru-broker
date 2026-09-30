@@ -7,7 +7,7 @@ import { mlsSources, pullBatch } from '../lib/mls.js';
 const TIME_BUDGET_MS = 45_000;
 const START = '2000-01-01T00:00:00Z';
 
-export default async (req: Request) => {
+export default async (req) => {
   const started = Date.now();
   const db = adminClient();
   const report = {};

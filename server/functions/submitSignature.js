@@ -3,7 +3,7 @@
 import { createClientFromRequest } from '../lib/base44.js';
 import { recordSignature, finalize } from '../lib/esign.js';
 
-export default async (req: Request) => {
+export default async (req) => {
   try {
     const { submissionToken, signedFields, userAgent } = await req.json().catch(() => ({}));
     const entities = createClientFromRequest(req).asServiceRole.entities;

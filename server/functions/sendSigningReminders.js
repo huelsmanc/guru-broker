@@ -6,7 +6,7 @@ import { whoseTurn, isExpired, emailSigner, audit } from '../lib/esign.js';
 
 const DAY = 864e5;
 
-export default async (req: Request) => {
+export default async (req) => {
   try {
     const entities = createClientFromRequest(req).asServiceRole.entities;
     const open = [

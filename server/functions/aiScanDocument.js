@@ -56,7 +56,7 @@ const SCHEMA = {
   required: ['document_type', 'summary', 'buyers', 'sellers', 'dates', 'contingencies', 'issues'],
 };
 
-export default async (req: Request) => {
+export default async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     await base44.auth.me();

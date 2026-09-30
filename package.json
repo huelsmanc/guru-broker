@@ -10,7 +10,8 @@
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc -p ./jsconfig.json",
     "preview": "vite preview",
-    "test:esign": "bash tests/esign/run.sh"
+    "test:esign": "bash tests/esign/run.sh",
+    "import:base44": "node scripts/import-base44.mjs"
   },
   "dependencies": {
     "@hello-pangea/dnd": "^17.0.0",

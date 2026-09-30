@@ -1,7 +1,7 @@
 // New: server side of `base44.entities.User.delete(id)`. Removes the login too.
 import { createClientFromRequest, adminClient } from '../lib/base44.js';
 
-export default async (req: Request) => {
+export default async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const me = await base44.auth.me();

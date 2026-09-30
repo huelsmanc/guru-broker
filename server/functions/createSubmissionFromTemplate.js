@@ -3,7 +3,7 @@
 import { createClientFromRequest } from '../lib/base44.js';
 import { startSigning } from '../lib/esign.js';
 
-export default async (req: Request) => {
+export default async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const me = await base44.auth.me().catch(() => null);

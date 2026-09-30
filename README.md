@@ -1,39 +1,21 @@
-**Welcome to your Base44 project** 
+# Go Broker Hub
 
-**About**
+Real estate brokerage platform: transactions, e-sign, offers, CMA, MLS, chat, compliance and culture tools.
+Self-hosted on Vercel + Supabase (migrated from Base44).
 
-View and Edit  your app on [Base44.com](http://Base44.com) 
+- **Set it up:** [SETUP.md](SETUP.md)
+- **Run locally:** `npm install`, copy `.env.example` to `.env.local` and fill it in, then `npm run dev`
+- **Tests:** `npm run test:esign`
 
-This project contains everything you need to run your app locally.
+## Layout
 
-**Edit the code in your local development environment**
-
-Any change pushed to the repo will also be reflected in the Base44 Builder.
-
-**Prerequisites:** 
-
-1. Clone the repository using the project's Git URL 
-2. Navigate to the project directory
-3. Install dependencies: `npm install`
-4. Create an `.env.local` file and set the right environment variables
-
-```
-VITE_BASE44_APP_ID=your_app_id
-VITE_BASE44_APP_BASE_URL=your_backend_url
-
-e.g.
-VITE_BASE44_APP_ID=cbef744a8545c389ef439ea6
-VITE_BASE44_APP_BASE_URL=https://my-to-do-list-81bfaad7.base44.app
-```
-
-Run the app: `npm run dev`
-
-**Publish your changes**
-
-Open [Base44.com](http://Base44.com) and click on Publish.
-
-**Docs & Support**
-
-Documentation: [https://docs.base44.com/Integrations/Using-GitHub](https://docs.base44.com/Integrations/Using-GitHub)
-
-Support: [https://app.base44.com/support](https://app.base44.com/support)
+| Path | What |
+|---|---|
+| `src/` | React app (Vite). `src/api/base44Client.js` keeps the old `base44.*` API working on Supabase |
+| `api/fn/[name].js` | Single Vercel route for every backend function |
+| `api/hooks/db.js` | Database automations (row changes -> functions) |
+| `server/functions/` | Backend functions (ported from Base44, plus new ones) |
+| `server/lib/` | Data layer, AI (Claude/ChatGPT), e-sign engine, MLS clients |
+| `shared/` | Code used by both browser and server (entities, e-sign geometry) |
+| `supabase/migrations/` | Database schema, security rules, schedules |
+| `scripts/` | Schema generator, function registry, Base44 data import |

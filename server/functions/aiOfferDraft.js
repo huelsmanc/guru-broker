@@ -5,7 +5,7 @@ import { InvokeLLM } from '../lib/integrations.js';
 
 const money = (n) => (n == null || n === '' ? null : `$${Number(n).toLocaleString('en-US')}`);
 
-export default async (req: Request) => {
+export default async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const me = await base44.auth.me();
