@@ -13,3 +13,4 @@ node .build/flow.test.mjs
 node .build/ai.test.mjs
 node .build/mls.test.mjs
 node ../entities.test.mjs
+node ../commission.test.mjs
