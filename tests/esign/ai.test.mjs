@@ -71,3 +71,44 @@ r = await call('aiFileCheck', { transactionId: tx.id });
 assert.equal(r.status, 200); assert.equal(r.body.result.score, 72);
 
 console.log('AI features: all checks passed');
+
+// ---- Roles, broker review, send to listing agent
+globalThis.__db.profiles.push(
+  { id: 'u3', email: 'boss@x.com', full_name: 'Bea Broker', role: 'admin', brokerage_id: 'B1', duties: [], extra: {} },
+  { id: 'u4', email: 'comp@x.com', full_name: 'Cal Compliance', role: 'user', brokerage_id: 'B1', duties: ['compliance'], extra: {} },
+  { id: 'u5', email: 'tc2@x.com', full_name: 'Tom TC', role: 'user', brokerage_id: 'B1', duties: ['tc'], extra: {} },
+);
+globalThis.__users.boss = { id: 'u3', email: 'boss@x.com' };
+globalThis.__db.brokerage_settings[0].extra = {}; // no default TC -> automatic
+globalThis.__db.transaction.push({ id: 'busy1', brokerage_id: 'B1', status: 'active', tc_email: 'tc@x.com', extra: {} });
+globalThis.__db.profiles.find((p) => p.email === 'tc@x.com').duties = ['tc'];
+globalThis.__db.offer.push({ id: 'o2', brokerage_id: 'B1', agent_email: 'ann@x.com', agent_name: 'Ann Agent', property_address: '9 Oak Ave', offer_price: 300000,
+  listing_agent_email: 'la@other.com', listing_agent_name: 'Lee Lister', document_url: 'https://files/original.pdf', buyers: [{ name: 'Bob' }], status: 'draft', extra: {} });
+const before = calls.length;
+const as = (tok) => async (name, body) => {
+  const r = await POST(new Request(`https://gurubroker.app/api/fn/${name}`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${tok}` }, body: JSON.stringify(body) }));
+  return { status: r.status, body: await r.json() };
+};
+globalThis.fetch = ((orig) => async (url, init) => (String(url).includes('original.pdf') ? new Response(Buffer.from('%PDF-1.4 test')) : orig(url, init)))(globalThis.fetch);
+
+r = await as('tok')('offerReview', { offerId: 'o2', action: 'request', note: 'Check the escalation clause' });
+assert.equal(r.status, 200, JSON.stringify(r.body)); assert.equal(r.body.notified, 2, 'admin + compliance notified');
+r = await as('tok')('offerReview', { offerId: 'o2', action: 'approve' });
+assert.equal(r.status, 403, 'agents cannot approve');
+r = await as('boss')('offerReview', { offerId: 'o2', action: 'changes', note: 'Raise EMD' });
+assert.equal(r.status, 200);
+assert.equal(globalThis.__db.offer.find((o) => o.id === 'o2').extra.review_status, 'changes_requested');
+
+r = await as('tok')('offerSend', { offerId: 'o2', message: 'Hi Lee <3' });
+assert.equal(r.status, 200, JSON.stringify(r.body));
+const sent = calls.filter((c) => c.url.includes('resend')).at(-1).body;
+assert.deepEqual(sent.to, ['la@other.com']); assert.ok(sent.cc.includes('ann@x.com')); assert.equal(sent.reply_to, 'ann@x.com');
+assert.ok(sent.attachments[0].filename.endsWith('.pdf')); assert.ok(sent.html.includes('Hi Lee &lt;3'));
+assert.equal(globalThis.__db.offer.find((o) => o.id === 'o2').status, 'submitted');
+
+r = await as('tok')('offerAccepted', { offerId: 'o2' });
+assert.equal(r.status, 200, JSON.stringify(r.body));
+assert.equal(r.body.tc.email, 'tc2@x.com', 'least-loaded TC picked automatically');
+const notes = globalThis.__db.notification.filter((n) => n.reference_id === r.body.transaction_id).map((n) => n.user_email).sort();
+assert.deepEqual(notes, ['comp@x.com', 'tc2@x.com']);
+console.log('Roles, review and send: all checks passed');

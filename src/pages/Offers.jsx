@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useOutletContext, useNavigate } from 'react-router-dom';
+import { useOutletContext, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
@@ -7,16 +7,22 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Handshake, Plus, Sparkles, Loader2, Send, CheckCircle, XCircle, FileText, ArrowRight, Trash2 } from 'lucide-react';
+import { Handshake, Plus, Sparkles, Loader2, Send, CheckCircle, XCircle, FileText, ArrowRight, Trash2, ShieldQuestion, Mail } from 'lucide-react';
 import UnifiedESignCreator from '@/components/esign/UnifiedESignCreator';
 import { textToPdfFile } from '@/lib/textToPdf';
 
 const STATUS = {
   draft: { label: 'Draft', cls: 'bg-slate-100 text-slate-700' },
   sent: { label: 'Out for signature', cls: 'bg-blue-100 text-blue-700' },
-  submitted: { label: 'Submitted to seller', cls: 'bg-indigo-100 text-indigo-700' },
+  submitted: { label: 'Sent to listing agent', cls: 'bg-indigo-100 text-indigo-700' },
   accepted: { label: 'Accepted', cls: 'bg-green-100 text-green-700' },
   rejected: { label: 'Rejected', cls: 'bg-red-100 text-red-700' },
+};
+
+const REVIEW = {
+  requested: { label: 'Broker review requested', cls: 'bg-amber-100 text-amber-800' },
+  approved: { label: 'Broker approved', cls: 'bg-green-100 text-green-700' },
+  changes_requested: { label: 'Changes requested', cls: 'bg-red-100 text-red-700' },
 };
 
 const EMPTY = {
@@ -40,6 +46,28 @@ export default function Offers() {
   const [editing, setEditing] = useState(null); // offer being edited (object) or null
   const [sending, setSending] = useState(null);
   const [accepting, setAccepting] = useState(null);
+  const [emailing, setEmailing] = useState(null);
+  const [busy, setBusy] = useState(null);
+  const [params] = useSearchParams();
+  const openId = params.get('open');
+
+  const review = async (o, action) => {
+    const note = window.prompt(
+      action === 'request' ? 'Anything you want the broker to look at? (optional)'
+        : action === 'approve' ? 'Note for the agent (optional)' : 'What should the agent change?',
+      '',
+    );
+    if (note === null) return;
+    setBusy(o.id + action);
+    try {
+      await base44.functions.invoke('offerReview', { offerId: o.id, action, note });
+      refresh();
+    } catch (err) {
+      window.alert(err.message);
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const { data: offers = [], isLoading } = useQuery({
     queryKey: ['offers', brokerageId],
@@ -69,7 +97,8 @@ export default function Offers() {
           {offers.map((o) => {
             const st = STATUS[o.status] || STATUS.draft;
             return (
-              <div key={o.id} className="rounded-xl border border-border/60 bg-card p-4">
+              <div key={o.id} ref={(el) => el && o.id === openId && el.scrollIntoView({ block: 'center' })}
+                className={`rounded-xl border bg-card p-4 ${o.id === openId ? 'border-primary ring-2 ring-primary/30' : 'border-border/60'}`}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="font-semibold truncate">{o.property_address}{o.city ? `, ${o.city}` : ''}</p>
@@ -78,8 +107,16 @@ export default function Offers() {
                     </p>
                     {isAdmin && o.agent_name && <p className="text-xs text-muted-foreground">Agent: {o.agent_name}</p>}
                   </div>
-                  <span className={`text-xs font-medium rounded-full px-2.5 py-1 ${st.cls}`}>{st.label}</span>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className={`text-xs font-medium rounded-full px-2.5 py-1 ${st.cls}`}>{st.label}</span>
+                    {REVIEW[o.review_status] && (
+                      <span className={`text-xs font-medium rounded-full px-2.5 py-1 ${REVIEW[o.review_status].cls}`}>{REVIEW[o.review_status].label}</span>
+                    )}
+                  </div>
                 </div>
+                {o.review_note && o.review_status && o.review_status !== 'requested' && (
+                  <p className="mt-2 text-xs rounded-md bg-muted/60 px-3 py-2"><span className="font-medium">Broker note:</span> {o.review_note}</p>
+                )}
                 <div className="flex flex-wrap gap-2 mt-3">
                   {o.status !== 'accepted' && (
                     <Button size="sm" variant="outline" onClick={() => setEditing(o)}>Edit</Button>
@@ -91,6 +128,22 @@ export default function Offers() {
                   )}
                   {o.document_url && (
                     <a href={o.document_url} target="_blank" rel="noreferrer"><Button size="sm" variant="ghost" className="gap-1.5"><FileText className="w-3.5 h-3.5" /> PDF</Button></a>
+                  )}
+                  {o.status !== 'accepted' && o.status !== 'rejected' && o.review_status !== 'requested' && (o.agent_email === user.email) && (
+                    <Button size="sm" variant="outline" className="gap-1.5" disabled={busy === o.id + 'request'} onClick={() => review(o, 'request')}>
+                      {busy === o.id + 'request' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldQuestion className="w-3.5 h-3.5" />} Request broker review
+                    </Button>
+                  )}
+                  {isAdmin && o.review_status === 'requested' && (
+                    <>
+                      <Button size="sm" className="gap-1.5" disabled={!!busy} onClick={() => review(o, 'approve')}><CheckCircle className="w-3.5 h-3.5" /> Approve</Button>
+                      <Button size="sm" variant="outline" className="gap-1.5" disabled={!!busy} onClick={() => review(o, 'changes')}>Request changes</Button>
+                    </>
+                  )}
+                  {(o.document_url || o.submission_id) && o.status !== 'accepted' && o.status !== 'rejected' && (
+                    <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setEmailing(o)}>
+                      <Mail className="w-3.5 h-3.5" /> {o.status === 'submitted' ? 'Email listing agent again' : 'Send to listing agent'}
+                    </Button>
                   )}
                   {o.status !== 'accepted' && o.status !== 'rejected' && (
                     <>
@@ -128,6 +181,10 @@ export default function Offers() {
       {sending && (
         <SendOffer offer={sending} user={user} brokerageId={brokerageId}
           onClose={() => setSending(null)} onSent={() => { setSending(null); refresh(); }} />
+      )}
+
+      {emailing && (
+        <EmailListingAgent offer={emailing} onClose={() => setEmailing(null)} onSent={() => { setEmailing(null); refresh(); }} />
       )}
 
       {accepting && (
@@ -406,7 +463,7 @@ function AcceptOffer({ offer, brokerageId, onClose, onDone }) {
           <div>
             <Label>Transaction coordinator</Label>
             <select className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={tc} onChange={(e) => setTc(e.target.value)}>
-              <option value="">No TC</option>
+              <option value="">Automatic: TC with the fewest open files</option>
               {users.map((u) => <option key={u.id} value={u.email}>{u.display_name || u.full_name || u.email}</option>)}
             </select>
           </div>
@@ -416,6 +473,59 @@ function AcceptOffer({ offer, brokerageId, onClose, onDone }) {
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button onClick={go} disabled={busy} className="gap-1.5 bg-green-600 hover:bg-green-700">
             {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />} Open transaction
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EmailListingAgent({ offer, onClose, onSent }) {
+  const [to, setTo] = useState(offer.listing_agent_email || '');
+  const [cc, setCc] = useState('');
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const signedLabel = offer.submission_id ? 'The signed copy is attached once your buyers have signed; until then, the offer PDF.' : 'The offer PDF is attached.';
+
+  const send = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await base44.functions.invoke('offerSend', {
+        offerId: offer.id, to, message: message.trim() || undefined,
+        cc: cc.split(/[,;\s]+/).filter(Boolean),
+      });
+      if (!offer.listing_agent_email && to) await base44.entities.Offer.update(offer.id, { listing_agent_email: to });
+      onSent();
+    } catch (err) {
+      setError(err.message);
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader><DialogTitle>Send offer to listing agent</DialogTitle></DialogHeader>
+        {offer.review_status === 'requested' && (
+          <p className="text-xs rounded-md bg-amber-50 border border-amber-200 text-amber-900 px-3 py-2">A broker review is still pending on this offer.</p>
+        )}
+        <div className="space-y-3">
+          <div><Label>To (listing agent)</Label><Input className="mt-1" type="email" value={to} onChange={(e) => setTo(e.target.value)} /></div>
+          <div><Label>Also copy (optional)</Label><Input className="mt-1" value={cc} onChange={(e) => setCc(e.target.value)} placeholder="lender@..., co-agent@..." /></div>
+          <div>
+            <Label>Message (optional)</Label>
+            <Textarea className="mt-1" rows={5} value={message} onChange={(e) => setMessage(e.target.value)}
+              placeholder="Leave blank for a short standard cover note with the key terms." />
+          </div>
+          <p className="text-xs text-muted-foreground">{signedLabel} It's sent in your name, you're copied, and replies come straight to you.</p>
+        </div>
+        {error && <p className="text-sm text-destructive">{error}</p>}
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={send} disabled={busy || !to} className="gap-1.5">
+            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Send
           </Button>
         </div>
       </DialogContent>

@@ -60,7 +60,7 @@ ENTITIES = {
 }
 
 # User lives in `profiles`, linked 1:1 to Supabase auth.users.
-USER_FIELDS = "email full_name display_name role brokerage_id suspended headshot agent_status"
+USER_FIELDS = "email full_name display_name role brokerage_id suspended headshot agent_status duties"
 
 JSON_FIELDS = set("""answers buyers checklist completed_dates details documents encryption_metadata esign_docs fields items
 members mentions messages options reactions read_by sellers signatories signature_fields signers tags tech_links updates
@@ -110,11 +110,16 @@ create table if not exists public.profiles (
   suspended boolean default false,
   headshot text,
   agent_status text,
+  -- Team duties, separate from permissions: 'tc' (transaction coordinator), 'compliance'
+  duties jsonb not null default '[]'::jsonb,
   extra jsonb not null default '{}'::jsonb,
   created_date timestamptz not null default now(),
   updated_date timestamptz not null default now(),
   created_by text
 );
+
+alter table public.profiles add column if not exists duties jsonb not null default '[]'::jsonb;
+create index if not exists profiles_brokerage_idx on public.profiles (brokerage_id);
 
 -- Create a profile row whenever someone signs up
 create or replace function public.handle_new_user() returns trigger
@@ -184,7 +189,7 @@ create trigger profiles_touch before update on public.profiles for each row exec
 """)
 
 colmap = {"User": {"table": "profiles", "columns": USER_FIELDS.split() + ["id","created_date","updated_date","created_by"],
-                    "typed": ["suspended"]}}
+                    "typed": ["suspended", "duties"]}}
 
 pol = []
 pw = pol.append

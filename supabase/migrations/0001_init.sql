@@ -14,11 +14,16 @@ create table if not exists public.profiles (
   suspended boolean default false,
   headshot text,
   agent_status text,
+  -- Team duties, separate from permissions: 'tc' (transaction coordinator), 'compliance'
+  duties jsonb not null default '[]'::jsonb,
   extra jsonb not null default '{}'::jsonb,
   created_date timestamptz not null default now(),
   updated_date timestamptz not null default now(),
   created_by text
 );
+
+alter table public.profiles add column if not exists duties jsonb not null default '[]'::jsonb;
+create index if not exists profiles_brokerage_idx on public.profiles (brokerage_id);
 
 -- Create a profile row whenever someone signs up
 create or replace function public.handle_new_user() returns trigger

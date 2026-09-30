@@ -155,7 +155,7 @@ export default function Settings() {
             />
           </div>
           <div className="sm:col-span-2">
-            <Label>Default transaction coordinator <span className="text-muted-foreground font-normal">(assigned when an offer is marked accepted)</span></Label>
+            <Label>Default transaction coordinator <span className="text-muted-foreground font-normal">(optional; leave on automatic to rotate among people with the TC role in Manage Users)</span></Label>
             <select
               value={form.default_tc_email}
               onChange={(e) => {
@@ -164,7 +164,7 @@ export default function Settings() {
               }}
               className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
             >
-              <option value="">No default</option>
+              <option value="">Automatic: TC with the fewest open files</option>
               {brokerageUsers.map((u) => (
                 <option key={u.id} value={u.email}>{u.display_name || u.full_name || u.email}</option>
               ))}

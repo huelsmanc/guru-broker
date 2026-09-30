@@ -11,13 +11,15 @@ export const SCHEMA = {
       "suspended",
       "headshot",
       "agent_status",
+      "duties",
       "id",
       "created_date",
       "updated_date",
       "created_by"
     ],
     "typed": [
-      "suspended"
+      "suspended",
+      "duties"
     ]
   },
   "ActivityLog": {

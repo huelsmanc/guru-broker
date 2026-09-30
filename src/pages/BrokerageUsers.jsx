@@ -62,6 +62,16 @@ export default function BrokerageUsers() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['brokerage-users', brokerageId] }),
   });
 
+  // Team duties (separate from admin/agent permissions): who gets TC work and compliance alerts.
+  const setDuty = useMutation({
+    mutationFn: ({ u, duty, on }) => {
+      const duties = new Set(u.duties || []);
+      if (on) duties.add(duty); else duties.delete(duty);
+      return base44.entities.User.update(u.id, { duties: [...duties] });
+    },
+    onSuccess: () => queryClient.invalidateQueries(),
+  });
+
   const openOnboarding = useMutation({
     mutationFn: async (agentUser) => {
       let onboarding = onboardings.find(o => o.agent_email === agentUser.email);
@@ -207,6 +217,26 @@ export default function BrokerageUsers() {
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground">{u.email}</p>
+                {isAdmin && (
+                  <div className="flex gap-1.5 mt-1.5">
+                    {[['tc', 'Transaction coordinator'], ['compliance', 'Compliance']].map(([duty, label]) => {
+                      const on = (u.duties || []).includes(duty);
+                      return (
+                        <button
+                          key={duty}
+                          onClick={() => setDuty.mutate({ u, duty, on: !on })}
+                          className={`text-[11px] rounded-full px-2 py-0.5 border ${on ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:border-foreground/40'}`}
+                          title={on ? `Remove ${label}` : `Make ${label}`}
+                        >
+                          {on ? '✓ ' : '+ '}{label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                {!isAdmin && (u.duties || []).length > 0 && (
+                  <p className="text-[11px] text-muted-foreground mt-1">{(u.duties || []).map((d) => (d === 'tc' ? 'TC' : 'Compliance')).join(' · ')}</p>
+                )}
               </div>
               {!isAccountOwner && (
                 <div className="flex items-center gap-2 flex-shrink-0">
