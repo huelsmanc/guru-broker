@@ -9,6 +9,8 @@ function matches(row, ops) {
     if (op === 'gte' && !(get(col) >= val)) return false;
     if (op === 'lte' && !(get(col) <= val)) return false;
     if (op === 'neq' && String(get(col)) === String(val)) return false;
+    if (op === 'lt' && !(get(col) < val)) return false;
+    if (op === 'gt' && !(get(col) > val)) return false;
     if (op === 'is' && get(col) != null) return false;
     if (op === 'in' && !val.map(String).includes(String(get(col)))) return false;
     if (op === 'contains') {
@@ -42,6 +44,7 @@ export function createClient(url, key, opts) {
       const order = ops.find((o) => o[0] === 'order');
       if (order) { const [, c, o] = order; hit = [...hit].sort((a, b) => (a[c] > b[c] ? 1 : -1) * (o?.ascending === false ? -1 : 1)); }
       const range = ops.find((o) => o[0] === 'range'); if (range) hit = hit.slice(range[1], range[2] + 1);
+      if (action === 'update' && !single) return { data: structuredClone(hit), error: null };
       if (single) return hit[0] ? { data: structuredClone(hit[0]), error: null } : { data: null, error: { code: 'PGRST116', message: 'not found' } };
       return { data: structuredClone(hit), error: null };
     };
@@ -61,6 +64,8 @@ export function createClient(url, key, opts) {
     auth: { getUser: async (t) => (globalThis.__users?.[t] ? { data: { user: globalThis.__users[t] } } : { data: {}, error: { message: 'bad' } }), admin: {} },
     storage: { from: (b) => ({
       upload: async (p, bytes) => { storage[`${b}/${p}`] = bytes; return { error: null }; },
+      download: async (p) => ({ data: new Blob([storage[`${b}/${p}`] || '']) }),
+      list: async (prefix) => ({ data: Object.keys(storage).filter((k) => k.startsWith(`${b}/${prefix}/`)).map((k) => ({ name: k.split('/').pop() })) }),
       createSignedUrl: async (p) => ({ data: { signedUrl: `https://storage.test/${b}/${p}?sig=1` }, error: null }),
       getPublicUrl: (p) => ({ data: { publicUrl: `https://storage.test/${b}/${p}` } }),
     }) },

@@ -34,7 +34,7 @@ ENTITIES = {
     "DirectMessage": "brokerage_id content reactions read receiver_email receiver_id receiver_name receiver_photo sender_email sender_id sender_name sender_photo",
     "DocumentTemplate": "brokerage_id is_active",
     "ESignAuditLog": "action details document_id ip_address signer_email user_agent",
-    "ESignDocument": "algorithm audit_trail_pdf_url brokerage_id created_by_email created_by_name description document_hash document_url encrypted encryption_metadata fields final_signed_document_url iv name original_document_url require_sequential_signing signatories signature_fields signers slug status title version versions",
+    "ESignDocument": "transaction_id algorithm audit_trail_pdf_url brokerage_id created_by_email created_by_name description document_hash document_url encrypted encryption_metadata fields final_signed_document_url iv name original_document_url require_sequential_signing signatories signature_fields signers slug status title version versions",
     "ESignSubmission": "brokerage_id completed_at created_by_email created_by_name document_id sequence_type signed_document_url signer_email signer_index signer_name signers status submitted_at template_id transaction_id",
     "ESignSubmitter": "email order signed submission_id",
     "ESignTemplate": "brokerage_id created_by_email document_url fields title",
@@ -53,6 +53,7 @@ ENTITIES = {
     "Payout": "brokerage_id commission_record_id transaction_id payee_email payee_name kind level for_agent amount status approved_by approved_at payload_transaction_id payload_status sent_at paid_at failure_reason method memo",
     "AgentPrivate": "brokerage_id user_email payload_activation_id payload_payment_method_id bank_status bank_linked_at w9_file_uri tax_classification",
     "ChecklistTemplate": "brokerage_id name deal_type items active is_default",
+    "TransactionContact": "brokerage_id transaction_id agent_email role name email phone company notes is_client",
     "ActivityEvent": "brokerage_id actor_email table_name op record_id summary changed",
     "Offer": "brokerage_id agent_email agent_name property_address city state zip mls_number list_price offer_price earnest_money financing_type down_payment_percent loan_amount closing_date offer_expiration inspection_days financing_days appraisal_contingency seller_concessions included_items special_terms buyers sellers listing_agent_name listing_agent_email status offer_text document_url esign_document_id submission_id transaction_id accepted_at acceptance_date",
     "Onboarding": "agent_email agent_name brokerage_id items status",
@@ -61,17 +62,17 @@ ENTITIES = {
     "SignatureData": "fields ip_address signed_at signer_email signer_name submission_id user_agent",
     "SocialMessage": "brokerage_id channel content mentions pinned pinned_by reactions read_by sender_email sender_name sender_photo",
     "ThreadReply": "brokerage_id content message_id reactions sender_email sender_name sender_photo",
-    "Transaction": "client_contacts closed_date checklist_template_id thank_you_sent_at agent_email agent_name agent_net agent_split_percentage brokerage_fee brokerage_fee_flat brokerage_fee_percentage brokerage_fee_type brokerage_id buyer_name buyers checklist closing_date commission_amount commission_flat commission_notes commission_percentage commission_sale_price commission_type completed_dates documents esign_docs property_address sale_price seller_name sellers status tc_email tc_name transaction_fee transaction_fee_flat transaction_fee_percentage transaction_fee_type updates inspection_date appraisal_date financing_contingency_date inspection_contingency_date loan_approval_date title_deadline_date",
+    "Transaction": "co_agents referral deductions commission_calc closed_date checklist_template_id thank_you_sent_at agent_email agent_name agent_net agent_split_percentage brokerage_fee brokerage_fee_flat brokerage_fee_percentage brokerage_fee_type brokerage_id buyer_name buyers checklist closing_date commission_amount commission_flat commission_notes commission_percentage commission_sale_price commission_type completed_dates documents esign_docs property_address sale_price seller_name sellers status tc_email tc_name transaction_fee transaction_fee_flat transaction_fee_percentage transaction_fee_type updates inspection_date appraisal_date financing_contingency_date inspection_contingency_date loan_approval_date title_deadline_date",
     "UserBadge": "brokerage_id user_email badge_type",
 }
 
 # User lives in `profiles`, linked 1:1 to Supabase auth.users.
 USER_FIELDS = "email full_name display_name role brokerage_id suspended headshot agent_status duties license_number license_state license_expiration eo_expiration mls_ids phone start_date cap_start_date commission_plan_id team_lead_email sponsor_email"
 
-JSON_FIELDS = set("""config calc items changed client_contacts mls_ids answers buyers checklist completed_dates details documents encryption_metadata esign_docs fields items
+JSON_FIELDS = set("""co_agents referral deductions commission_calc config calc items changed mls_ids answers buyers checklist completed_dates details documents encryption_metadata esign_docs fields items
 members mentions messages options reactions read_by sellers signatories signature_fields signers tags tech_links updates
 versions cma_report""".split())
-BOOL_FIELDS = set("is_default active appraisal_contingency read pinned encrypted suspended submitted checked_in is_active is_anonymous is_featured signed passed require_sequential_signing".split())
+BOOL_FIELDS = set("is_client is_default active appraisal_contingency read pinned encrypted suspended submitted checked_in is_active is_anonymous is_featured signed passed require_sequential_signing".split())
 INT_FIELDS = set("level inspection_days financing_days bathrooms bedrooms downloads_count downvotes upvotes guests_count order passing_score rating signer_index version file_size score".split())
 NUM_FIELDS = set("""gross_share company_dollar agent_net fees team_lead revshare_total amount list_price offer_price earnest_money down_payment_percent loan_amount seller_concessions agent_net agent_split_percentage brokerage_fee brokerage_fee_flat brokerage_fee_percentage commission_amount
 commission_flat commission_percentage commission_sale_price sale_price sales_amount transaction_fee transaction_fee_flat
@@ -244,6 +245,9 @@ for ent, fields in sorted(ENTITIES.items()):
     ]
     w(f"-- {ent} " + "-" * (70 - len(ent)))
     w(f"create table if not exists public.{t} (\n" + ",\n".join(cols) + "\n);")
+    # Re-running after an update adds any new columns to an existing table.
+    for f in fl:
+        w(f"alter table public.{t} add column if not exists {quote(f)} {coltype(f)};")
     w(f"drop trigger if exists {t}_touch on public.{t};")
     w(f"create trigger {t}_touch before update on public.{t} for each row execute function public.touch_updated_date();")
     fill = "fill_owner" if "brokerage_id" in fl else "fill_creator"
@@ -258,10 +262,32 @@ for ent, fields in sorted(ENTITIES.items()):
         pw(f"create policy {t}_access on public.{t} for all using (lower(sender_email) = public.auth_email() or lower(receiver_email) = public.auth_email() or public.is_super_admin()) with check (lower(sender_email) = public.auth_email() or lower(receiver_email) = public.auth_email());")
     elif ent == "Notification":
         pw(f"create policy {t}_access on public.{t} for all using (lower(user_email) = public.auth_email() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or lower(user_email) = public.auth_email() or public.is_super_admin());")
+    elif ent == "Transaction":
+        # Private to the agents on the deal and its TC; admins see everything.
+        cond = ("(lower(agent_email) = public.auth_email() or lower(tc_email) = public.auth_email()"
+                " or coalesce(co_agents, '[]'::jsonb) @> jsonb_build_array(jsonb_build_object('email', public.auth_email()))"
+                " or (brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin())")
+        pw(f"create policy {t}_access on public.{t} for all using {cond} with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());")
+    elif ent == "Offer":
+        cond = "(lower(agent_email) = public.auth_email() or (brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin())"
+        pw(f"create policy {t}_access on public.{t} for all using {cond} with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());")
+    elif ent == "ESignDocument":
+        cond = ("(lower(created_by_email) = public.auth_email() or lower(created_by) = public.auth_email()"
+                " or (transaction_id is not null and exists (select 1 from public.transaction x where x.id = esign_document.transaction_id))"
+                " or (brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin())")
+        pw(f"create policy {t}_access on public.{t} for all using {cond} with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());")
     elif ent in ("CommissionPlan", "ChecklistTemplate"):
         pw(f"create policy {t}_access on public.{t} for select using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());")
         pw(f"drop policy if exists {t}_admin on public.{t};")
         pw(f"create policy {t}_admin on public.{t} for all using ((brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin()) with check ((brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin());")
+    elif ent == "TransactionContact":
+        # Private to the agent on the deal (and its TC); admins see everything.
+        cond = (f"(lower({t}.agent_email) = public.auth_email()"
+                f" or exists (select 1 from public.transaction x where x.id = {t}.transaction_id and (lower(x.agent_email) = public.auth_email() or lower(x.tc_email) = public.auth_email()"
+                f" or coalesce(x.co_agents, '[]'::jsonb) @> jsonb_build_array(jsonb_build_object('email', public.auth_email()))))"
+                f" or (brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin())")
+        pw(f"create policy {t}_access on public.{t} for all using {cond} with check {cond};")
+        pw("-- Co-agents are stored lower-case in transaction.co_agents: [{\"email\": ..., \"split_pct\": ...}]")
     elif ent == "CommissionRecord":
         pw(f"create policy {t}_access on public.{t} for select using (lower(agent_email) = public.auth_email() or (brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin());")
         pw(f"-- {t}: written only by server routes.")
@@ -275,7 +301,8 @@ for ent, fields in sorted(ENTITIES.items()):
         pw(f"create policy {t}_access on public.{t} for select using ((brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin());")
         pw(f"-- {t}: written by the activity trigger and server routes only.")
     elif ent == "ESignSubmission":
-        pw(f"create policy {t}_access on public.{t} for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin() or exists (select 1 from public.esign_document d where d.id = {t}.document_id and d.brokerage_id = public.auth_brokerage_id())) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());")
+        # Visible when the document is visible (document rules apply through the subquery).
+        pw(f"create policy {t}_access on public.{t} for all using (public.is_super_admin() or (brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or lower(created_by_email) = public.auth_email() or exists (select 1 from public.esign_document d where d.id = {t}.document_id)) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());")
     elif ent == "ESignAuditLog":
         pw(f"create policy {t}_access on public.{t} for select using (public.is_super_admin() or exists (select 1 from public.esign_document d where d.id = {t}.document_id and d.brokerage_id = public.auth_brokerage_id()));")
     elif ent in ("SignatureData", "ESignSubmitter"):

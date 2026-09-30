@@ -138,6 +138,13 @@ create table if not exists public.activity_event (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.activity_event add column if not exists actor_email text;
+alter table public.activity_event add column if not exists brokerage_id text;
+alter table public.activity_event add column if not exists changed jsonb;
+alter table public.activity_event add column if not exists op text;
+alter table public.activity_event add column if not exists record_id text;
+alter table public.activity_event add column if not exists summary text;
+alter table public.activity_event add column if not exists table_name text;
 drop trigger if exists activity_event_touch on public.activity_event;
 create trigger activity_event_touch before update on public.activity_event for each row execute function public.touch_updated_date();
 drop trigger if exists activity_event_fill on public.activity_event;
@@ -165,6 +172,17 @@ create table if not exists public.activity_log (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.activity_log add column if not exists action_type text;
+alter table public.activity_log add column if not exists brokerage_id text;
+alter table public.activity_log add column if not exists browser text;
+alter table public.activity_log add column if not exists details jsonb;
+alter table public.activity_log add column if not exists document_id text;
+alter table public.activity_log add column if not exists ip_address text;
+alter table public.activity_log add column if not exists location text;
+alter table public.activity_log add column if not exists os text;
+alter table public.activity_log add column if not exists user_agent text;
+alter table public.activity_log add column if not exists user_email text;
+alter table public.activity_log add column if not exists user_name text;
 drop trigger if exists activity_log_touch on public.activity_log;
 create trigger activity_log_touch before update on public.activity_log for each row execute function public.touch_updated_date();
 drop trigger if exists activity_log_fill on public.activity_log;
@@ -186,6 +204,10 @@ create table if not exists public.admin_message (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.admin_message add column if not exists brokerage_id text;
+alter table public.admin_message add column if not exists content text;
+alter table public.admin_message add column if not exists sender_email text;
+alter table public.admin_message add column if not exists sender_name text;
 drop trigger if exists admin_message_touch on public.admin_message;
 create trigger admin_message_touch before update on public.admin_message for each row execute function public.touch_updated_date();
 drop trigger if exists admin_message_fill on public.admin_message;
@@ -209,6 +231,14 @@ create table if not exists public.agent_private (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.agent_private add column if not exists bank_linked_at timestamptz;
+alter table public.agent_private add column if not exists bank_status text;
+alter table public.agent_private add column if not exists brokerage_id text;
+alter table public.agent_private add column if not exists payload_activation_id text;
+alter table public.agent_private add column if not exists payload_payment_method_id text;
+alter table public.agent_private add column if not exists tax_classification text;
+alter table public.agent_private add column if not exists user_email text;
+alter table public.agent_private add column if not exists w9_file_uri text;
 drop trigger if exists agent_private_touch on public.agent_private;
 create trigger agent_private_touch before update on public.agent_private for each row execute function public.touch_updated_date();
 drop trigger if exists agent_private_fill on public.agent_private;
@@ -231,6 +261,12 @@ create table if not exists public.agent_sales (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.agent_sales add column if not exists agent_email text;
+alter table public.agent_sales add column if not exists agent_id text;
+alter table public.agent_sales add column if not exists agent_name text;
+alter table public.agent_sales add column if not exists brokerage_id text;
+alter table public.agent_sales add column if not exists month text;
+alter table public.agent_sales add column if not exists sales_amount numeric;
 drop trigger if exists agent_sales_touch on public.agent_sales;
 create trigger agent_sales_touch before update on public.agent_sales for each row execute function public.touch_updated_date();
 drop trigger if exists agent_sales_fill on public.agent_sales;
@@ -255,6 +291,14 @@ create table if not exists public.brokerage (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.brokerage add column if not exists account_owner_id text;
+alter table public.brokerage add column if not exists broker_name text;
+alter table public.brokerage add column if not exists broker_title text;
+alter table public.brokerage add column if not exists email text;
+alter table public.brokerage add column if not exists name text;
+alter table public.brokerage add column if not exists phone text;
+alter table public.brokerage add column if not exists status text;
+alter table public.brokerage add column if not exists welcome_message text;
 drop trigger if exists brokerage_touch on public.brokerage;
 create trigger brokerage_touch before update on public.brokerage for each row execute function public.touch_updated_date();
 drop trigger if exists brokerage_fill on public.brokerage;
@@ -273,6 +317,10 @@ create table if not exists public.brokerage_settings (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.brokerage_settings add column if not exists brokerage_id text;
+alter table public.brokerage_settings add column if not exists brokerage_phone text;
+alter table public.brokerage_settings add column if not exists logo_url text;
+alter table public.brokerage_settings add column if not exists tech_links jsonb;
 drop trigger if exists brokerage_settings_touch on public.brokerage_settings;
 create trigger brokerage_settings_touch before update on public.brokerage_settings for each row execute function public.touch_updated_date();
 drop trigger if exists brokerage_settings_fill on public.brokerage_settings;
@@ -297,6 +345,15 @@ create table if not exists public.cmas_report (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.cmas_report add column if not exists address text;
+alter table public.cmas_report add column if not exists bathrooms integer;
+alter table public.cmas_report add column if not exists bedrooms integer;
+alter table public.cmas_report add column if not exists brokerage_id text;
+alter table public.cmas_report add column if not exists cma_report jsonb;
+alter table public.cmas_report add column if not exists notes text;
+alter table public.cmas_report add column if not exists status text;
+alter table public.cmas_report add column if not exists title text;
+alter table public.cmas_report add column if not exists user_email text;
 drop trigger if exists cmas_report_touch on public.cmas_report;
 create trigger cmas_report_touch before update on public.cmas_report for each row execute function public.touch_updated_date();
 drop trigger if exists cmas_report_fill on public.cmas_report;
@@ -317,6 +374,10 @@ create table if not exists public.channel (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.channel add column if not exists brokerage_id text;
+alter table public.channel add column if not exists emoji text;
+alter table public.channel add column if not exists label text;
+alter table public.channel add column if not exists name text;
 drop trigger if exists channel_touch on public.channel;
 create trigger channel_touch before update on public.channel for each row execute function public.touch_updated_date();
 drop trigger if exists channel_fill on public.channel;
@@ -336,6 +397,10 @@ create table if not exists public.channel_member (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.channel_member add column if not exists brokerage_id text;
+alter table public.channel_member add column if not exists channel_id text;
+alter table public.channel_member add column if not exists user_email text;
+alter table public.channel_member add column if not exists user_name text;
 drop trigger if exists channel_member_touch on public.channel_member;
 create trigger channel_member_touch before update on public.channel_member for each row execute function public.touch_updated_date();
 drop trigger if exists channel_member_fill on public.channel_member;
@@ -358,6 +423,12 @@ create table if not exists public.checklist_template (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.checklist_template add column if not exists active boolean;
+alter table public.checklist_template add column if not exists brokerage_id text;
+alter table public.checklist_template add column if not exists deal_type text;
+alter table public.checklist_template add column if not exists is_default boolean;
+alter table public.checklist_template add column if not exists items jsonb;
+alter table public.checklist_template add column if not exists name text;
 drop trigger if exists checklist_template_touch on public.checklist_template;
 create trigger checklist_template_touch before update on public.checklist_template for each row execute function public.touch_updated_date();
 drop trigger if exists checklist_template_fill on public.checklist_template;
@@ -385,6 +456,18 @@ create table if not exists public.client_review (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.client_review add column if not exists agent_email text;
+alter table public.client_review add column if not exists agent_id text;
+alter table public.client_review add column if not exists agent_name text;
+alter table public.client_review add column if not exists brokerage_id text;
+alter table public.client_review add column if not exists client_name text;
+alter table public.client_review add column if not exists comment text;
+alter table public.client_review add column if not exists property_address text;
+alter table public.client_review add column if not exists rating integer;
+alter table public.client_review add column if not exists reactions jsonb;
+alter table public.client_review add column if not exists review_token text;
+alter table public.client_review add column if not exists status text;
+alter table public.client_review add column if not exists submitted boolean;
 drop trigger if exists client_review_touch on public.client_review;
 create trigger client_review_touch before update on public.client_review for each row execute function public.touch_updated_date();
 drop trigger if exists client_review_fill on public.client_review;
@@ -409,6 +492,13 @@ create table if not exists public.comment (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.comment add column if not exists author_email text;
+alter table public.comment add column if not exists author_name text;
+alter table public.comment add column if not exists brokerage_id text;
+alter table public.comment add column if not exists content text;
+alter table public.comment add column if not exists idea_id text;
+alter table public.comment add column if not exists mentions jsonb;
+alter table public.comment add column if not exists parent_comment_id text;
 drop trigger if exists comment_touch on public.comment;
 create trigger comment_touch before update on public.comment for each row execute function public.touch_updated_date();
 drop trigger if exists comment_fill on public.comment;
@@ -430,6 +520,12 @@ create table if not exists public.commission_plan (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.commission_plan add column if not exists active boolean;
+alter table public.commission_plan add column if not exists brokerage_id text;
+alter table public.commission_plan add column if not exists config jsonb;
+alter table public.commission_plan add column if not exists description text;
+alter table public.commission_plan add column if not exists is_default boolean;
+alter table public.commission_plan add column if not exists name text;
 drop trigger if exists commission_plan_touch on public.commission_plan;
 create trigger commission_plan_touch before update on public.commission_plan for each row execute function public.touch_updated_date();
 drop trigger if exists commission_plan_fill on public.commission_plan;
@@ -463,6 +559,24 @@ create table if not exists public.commission_record (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.commission_record add column if not exists agent_email text;
+alter table public.commission_record add column if not exists agent_name text;
+alter table public.commission_record add column if not exists agent_net numeric;
+alter table public.commission_record add column if not exists approved_at timestamptz;
+alter table public.commission_record add column if not exists approved_by text;
+alter table public.commission_record add column if not exists brokerage_id text;
+alter table public.commission_record add column if not exists calc jsonb;
+alter table public.commission_record add column if not exists cap_year_start date;
+alter table public.commission_record add column if not exists closed_date date;
+alter table public.commission_record add column if not exists company_dollar numeric;
+alter table public.commission_record add column if not exists fees numeric;
+alter table public.commission_record add column if not exists gross_share numeric;
+alter table public.commission_record add column if not exists property_address text;
+alter table public.commission_record add column if not exists revshare_total numeric;
+alter table public.commission_record add column if not exists sale_price numeric;
+alter table public.commission_record add column if not exists status text;
+alter table public.commission_record add column if not exists team_lead numeric;
+alter table public.commission_record add column if not exists transaction_id text;
 drop trigger if exists commission_record_touch on public.commission_record;
 create trigger commission_record_touch before update on public.commission_record for each row execute function public.touch_updated_date();
 drop trigger if exists commission_record_fill on public.commission_record;
@@ -486,6 +600,12 @@ create table if not exists public.compliance_attempt (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.compliance_attempt add column if not exists agent_email text;
+alter table public.compliance_attempt add column if not exists answers jsonb;
+alter table public.compliance_attempt add column if not exists brokerage_id text;
+alter table public.compliance_attempt add column if not exists passed boolean;
+alter table public.compliance_attempt add column if not exists score integer;
+alter table public.compliance_attempt add column if not exists training_id text;
 drop trigger if exists compliance_attempt_touch on public.compliance_attempt;
 create trigger compliance_attempt_touch before update on public.compliance_attempt for each row execute function public.touch_updated_date();
 drop trigger if exists compliance_attempt_fill on public.compliance_attempt;
@@ -509,6 +629,13 @@ create table if not exists public.compliance_question (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.compliance_question add column if not exists correct_answer text;
+alter table public.compliance_question add column if not exists explanation text;
+alter table public.compliance_question add column if not exists options jsonb;
+alter table public.compliance_question add column if not exists "order" integer;
+alter table public.compliance_question add column if not exists question_text text;
+alter table public.compliance_question add column if not exists question_type text;
+alter table public.compliance_question add column if not exists training_id text;
 drop trigger if exists compliance_question_touch on public.compliance_question;
 create trigger compliance_question_touch before update on public.compliance_question for each row execute function public.touch_updated_date();
 drop trigger if exists compliance_question_fill on public.compliance_question;
@@ -529,6 +656,12 @@ create table if not exists public.compliance_training (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.compliance_training add column if not exists brokerage_id text;
+alter table public.compliance_training add column if not exists category text;
+alter table public.compliance_training add column if not exists description text;
+alter table public.compliance_training add column if not exists passing_score integer;
+alter table public.compliance_training add column if not exists title text;
+alter table public.compliance_training add column if not exists type text;
 drop trigger if exists compliance_training_touch on public.compliance_training;
 create trigger compliance_training_touch before update on public.compliance_training for each row execute function public.touch_updated_date();
 drop trigger if exists compliance_training_fill on public.compliance_training;
@@ -555,6 +688,17 @@ create table if not exists public.conversation (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.conversation add column if not exists agent_email text;
+alter table public.conversation add column if not exists agent_name text;
+alter table public.conversation add column if not exists broker_email text;
+alter table public.conversation add column if not exists brokerage_id text;
+alter table public.conversation add column if not exists category text;
+alter table public.conversation add column if not exists handled_by text;
+alter table public.conversation add column if not exists last_message_preview text;
+alter table public.conversation add column if not exists status text;
+alter table public.conversation add column if not exists summary text;
+alter table public.conversation add column if not exists tags jsonb;
+alter table public.conversation add column if not exists title text;
 drop trigger if exists conversation_touch on public.conversation;
 create trigger conversation_touch before update on public.conversation for each row execute function public.touch_updated_date();
 drop trigger if exists conversation_fill on public.conversation;
@@ -581,6 +725,16 @@ create table if not exists public.culture_calendar_entry (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.culture_calendar_entry add column if not exists brokerage_id text;
+alter table public.culture_calendar_entry add column if not exists created_by_email text;
+alter table public.culture_calendar_entry add column if not exists created_by_name text;
+alter table public.culture_calendar_entry add column if not exists date date;
+alter table public.culture_calendar_entry add column if not exists description text;
+alter table public.culture_calendar_entry add column if not exists event_type text;
+alter table public.culture_calendar_entry add column if not exists month text;
+alter table public.culture_calendar_entry add column if not exists person_email text;
+alter table public.culture_calendar_entry add column if not exists person_name text;
+alter table public.culture_calendar_entry add column if not exists title text;
 drop trigger if exists culture_calendar_entry_touch on public.culture_calendar_entry;
 create trigger culture_calendar_entry_touch before update on public.culture_calendar_entry for each row execute function public.touch_updated_date();
 drop trigger if exists culture_calendar_entry_fill on public.culture_calendar_entry;
@@ -602,6 +756,12 @@ create table if not exists public.culture_calendar_rsvp (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.culture_calendar_rsvp add column if not exists brokerage_id text;
+alter table public.culture_calendar_rsvp add column if not exists culture_calendar_entry_id text;
+alter table public.culture_calendar_rsvp add column if not exists response_date timestamptz;
+alter table public.culture_calendar_rsvp add column if not exists status text;
+alter table public.culture_calendar_rsvp add column if not exists user_email text;
+alter table public.culture_calendar_rsvp add column if not exists user_name text;
 drop trigger if exists culture_calendar_rsvp_touch on public.culture_calendar_rsvp;
 create trigger culture_calendar_rsvp_touch before update on public.culture_calendar_rsvp for each row execute function public.touch_updated_date();
 drop trigger if exists culture_calendar_rsvp_fill on public.culture_calendar_rsvp;
@@ -623,6 +783,11 @@ create table if not exists public.dashboard_announcement (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.dashboard_announcement add column if not exists audio_url text;
+alter table public.dashboard_announcement add column if not exists brokerage_id text;
+alter table public.dashboard_announcement add column if not exists message text;
+alter table public.dashboard_announcement add column if not exists posted_by_email text;
+alter table public.dashboard_announcement add column if not exists posted_by_name text;
 drop trigger if exists dashboard_announcement_touch on public.dashboard_announcement;
 create trigger dashboard_announcement_touch before update on public.dashboard_announcement for each row execute function public.touch_updated_date();
 drop trigger if exists dashboard_announcement_fill on public.dashboard_announcement;
@@ -650,6 +815,18 @@ create table if not exists public.direct_message (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.direct_message add column if not exists brokerage_id text;
+alter table public.direct_message add column if not exists content text;
+alter table public.direct_message add column if not exists reactions jsonb;
+alter table public.direct_message add column if not exists read boolean;
+alter table public.direct_message add column if not exists receiver_email text;
+alter table public.direct_message add column if not exists receiver_id text;
+alter table public.direct_message add column if not exists receiver_name text;
+alter table public.direct_message add column if not exists receiver_photo text;
+alter table public.direct_message add column if not exists sender_email text;
+alter table public.direct_message add column if not exists sender_id text;
+alter table public.direct_message add column if not exists sender_name text;
+alter table public.direct_message add column if not exists sender_photo text;
 drop trigger if exists direct_message_touch on public.direct_message;
 create trigger direct_message_touch before update on public.direct_message for each row execute function public.touch_updated_date();
 drop trigger if exists direct_message_fill on public.direct_message;
@@ -667,6 +844,8 @@ create table if not exists public.document_template (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.document_template add column if not exists brokerage_id text;
+alter table public.document_template add column if not exists is_active boolean;
 drop trigger if exists document_template_touch on public.document_template;
 create trigger document_template_touch before update on public.document_template for each row execute function public.touch_updated_date();
 drop trigger if exists document_template_fill on public.document_template;
@@ -688,6 +867,12 @@ create table if not exists public.esign_audit_log (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.esign_audit_log add column if not exists action text;
+alter table public.esign_audit_log add column if not exists details jsonb;
+alter table public.esign_audit_log add column if not exists document_id text;
+alter table public.esign_audit_log add column if not exists ip_address text;
+alter table public.esign_audit_log add column if not exists signer_email text;
+alter table public.esign_audit_log add column if not exists user_agent text;
 drop trigger if exists esign_audit_log_touch on public.esign_audit_log;
 create trigger esign_audit_log_touch before update on public.esign_audit_log for each row execute function public.touch_updated_date();
 drop trigger if exists esign_audit_log_fill on public.esign_audit_log;
@@ -720,6 +905,7 @@ create table if not exists public.esign_document (
   slug text,
   status text,
   title text,
+  transaction_id text,
   version integer,
   versions jsonb,
   extra jsonb not null default '{}'::jsonb,
@@ -727,12 +913,38 @@ create table if not exists public.esign_document (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.esign_document add column if not exists algorithm text;
+alter table public.esign_document add column if not exists audit_trail_pdf_url text;
+alter table public.esign_document add column if not exists brokerage_id text;
+alter table public.esign_document add column if not exists created_by_email text;
+alter table public.esign_document add column if not exists created_by_name text;
+alter table public.esign_document add column if not exists description text;
+alter table public.esign_document add column if not exists document_hash text;
+alter table public.esign_document add column if not exists document_url text;
+alter table public.esign_document add column if not exists encrypted boolean;
+alter table public.esign_document add column if not exists encryption_metadata jsonb;
+alter table public.esign_document add column if not exists fields jsonb;
+alter table public.esign_document add column if not exists final_signed_document_url text;
+alter table public.esign_document add column if not exists iv text;
+alter table public.esign_document add column if not exists name text;
+alter table public.esign_document add column if not exists original_document_url text;
+alter table public.esign_document add column if not exists require_sequential_signing boolean;
+alter table public.esign_document add column if not exists signatories jsonb;
+alter table public.esign_document add column if not exists signature_fields jsonb;
+alter table public.esign_document add column if not exists signers jsonb;
+alter table public.esign_document add column if not exists slug text;
+alter table public.esign_document add column if not exists status text;
+alter table public.esign_document add column if not exists title text;
+alter table public.esign_document add column if not exists transaction_id text;
+alter table public.esign_document add column if not exists version integer;
+alter table public.esign_document add column if not exists versions jsonb;
 drop trigger if exists esign_document_touch on public.esign_document;
 create trigger esign_document_touch before update on public.esign_document for each row execute function public.touch_updated_date();
 drop trigger if exists esign_document_fill on public.esign_document;
 create trigger esign_document_fill before insert on public.esign_document for each row execute function public.fill_owner();
 alter table public.esign_document enable row level security;
 create index if not exists esign_document_brokerage_id_idx on public.esign_document (brokerage_id);
+create index if not exists esign_document_transaction_id_idx on public.esign_document (transaction_id);
 create index if not exists esign_document_slug_idx on public.esign_document (slug);
 
 -- ESignSubmission -------------------------------------------------------
@@ -758,6 +970,21 @@ create table if not exists public.esign_submission (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.esign_submission add column if not exists brokerage_id text;
+alter table public.esign_submission add column if not exists completed_at timestamptz;
+alter table public.esign_submission add column if not exists created_by_email text;
+alter table public.esign_submission add column if not exists created_by_name text;
+alter table public.esign_submission add column if not exists document_id text;
+alter table public.esign_submission add column if not exists sequence_type text;
+alter table public.esign_submission add column if not exists signed_document_url text;
+alter table public.esign_submission add column if not exists signer_email text;
+alter table public.esign_submission add column if not exists signer_index integer;
+alter table public.esign_submission add column if not exists signer_name text;
+alter table public.esign_submission add column if not exists signers jsonb;
+alter table public.esign_submission add column if not exists status text;
+alter table public.esign_submission add column if not exists submitted_at timestamptz;
+alter table public.esign_submission add column if not exists template_id text;
+alter table public.esign_submission add column if not exists transaction_id text;
 drop trigger if exists esign_submission_touch on public.esign_submission;
 create trigger esign_submission_touch before update on public.esign_submission for each row execute function public.touch_updated_date();
 drop trigger if exists esign_submission_fill on public.esign_submission;
@@ -781,6 +1008,10 @@ create table if not exists public.esign_submitter (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.esign_submitter add column if not exists email text;
+alter table public.esign_submitter add column if not exists "order" integer;
+alter table public.esign_submitter add column if not exists signed boolean;
+alter table public.esign_submitter add column if not exists submission_id text;
 drop trigger if exists esign_submitter_touch on public.esign_submitter;
 create trigger esign_submitter_touch before update on public.esign_submitter for each row execute function public.touch_updated_date();
 drop trigger if exists esign_submitter_fill on public.esign_submitter;
@@ -801,6 +1032,11 @@ create table if not exists public.esign_template (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.esign_template add column if not exists brokerage_id text;
+alter table public.esign_template add column if not exists created_by_email text;
+alter table public.esign_template add column if not exists document_url text;
+alter table public.esign_template add column if not exists fields jsonb;
+alter table public.esign_template add column if not exists title text;
 drop trigger if exists esign_template_touch on public.esign_template;
 create trigger esign_template_touch before update on public.esign_template for each row execute function public.touch_updated_date();
 drop trigger if exists esign_template_fill on public.esign_template;
@@ -821,6 +1057,11 @@ create table if not exists public.event (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.event add column if not exists brokerage_id text;
+alter table public.event add column if not exists date date;
+alter table public.event add column if not exists organizer_email text;
+alter table public.event add column if not exists organizer_name text;
+alter table public.event add column if not exists status text;
 drop trigger if exists event_touch on public.event;
 create trigger event_touch before update on public.event for each row execute function public.touch_updated_date();
 drop trigger if exists event_fill on public.event;
@@ -844,6 +1085,14 @@ create table if not exists public.event_rsvp (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.event_rsvp add column if not exists brokerage_id text;
+alter table public.event_rsvp add column if not exists checked_in boolean;
+alter table public.event_rsvp add column if not exists dietary_notes text;
+alter table public.event_rsvp add column if not exists event_id text;
+alter table public.event_rsvp add column if not exists guests_count integer;
+alter table public.event_rsvp add column if not exists status text;
+alter table public.event_rsvp add column if not exists user_email text;
+alter table public.event_rsvp add column if not exists user_name text;
 drop trigger if exists event_rsvp_touch on public.event_rsvp;
 create trigger event_rsvp_touch before update on public.event_rsvp for each row execute function public.touch_updated_date();
 drop trigger if exists event_rsvp_fill on public.event_rsvp;
@@ -871,6 +1120,17 @@ create table if not exists public.file_repository (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.file_repository add column if not exists brokerage_id text;
+alter table public.file_repository add column if not exists category text;
+alter table public.file_repository add column if not exists description text;
+alter table public.file_repository add column if not exists downloads_count integer;
+alter table public.file_repository add column if not exists file_name text;
+alter table public.file_repository add column if not exists file_size integer;
+alter table public.file_repository add column if not exists file_url text;
+alter table public.file_repository add column if not exists is_featured boolean;
+alter table public.file_repository add column if not exists tags jsonb;
+alter table public.file_repository add column if not exists uploaded_by_email text;
+alter table public.file_repository add column if not exists uploaded_by_name text;
 drop trigger if exists file_repository_touch on public.file_repository;
 create trigger file_repository_touch before update on public.file_repository for each row execute function public.touch_updated_date();
 drop trigger if exists file_repository_fill on public.file_repository;
@@ -895,6 +1155,15 @@ create table if not exists public.generated_contract (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.generated_contract add column if not exists brokerage_id text;
+alter table public.generated_contract add column if not exists buyer_name text;
+alter table public.generated_contract add column if not exists contract_text text;
+alter table public.generated_contract add column if not exists created_by_email text;
+alter table public.generated_contract add column if not exists created_by_name text;
+alter table public.generated_contract add column if not exists property_address text;
+alter table public.generated_contract add column if not exists purchase_price numeric;
+alter table public.generated_contract add column if not exists seller_name text;
+alter table public.generated_contract add column if not exists state text;
 drop trigger if exists generated_contract_touch on public.generated_contract;
 create trigger generated_contract_touch before update on public.generated_contract for each row execute function public.touch_updated_date();
 drop trigger if exists generated_contract_fill on public.generated_contract;
@@ -915,6 +1184,11 @@ create table if not exists public.group_chat (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.group_chat add column if not exists brokerage_id text;
+alter table public.group_chat add column if not exists created_by_email text;
+alter table public.group_chat add column if not exists created_by_name text;
+alter table public.group_chat add column if not exists members jsonb;
+alter table public.group_chat add column if not exists name text;
 drop trigger if exists group_chat_touch on public.group_chat;
 create trigger group_chat_touch before update on public.group_chat for each row execute function public.touch_updated_date();
 drop trigger if exists group_chat_fill on public.group_chat;
@@ -938,6 +1212,14 @@ create table if not exists public.group_message (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.group_message add column if not exists brokerage_id text;
+alter table public.group_message add column if not exists content text;
+alter table public.group_message add column if not exists group_id text;
+alter table public.group_message add column if not exists reactions jsonb;
+alter table public.group_message add column if not exists sender_email text;
+alter table public.group_message add column if not exists sender_id text;
+alter table public.group_message add column if not exists sender_name text;
+alter table public.group_message add column if not exists sender_photo text;
 drop trigger if exists group_message_touch on public.group_message;
 create trigger group_message_touch before update on public.group_message for each row execute function public.touch_updated_date();
 drop trigger if exists group_message_fill on public.group_message;
@@ -965,6 +1247,17 @@ create table if not exists public.idea (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.idea add column if not exists admin_notes text;
+alter table public.idea add column if not exists brokerage_id text;
+alter table public.idea add column if not exists category text;
+alter table public.idea add column if not exists description text;
+alter table public.idea add column if not exists downvotes integer;
+alter table public.idea add column if not exists is_anonymous boolean;
+alter table public.idea add column if not exists status text;
+alter table public.idea add column if not exists submitter_email text;
+alter table public.idea add column if not exists submitter_name text;
+alter table public.idea add column if not exists title text;
+alter table public.idea add column if not exists upvotes integer;
 drop trigger if exists idea_touch on public.idea;
 create trigger idea_touch before update on public.idea for each row execute function public.touch_updated_date();
 drop trigger if exists idea_fill on public.idea;
@@ -984,6 +1277,10 @@ create table if not exists public.idea_pad_note (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.idea_pad_note add column if not exists content text;
+alter table public.idea_pad_note add column if not exists messages jsonb;
+alter table public.idea_pad_note add column if not exists title text;
+alter table public.idea_pad_note add column if not exists user_email text;
 drop trigger if exists idea_pad_note_touch on public.idea_pad_note;
 create trigger idea_pad_note_touch before update on public.idea_pad_note for each row execute function public.touch_updated_date();
 drop trigger if exists idea_pad_note_fill on public.idea_pad_note;
@@ -1006,6 +1303,13 @@ create table if not exists public.message (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.message add column if not exists brokerage_id text;
+alter table public.message add column if not exists content text;
+alter table public.message add column if not exists conversation_id text;
+alter table public.message add column if not exists read boolean;
+alter table public.message add column if not exists sender_email text;
+alter table public.message add column if not exists sender_name text;
+alter table public.message add column if not exists sender_role text;
 drop trigger if exists message_touch on public.message;
 create trigger message_touch before update on public.message for each row execute function public.touch_updated_date();
 drop trigger if exists message_fill on public.message;
@@ -1032,6 +1336,16 @@ create table if not exists public.notification (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.notification add column if not exists action_url text;
+alter table public.notification add column if not exists brokerage_id text;
+alter table public.notification add column if not exists channel text;
+alter table public.notification add column if not exists description text;
+alter table public.notification add column if not exists read boolean;
+alter table public.notification add column if not exists reference_id text;
+alter table public.notification add column if not exists reference_type text;
+alter table public.notification add column if not exists title text;
+alter table public.notification add column if not exists type text;
+alter table public.notification add column if not exists user_email text;
 drop trigger if exists notification_touch on public.notification;
 create trigger notification_touch before update on public.notification for each row execute function public.touch_updated_date();
 drop trigger if exists notification_fill on public.notification;
@@ -1083,6 +1397,40 @@ create table if not exists public.offer (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.offer add column if not exists acceptance_date date;
+alter table public.offer add column if not exists accepted_at timestamptz;
+alter table public.offer add column if not exists agent_email text;
+alter table public.offer add column if not exists agent_name text;
+alter table public.offer add column if not exists appraisal_contingency boolean;
+alter table public.offer add column if not exists brokerage_id text;
+alter table public.offer add column if not exists buyers jsonb;
+alter table public.offer add column if not exists city text;
+alter table public.offer add column if not exists closing_date date;
+alter table public.offer add column if not exists document_url text;
+alter table public.offer add column if not exists down_payment_percent numeric;
+alter table public.offer add column if not exists earnest_money numeric;
+alter table public.offer add column if not exists esign_document_id text;
+alter table public.offer add column if not exists financing_days integer;
+alter table public.offer add column if not exists financing_type text;
+alter table public.offer add column if not exists included_items text;
+alter table public.offer add column if not exists inspection_days integer;
+alter table public.offer add column if not exists list_price numeric;
+alter table public.offer add column if not exists listing_agent_email text;
+alter table public.offer add column if not exists listing_agent_name text;
+alter table public.offer add column if not exists loan_amount numeric;
+alter table public.offer add column if not exists mls_number text;
+alter table public.offer add column if not exists offer_expiration timestamptz;
+alter table public.offer add column if not exists offer_price numeric;
+alter table public.offer add column if not exists offer_text text;
+alter table public.offer add column if not exists property_address text;
+alter table public.offer add column if not exists seller_concessions numeric;
+alter table public.offer add column if not exists sellers jsonb;
+alter table public.offer add column if not exists special_terms text;
+alter table public.offer add column if not exists state text;
+alter table public.offer add column if not exists status text;
+alter table public.offer add column if not exists submission_id text;
+alter table public.offer add column if not exists transaction_id text;
+alter table public.offer add column if not exists zip text;
 drop trigger if exists offer_touch on public.offer;
 create trigger offer_touch before update on public.offer for each row execute function public.touch_updated_date();
 drop trigger if exists offer_fill on public.offer;
@@ -1106,6 +1454,11 @@ create table if not exists public.onboarding (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.onboarding add column if not exists agent_email text;
+alter table public.onboarding add column if not exists agent_name text;
+alter table public.onboarding add column if not exists brokerage_id text;
+alter table public.onboarding add column if not exists items jsonb;
+alter table public.onboarding add column if not exists status text;
 drop trigger if exists onboarding_touch on public.onboarding;
 create trigger onboarding_touch before update on public.onboarding for each row execute function public.touch_updated_date();
 drop trigger if exists onboarding_fill on public.onboarding;
@@ -1141,6 +1494,25 @@ create table if not exists public.payout (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.payout add column if not exists amount numeric;
+alter table public.payout add column if not exists approved_at timestamptz;
+alter table public.payout add column if not exists approved_by text;
+alter table public.payout add column if not exists brokerage_id text;
+alter table public.payout add column if not exists commission_record_id text;
+alter table public.payout add column if not exists failure_reason text;
+alter table public.payout add column if not exists for_agent text;
+alter table public.payout add column if not exists kind text;
+alter table public.payout add column if not exists level integer;
+alter table public.payout add column if not exists memo text;
+alter table public.payout add column if not exists method text;
+alter table public.payout add column if not exists paid_at timestamptz;
+alter table public.payout add column if not exists payee_email text;
+alter table public.payout add column if not exists payee_name text;
+alter table public.payout add column if not exists payload_status text;
+alter table public.payout add column if not exists payload_transaction_id text;
+alter table public.payout add column if not exists sent_at timestamptz;
+alter table public.payout add column if not exists status text;
+alter table public.payout add column if not exists transaction_id text;
 drop trigger if exists payout_touch on public.payout;
 create trigger payout_touch before update on public.payout for each row execute function public.touch_updated_date();
 drop trigger if exists payout_fill on public.payout;
@@ -1167,6 +1539,15 @@ create table if not exists public.recognition (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.recognition add column if not exists brokerage_id text;
+alter table public.recognition add column if not exists category text;
+alter table public.recognition add column if not exists from_email text;
+alter table public.recognition add column if not exists from_name text;
+alter table public.recognition add column if not exists is_anonymous boolean;
+alter table public.recognition add column if not exists message text;
+alter table public.recognition add column if not exists reactions jsonb;
+alter table public.recognition add column if not exists to_email text;
+alter table public.recognition add column if not exists to_name text;
 drop trigger if exists recognition_touch on public.recognition;
 create trigger recognition_touch before update on public.recognition for each row execute function public.touch_updated_date();
 drop trigger if exists recognition_fill on public.recognition;
@@ -1187,6 +1568,11 @@ create table if not exists public.scheduled_call (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.scheduled_call add column if not exists agent_email text;
+alter table public.scheduled_call add column if not exists agent_name text;
+alter table public.scheduled_call add column if not exists brokerage_id text;
+alter table public.scheduled_call add column if not exists scheduled_at timestamptz;
+alter table public.scheduled_call add column if not exists status text;
 drop trigger if exists scheduled_call_touch on public.scheduled_call;
 create trigger scheduled_call_touch before update on public.scheduled_call for each row execute function public.touch_updated_date();
 drop trigger if exists scheduled_call_fill on public.scheduled_call;
@@ -1210,6 +1596,13 @@ create table if not exists public.signature_data (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.signature_data add column if not exists fields jsonb;
+alter table public.signature_data add column if not exists ip_address text;
+alter table public.signature_data add column if not exists signed_at timestamptz;
+alter table public.signature_data add column if not exists signer_email text;
+alter table public.signature_data add column if not exists signer_name text;
+alter table public.signature_data add column if not exists submission_id text;
+alter table public.signature_data add column if not exists user_agent text;
 drop trigger if exists signature_data_touch on public.signature_data;
 create trigger signature_data_touch before update on public.signature_data for each row execute function public.touch_updated_date();
 drop trigger if exists signature_data_fill on public.signature_data;
@@ -1236,6 +1629,17 @@ create table if not exists public.social_message (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.social_message add column if not exists brokerage_id text;
+alter table public.social_message add column if not exists channel text;
+alter table public.social_message add column if not exists content text;
+alter table public.social_message add column if not exists mentions jsonb;
+alter table public.social_message add column if not exists pinned boolean;
+alter table public.social_message add column if not exists pinned_by text;
+alter table public.social_message add column if not exists reactions jsonb;
+alter table public.social_message add column if not exists read_by jsonb;
+alter table public.social_message add column if not exists sender_email text;
+alter table public.social_message add column if not exists sender_name text;
+alter table public.social_message add column if not exists sender_photo text;
 drop trigger if exists social_message_touch on public.social_message;
 create trigger social_message_touch before update on public.social_message for each row execute function public.touch_updated_date();
 drop trigger if exists social_message_fill on public.social_message;
@@ -1259,6 +1663,13 @@ create table if not exists public.thread_reply (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.thread_reply add column if not exists brokerage_id text;
+alter table public.thread_reply add column if not exists content text;
+alter table public.thread_reply add column if not exists message_id text;
+alter table public.thread_reply add column if not exists reactions jsonb;
+alter table public.thread_reply add column if not exists sender_email text;
+alter table public.thread_reply add column if not exists sender_name text;
+alter table public.thread_reply add column if not exists sender_photo text;
 drop trigger if exists thread_reply_touch on public.thread_reply;
 create trigger thread_reply_touch before update on public.thread_reply for each row execute function public.touch_updated_date();
 drop trigger if exists thread_reply_fill on public.thread_reply;
@@ -1283,16 +1694,18 @@ create table if not exists public.transaction (
   buyers jsonb,
   checklist jsonb,
   checklist_template_id text,
-  client_contacts jsonb,
   closed_date date,
   closing_date date,
+  co_agents jsonb,
   commission_amount numeric,
+  commission_calc jsonb,
   commission_flat numeric,
   commission_notes text,
   commission_percentage numeric,
   commission_sale_price numeric,
   commission_type text,
   completed_dates jsonb,
+  deductions jsonb,
   documents jsonb,
   esign_docs jsonb,
   financing_contingency_date date,
@@ -1300,6 +1713,7 @@ create table if not exists public.transaction (
   inspection_date date,
   loan_approval_date date,
   property_address text,
+  referral jsonb,
   sale_price numeric,
   seller_name text,
   sellers jsonb,
@@ -1318,6 +1732,53 @@ create table if not exists public.transaction (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.transaction add column if not exists agent_email text;
+alter table public.transaction add column if not exists agent_name text;
+alter table public.transaction add column if not exists agent_net numeric;
+alter table public.transaction add column if not exists agent_split_percentage numeric;
+alter table public.transaction add column if not exists appraisal_date date;
+alter table public.transaction add column if not exists brokerage_fee numeric;
+alter table public.transaction add column if not exists brokerage_fee_flat numeric;
+alter table public.transaction add column if not exists brokerage_fee_percentage numeric;
+alter table public.transaction add column if not exists brokerage_fee_type text;
+alter table public.transaction add column if not exists brokerage_id text;
+alter table public.transaction add column if not exists buyer_name text;
+alter table public.transaction add column if not exists buyers jsonb;
+alter table public.transaction add column if not exists checklist jsonb;
+alter table public.transaction add column if not exists checklist_template_id text;
+alter table public.transaction add column if not exists closed_date date;
+alter table public.transaction add column if not exists closing_date date;
+alter table public.transaction add column if not exists co_agents jsonb;
+alter table public.transaction add column if not exists commission_amount numeric;
+alter table public.transaction add column if not exists commission_calc jsonb;
+alter table public.transaction add column if not exists commission_flat numeric;
+alter table public.transaction add column if not exists commission_notes text;
+alter table public.transaction add column if not exists commission_percentage numeric;
+alter table public.transaction add column if not exists commission_sale_price numeric;
+alter table public.transaction add column if not exists commission_type text;
+alter table public.transaction add column if not exists completed_dates jsonb;
+alter table public.transaction add column if not exists deductions jsonb;
+alter table public.transaction add column if not exists documents jsonb;
+alter table public.transaction add column if not exists esign_docs jsonb;
+alter table public.transaction add column if not exists financing_contingency_date date;
+alter table public.transaction add column if not exists inspection_contingency_date date;
+alter table public.transaction add column if not exists inspection_date date;
+alter table public.transaction add column if not exists loan_approval_date date;
+alter table public.transaction add column if not exists property_address text;
+alter table public.transaction add column if not exists referral jsonb;
+alter table public.transaction add column if not exists sale_price numeric;
+alter table public.transaction add column if not exists seller_name text;
+alter table public.transaction add column if not exists sellers jsonb;
+alter table public.transaction add column if not exists status text;
+alter table public.transaction add column if not exists tc_email text;
+alter table public.transaction add column if not exists tc_name text;
+alter table public.transaction add column if not exists thank_you_sent_at timestamptz;
+alter table public.transaction add column if not exists title_deadline_date date;
+alter table public.transaction add column if not exists transaction_fee numeric;
+alter table public.transaction add column if not exists transaction_fee_flat numeric;
+alter table public.transaction add column if not exists transaction_fee_percentage numeric;
+alter table public.transaction add column if not exists transaction_fee_type text;
+alter table public.transaction add column if not exists updates jsonb;
 drop trigger if exists transaction_touch on public.transaction;
 create trigger transaction_touch before update on public.transaction for each row execute function public.touch_updated_date();
 drop trigger if exists transaction_fill on public.transaction;
@@ -1325,6 +1786,43 @@ create trigger transaction_fill before insert on public.transaction for each row
 alter table public.transaction enable row level security;
 create index if not exists transaction_brokerage_id_idx on public.transaction (brokerage_id);
 create index if not exists transaction_agent_email_idx on public.transaction (agent_email);
+
+-- TransactionContact ----------------------------------------------------
+create table if not exists public.transaction_contact (
+  id text primary key default replace(gen_random_uuid()::text, '-', ''),
+  agent_email text,
+  brokerage_id text,
+  company text,
+  email text,
+  is_client boolean,
+  name text,
+  notes text,
+  phone text,
+  role text,
+  transaction_id text,
+  extra jsonb not null default '{}'::jsonb,
+  created_date timestamptz not null default now(),
+  updated_date timestamptz not null default now(),
+  created_by text
+);
+alter table public.transaction_contact add column if not exists agent_email text;
+alter table public.transaction_contact add column if not exists brokerage_id text;
+alter table public.transaction_contact add column if not exists company text;
+alter table public.transaction_contact add column if not exists email text;
+alter table public.transaction_contact add column if not exists is_client boolean;
+alter table public.transaction_contact add column if not exists name text;
+alter table public.transaction_contact add column if not exists notes text;
+alter table public.transaction_contact add column if not exists phone text;
+alter table public.transaction_contact add column if not exists role text;
+alter table public.transaction_contact add column if not exists transaction_id text;
+drop trigger if exists transaction_contact_touch on public.transaction_contact;
+create trigger transaction_contact_touch before update on public.transaction_contact for each row execute function public.touch_updated_date();
+drop trigger if exists transaction_contact_fill on public.transaction_contact;
+create trigger transaction_contact_fill before insert on public.transaction_contact for each row execute function public.fill_owner();
+alter table public.transaction_contact enable row level security;
+create index if not exists transaction_contact_brokerage_id_idx on public.transaction_contact (brokerage_id);
+create index if not exists transaction_contact_agent_email_idx on public.transaction_contact (agent_email);
+create index if not exists transaction_contact_transaction_id_idx on public.transaction_contact (transaction_id);
 
 -- UserBadge -------------------------------------------------------------
 create table if not exists public.user_badge (
@@ -1337,6 +1835,9 @@ create table if not exists public.user_badge (
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.user_badge add column if not exists badge_type text;
+alter table public.user_badge add column if not exists brokerage_id text;
+alter table public.user_badge add column if not exists user_email text;
 drop trigger if exists user_badge_touch on public.user_badge;
 create trigger user_badge_touch before update on public.user_badge for each row execute function public.touch_updated_date();
 drop trigger if exists user_badge_fill on public.user_badge;
@@ -1408,9 +1909,9 @@ create policy document_template_access on public.document_template for all using
 drop policy if exists esign_audit_log_access on public.esign_audit_log;
 create policy esign_audit_log_access on public.esign_audit_log for select using (public.is_super_admin() or exists (select 1 from public.esign_document d where d.id = esign_audit_log.document_id and d.brokerage_id = public.auth_brokerage_id()));
 drop policy if exists esign_document_access on public.esign_document;
-create policy esign_document_access on public.esign_document for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+create policy esign_document_access on public.esign_document for all using (lower(created_by_email) = public.auth_email() or lower(created_by) = public.auth_email() or (transaction_id is not null and exists (select 1 from public.transaction x where x.id = esign_document.transaction_id)) or (brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 drop policy if exists esign_submission_access on public.esign_submission;
-create policy esign_submission_access on public.esign_submission for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin() or exists (select 1 from public.esign_document d where d.id = esign_submission.document_id and d.brokerage_id = public.auth_brokerage_id())) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+create policy esign_submission_access on public.esign_submission for all using (public.is_super_admin() or (brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or lower(created_by_email) = public.auth_email() or exists (select 1 from public.esign_document d where d.id = esign_submission.document_id)) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 drop policy if exists esign_submitter_access on public.esign_submitter;
 create policy esign_submitter_access on public.esign_submitter for select using (public.is_super_admin() or exists (select 1 from public.esign_submission s where s.id = esign_submitter.submission_id and (s.brokerage_id = public.auth_brokerage_id() or exists (select 1 from public.esign_document d where d.id = s.document_id and d.brokerage_id = public.auth_brokerage_id()))));
 drop policy if exists esign_template_access on public.esign_template;
@@ -1436,7 +1937,7 @@ create policy message_access on public.message for all using (brokerage_id = pub
 drop policy if exists notification_access on public.notification;
 create policy notification_access on public.notification for all using (lower(user_email) = public.auth_email() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or lower(user_email) = public.auth_email() or public.is_super_admin());
 drop policy if exists offer_access on public.offer;
-create policy offer_access on public.offer for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+create policy offer_access on public.offer for all using (lower(agent_email) = public.auth_email() or (brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 drop policy if exists onboarding_access on public.onboarding;
 create policy onboarding_access on public.onboarding for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 drop policy if exists payout_access on public.payout;
@@ -1453,7 +1954,10 @@ create policy social_message_access on public.social_message for all using (brok
 drop policy if exists thread_reply_access on public.thread_reply;
 create policy thread_reply_access on public.thread_reply for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 drop policy if exists transaction_access on public.transaction;
-create policy transaction_access on public.transaction for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+create policy transaction_access on public.transaction for all using (lower(agent_email) = public.auth_email() or lower(tc_email) = public.auth_email() or coalesce(co_agents, '[]'::jsonb) @> jsonb_build_array(jsonb_build_object('email', public.auth_email())) or (brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+drop policy if exists transaction_contact_access on public.transaction_contact;
+create policy transaction_contact_access on public.transaction_contact for all using (lower(transaction_contact.agent_email) = public.auth_email() or exists (select 1 from public.transaction x where x.id = transaction_contact.transaction_id and (lower(x.agent_email) = public.auth_email() or lower(x.tc_email) = public.auth_email() or coalesce(x.co_agents, '[]'::jsonb) @> jsonb_build_array(jsonb_build_object('email', public.auth_email())))) or (brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin()) with check (lower(transaction_contact.agent_email) = public.auth_email() or exists (select 1 from public.transaction x where x.id = transaction_contact.transaction_id and (lower(x.agent_email) = public.auth_email() or lower(x.tc_email) = public.auth_email() or coalesce(x.co_agents, '[]'::jsonb) @> jsonb_build_array(jsonb_build_object('email', public.auth_email())))) or (brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin());
+-- Co-agents are stored lower-case in transaction.co_agents: [{"email": ..., "split_pct": ...}]
 drop policy if exists user_badge_access on public.user_badge;
 create policy user_badge_access on public.user_badge for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 

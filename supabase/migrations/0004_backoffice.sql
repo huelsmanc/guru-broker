@@ -44,7 +44,7 @@ do $$ declare t text; begin
     'transaction', 'offer', 'esign_document', 'esign_submission', 'esign_template',
     'commission_plan', 'commission_record', 'payout', 'checklist_template',
     'profiles', 'brokerage_settings', 'file_repository', 'client_review', 'compliance_training',
-    'generated_contract', 'cmas_report', 'agent_private'
+    'generated_contract', 'cmas_report', 'agent_private', 'transaction_contact'
   ] loop
     execute format('drop trigger if exists activity_%1$s on public.%1$I', t);
     execute format('create trigger activity_%1$s after insert or update or delete on public.%1$I for each row execute function private.log_activity()', t);
