@@ -21,12 +21,17 @@ export default function Settings() {
     brokerage_phone: '',
     brokerage_email: '',
     welcome_message: '',
-    openai_api_key: '',
+    default_tc_email: '',
+    default_tc_name: '',
     tech_links: [],
     primary_color: '#667eea',
     sidebar_color: '#1c231f',
   });
   const [settingsId, setSettingsId] = useState(null);
+  const [brokerageUsers, setBrokerageUsers] = useState([]);
+  useEffect(() => {
+    if (brokerageId) base44.entities.User.filter({ brokerage_id: brokerageId }, 'full_name', 500).then(setBrokerageUsers).catch(() => {});
+  }, [brokerageId]);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -42,7 +47,8 @@ export default function Settings() {
           brokerage_phone: s.brokerage_phone || '',
           brokerage_email: s.brokerage_email || '',
           welcome_message: s.welcome_message || '',
-          openai_api_key: s.openai_api_key || '',
+          default_tc_email: s.default_tc_email || '',
+          default_tc_name: s.default_tc_name || '',
           tech_links: s.tech_links || [],
           primary_color: s.primary_color || '#667eea',
           sidebar_color: s.sidebar_color || '#1c231f',
@@ -149,14 +155,20 @@ export default function Settings() {
             />
           </div>
           <div className="sm:col-span-2">
-            <Label>OpenAI API Key <span className="text-muted-foreground font-normal">(optional — overrides platform default)</span></Label>
-            <Input
-              type="password"
-              value={form.openai_api_key}
-              onChange={(e) => setForm({ ...form, openai_api_key: e.target.value })}
-              placeholder="sk-..."
-              className="mt-1.5"
-            />
+            <Label>Default transaction coordinator <span className="text-muted-foreground font-normal">(assigned when an offer is marked accepted)</span></Label>
+            <select
+              value={form.default_tc_email}
+              onChange={(e) => {
+                const u = brokerageUsers.find((x) => x.email === e.target.value);
+                setForm({ ...form, default_tc_email: e.target.value, default_tc_name: u?.display_name || u?.full_name || '' });
+              }}
+              className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              <option value="">No default</option>
+              {brokerageUsers.map((u) => (
+                <option key={u.id} value={u.email}>{u.display_name || u.full_name || u.email}</option>
+              ))}
+            </select>
           </div>
         </div>
 

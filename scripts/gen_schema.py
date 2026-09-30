@@ -48,6 +48,7 @@ ENTITIES = {
     "IdeaPadNote": "content messages title user_email",
     "Message": "brokerage_id content conversation_id read sender_email sender_name sender_role",
     "Notification": "action_url brokerage_id channel description read reference_id reference_type title type user_email",
+    "Offer": "brokerage_id agent_email agent_name property_address city state zip mls_number list_price offer_price earnest_money financing_type down_payment_percent loan_amount closing_date offer_expiration inspection_days financing_days appraisal_contingency seller_concessions included_items special_terms buyers sellers listing_agent_name listing_agent_email status offer_text document_url esign_document_id submission_id transaction_id accepted_at acceptance_date",
     "Onboarding": "agent_email agent_name brokerage_id items status",
     "Recognition": "brokerage_id category from_email from_name is_anonymous message reactions to_email to_name",
     "ScheduledCall": "agent_email agent_name brokerage_id status scheduled_at",
@@ -64,13 +65,13 @@ USER_FIELDS = "email full_name display_name role brokerage_id suspended headshot
 JSON_FIELDS = set("""answers buyers checklist completed_dates details documents encryption_metadata esign_docs fields items
 members mentions messages options reactions read_by sellers signatories signature_fields signers tags tech_links updates
 versions cma_report""".split())
-BOOL_FIELDS = set("read pinned encrypted suspended submitted checked_in is_active is_anonymous is_featured signed passed require_sequential_signing".split())
-INT_FIELDS = set("bathrooms bedrooms downloads_count downvotes upvotes guests_count order passing_score rating signer_index version file_size score".split())
-NUM_FIELDS = set("""agent_net agent_split_percentage brokerage_fee brokerage_fee_flat brokerage_fee_percentage commission_amount
+BOOL_FIELDS = set("appraisal_contingency read pinned encrypted suspended submitted checked_in is_active is_anonymous is_featured signed passed require_sequential_signing".split())
+INT_FIELDS = set("inspection_days financing_days bathrooms bedrooms downloads_count downvotes upvotes guests_count order passing_score rating signer_index version file_size score".split())
+NUM_FIELDS = set("""list_price offer_price earnest_money down_payment_percent loan_amount seller_concessions agent_net agent_split_percentage brokerage_fee brokerage_fee_flat brokerage_fee_percentage commission_amount
 commission_flat commission_percentage commission_sale_price sale_price sales_amount transaction_fee transaction_fee_flat
 transaction_fee_percentage purchase_price""".split())
-DATE_FIELDS = set("date closing_date inspection_date appraisal_date financing_contingency_date inspection_contingency_date loan_approval_date title_deadline_date".split())
-TS_FIELDS = set("completed_at submitted_at signed_at response_date scheduled_at".split())
+DATE_FIELDS = set("acceptance_date date closing_date inspection_date appraisal_date financing_contingency_date inspection_contingency_date loan_approval_date title_deadline_date".split())
+TS_FIELDS = set("offer_expiration accepted_at completed_at submitted_at signed_at response_date scheduled_at".split())
 
 # Tables not scoped by brokerage (owned by a user or reached via a parent)
 PERSONAL = {"IdeaPadNote": "user_email"}

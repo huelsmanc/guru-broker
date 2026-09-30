@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
@@ -16,6 +16,8 @@ import TransactionChecklist from '@/components/transactions/TransactionChecklist
 import TransactionESign from '@/components/transactions/TransactionESign';
 import CommissionBreakdown from '@/components/transactions/CommissionBreakdown';
 import ClosingReviewPrompt from '@/components/transactions/ClosingReviewPrompt';
+import ScanContractButton from '@/components/transactions/ScanContractButton';
+import FileCheck from '@/components/transactions/FileCheck';
 
 
 const MILESTONES = [
@@ -78,6 +80,33 @@ export default function Transactions() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [updateForm, setUpdateForm] = useState({ message: '', milestone: '', flag: 'none' });
   const [uploadingFor, setUploadingFor] = useState(null);
+  const [searchParams] = useSearchParams();
+  // Links like /Transactions?open=<id> (from "Offer accepted" and TC emails) open that file.
+  useEffect(() => {
+    const id = searchParams.get('open');
+    if (id) setExpandedId(id);
+  }, [searchParams]);
+
+  // Fill the new-file form from an AI contract scan.
+  const applyScan = (r, files) => {
+    const d = r.dates || {};
+    setForm((f) => ({
+      ...f,
+      property_address: [r.property_address, r.city, r.state, r.zip].filter(Boolean).join(', ') || f.property_address,
+      buyers: r.buyers?.length ? r.buyers : f.buyers,
+      sellers: r.sellers?.length ? r.sellers : f.sellers,
+      sale_price: r.purchase_price ?? f.sale_price,
+      closing_date: d.closing_date || f.closing_date,
+      inspection_date: d.inspection_date || f.inspection_date,
+      appraisal_date: d.appraisal_date || f.appraisal_date,
+      financing_contingency_date: d.financing_contingency_date || f.financing_contingency_date,
+      inspection_contingency_date: d.inspection_contingency_date || f.inspection_contingency_date,
+      loan_approval_date: d.loan_approval_date || f.loan_approval_date,
+      title_deadline_date: d.title_deadline_date || f.title_deadline_date,
+      documents: files.map((x) => ({ name: x.name, url: x.url, uploaded_at: new Date().toISOString(), uploaded_by: user?.full_name })),
+      scan_issues: r.issues || [],
+    }));
+  };
   const [editingDate, setEditingDate] = useState(null); // { txId, field }
   const [editingTx, setEditingTx] = useState(null); // full transaction being edited
   const [closingPromptTx, setClosingPromptTx] = useState(null); // tx to show closing review prompt for
@@ -499,6 +528,13 @@ export default function Transactions() {
                           </AnimatePresence>
                         </div>
 
+                        {/* AI file check */}
+                        <FileCheck
+                          tx={tx}
+                          canEdit={canEditTx(tx)}
+                          onUpdate={() => queryClient.invalidateQueries({ queryKey: ['transactions', brokerageId] })}
+                        />
+
                         {/* Checklist */}
                         <TransactionChecklist
                           tx={tx}
@@ -636,6 +672,7 @@ export default function Transactions() {
             <DialogTitle>New Transaction File</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
+            <ScanContractButton onResult={applyScan} />
             <div>
               <Label>Property Address *</Label>
               <Input value={form.property_address} onChange={e => setForm(f => ({ ...f, property_address: e.target.value }))} placeholder="123 Main St, City, State" className="mt-1.5" />

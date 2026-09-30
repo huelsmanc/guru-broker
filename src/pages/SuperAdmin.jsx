@@ -790,10 +790,6 @@ function BrokerageManagement({ brokerage, allUsers, currentUser, onBack, onUpdat
                   <Label>Welcome Message for Agents</Label>
                   <Textarea value={settingsForm.welcome_message} onChange={(e) => setSettingsForm({ ...settingsForm, welcome_message: e.target.value })} placeholder="Welcome! I'm here to help..." className="mt-1.5" />
                 </div>
-                <div className="sm:col-span-2">
-                  <Label>OpenAI API Key <span className="text-muted-foreground font-normal">(optional — overrides platform default)</span></Label>
-                  <Input type="password" value={settingsForm.openai_api_key} onChange={(e) => setSettingsForm({ ...settingsForm, openai_api_key: e.target.value })} placeholder="sk-..." className="mt-1.5" />
-                </div>
               </div>
               <div className="flex justify-end pt-2">
                 <Button onClick={handleSaveSettings} disabled={saving || !settingsForm.brokerage_name || !settingsForm.broker_name} className="gap-2 rounded-xl h-11 min-w-[140px]">

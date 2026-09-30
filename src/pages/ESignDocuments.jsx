@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { isPdfUrl } from '@/components/esign/PDFPageRenderer';
+import { autoDetectFields } from '@/components/esign/autoDetectFields';
 import { useOutletContext } from 'react-router-dom';
 import MobilePageHeader from '@/components/layout/MobilePageHeader';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -260,6 +262,7 @@ export default function ESignDocuments() {
               <DialogTitle>Place Signature Fields</DialogTitle>
             </DialogHeader>
             <ESignFieldEditor
+              onAutoDetect={isPdfUrl(selectedDoc.document_url) ? autoDetectFields : undefined}
               doc={selectedDoc}
               onComplete={() => {
                 setShowFieldEditor(false);

@@ -52,6 +52,7 @@ const Reviews = lazy(() => import('@/pages/Reviews'));
 const Transactions = lazy(() => import('@/pages/Transactions'));
 const ClientPortal = lazy(() => import('@/pages/ClientPortal'));
 const Login = lazy(() => import('@/pages/Login'));
+const Offers = lazy(() => import('@/pages/Offers'));
 const ResetPassword = lazy(() => import('@/pages/ResetPassword'));
 
 // Loading fallback component
@@ -141,6 +142,7 @@ const AuthenticatedApp = () => {
             <Route path="/NetSheetCalculator" element={<NetSheetCalculator />} />
             <Route path="/SalesCoach" element={<SalesCoach />} />
             <Route path="/ContractGenerator" element={<ContractGenerator />} />
+            <Route path="/Offers" element={<Offers />} />
             <Route path="/Onboarding" element={<Onboarding />} />
             <Route path="/CMABuilder" element={<CMABuilder />} />
             <Route path="/MyReports" element={<MyReports />} />

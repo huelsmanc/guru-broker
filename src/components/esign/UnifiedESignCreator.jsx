@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { isPdfUrl } from './PDFPageRenderer';
+import { autoDetectFields } from './autoDetectFields';
 import { useOutletContext } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
@@ -255,6 +257,7 @@ export default function UnifiedESignCreator({
         {step === 'fields' && currentDoc && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
             <ESignFieldEditor
+              onAutoDetect={isPdfUrl(currentDoc.document_url) ? autoDetectFields : undefined}
               doc={currentDoc}
               onComplete={handleFieldsComplete}
             />

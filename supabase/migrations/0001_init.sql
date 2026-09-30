@@ -875,6 +875,56 @@ create index if not exists notification_brokerage_id_idx on public.notification 
 create index if not exists notification_user_email_idx on public.notification (user_email);
 create index if not exists notification_channel_idx on public.notification (channel);
 
+-- Offer -----------------------------------------------------------------
+create table if not exists public.offer (
+  id text primary key default replace(gen_random_uuid()::text, '-', ''),
+  acceptance_date date,
+  accepted_at timestamptz,
+  agent_email text,
+  agent_name text,
+  appraisal_contingency boolean,
+  brokerage_id text,
+  buyers jsonb,
+  city text,
+  closing_date date,
+  document_url text,
+  down_payment_percent numeric,
+  earnest_money numeric,
+  esign_document_id text,
+  financing_days integer,
+  financing_type text,
+  included_items text,
+  inspection_days integer,
+  list_price numeric,
+  listing_agent_email text,
+  listing_agent_name text,
+  loan_amount numeric,
+  mls_number text,
+  offer_expiration timestamptz,
+  offer_price numeric,
+  offer_text text,
+  property_address text,
+  seller_concessions numeric,
+  sellers jsonb,
+  special_terms text,
+  state text,
+  status text,
+  submission_id text,
+  transaction_id text,
+  zip text,
+  extra jsonb not null default '{}'::jsonb,
+  created_date timestamptz not null default now(),
+  updated_date timestamptz not null default now(),
+  created_by text
+);
+drop trigger if exists offer_touch on public.offer;
+create trigger offer_touch before update on public.offer for each row execute function public.touch_updated_date();
+drop trigger if exists offer_fill on public.offer;
+create trigger offer_fill before insert on public.offer for each row execute function public.fill_owner();
+alter table public.offer enable row level security;
+create index if not exists offer_brokerage_id_idx on public.offer (brokerage_id);
+create index if not exists offer_submission_id_idx on public.offer (submission_id);
+
 -- Onboarding ------------------------------------------------------------
 create table if not exists public.onboarding (
   id text primary key default replace(gen_random_uuid()::text, '-', ''),
@@ -1157,6 +1207,8 @@ drop policy if exists message_access on public.message;
 create policy message_access on public.message for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 drop policy if exists notification_access on public.notification;
 create policy notification_access on public.notification for all using (lower(user_email) = public.auth_email() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or lower(user_email) = public.auth_email() or public.is_super_admin());
+drop policy if exists offer_access on public.offer;
+create policy offer_access on public.offer for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 drop policy if exists onboarding_access on public.onboarding;
 create policy onboarding_access on public.onboarding for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 drop policy if exists recognition_access on public.recognition;
