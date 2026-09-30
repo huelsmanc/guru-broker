@@ -143,6 +143,23 @@ const task = cl.items.find((i) => !i.requires_document);
 r = await as('ann')('checklistAction', { action: 'complete', checklist_id: cl.id, item_id: task.id });
 assert.equal(r.body.checklist.items.find((i) => i.id === task.id).status, 'done');
 
+// @mentions: only people who can see the deal are offered and notified
+r = await as('ann')('checklistAction', { action: 'mentionable', checklist_id: cl.id });
+assert.deepEqual(r.body.people.map((p) => p.email).sort(), ['boss@x.com'], JSON.stringify(r.body));
+const before = globalThis.__db.notification.length;
+r = await as('ann')('checklistAction', { action: 'comment', checklist_id: cl.id, item_id: b2b.id, text: 'Hey @Bea Broker can you look? cc @Sam Sponsor', mentions: ['boss@x.com', 'sam@x.com'] });
+assert.equal(r.status, 200, JSON.stringify(r.body));
+const c = r.body.checklist.items.find((i) => i.id === b2b.id).comments.at(-1);
+assert.deepEqual(c.mentions.map((m) => m.email), ['boss@x.com'], 'sam is not on the deal');
+const fresh = globalThis.__db.notification.slice(before);
+assert.equal(fresh.length, 1); assert.equal(fresh[0].user_email, 'boss@x.com'); assert.match(fresh[0].title, /mentioned you on B2B/);
+assert.match(fresh[0].action_url ?? fresh[0].extra?.action_url, /item=/);
+assert.ok(calls.some((x) => x.url.includes('resend') && JSON.parse(x.init.body).to[0] === 'boss@x.com' && /mentioned you/.test(JSON.parse(x.init.body).html)), 'mention emailed');
+r = await as('ann')('trackEvent', { event: 'mentionable', transaction_id: 't1' });
+assert.deepEqual(r.body.people.map((p) => p.email), ['boss@x.com']);
+r = await as('boss')('trackEvent', { event: 'comment', transaction_id: 't1', summary: 'Nice work @Ann Agent', mentions: ['ann@x.com'] });
+assert.ok(globalThis.__db.notification.some((n) => n.user_email === 'ann@x.com' && /mentioned you/.test(n.title)));
+
 // Sides: listing 0%, buying 2.5% of 800k with two agents 50/50
 globalThis.__db.transaction.push({ id: 't2', brokerage_id: 'B1', agent_email: 'ann@x.com', property_address: '3905 Aquilla Dr', sale_price: 800000, status: 'active',
   sides: [{ side: 'listing', pct: 0, agents: [] }, { side: 'buying', pct: 2.5, agents: [{ email: 'ann@x.com', pct: 50 }, { email: 'sam@x.com', pct: 50 }] }], extra: {} });

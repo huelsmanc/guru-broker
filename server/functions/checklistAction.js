@@ -13,8 +13,10 @@
 //   complete  { checklist_id, item_id, done }               (checkbox tasks)
 //   comment   { checklist_id, item_id, text }
 //   remove_item { checklist_id, item_id } | remove { checklist_id }
+import { applyTemplate } from '../lib/checklists.js';
+import { esc } from '../lib/esign.js';
 import { createClientFromRequest } from '../lib/base44.js';
-import { isAdminRole, can, notifyPeople } from '../lib/team.js';
+import { isAdminRole, can, notifyPeople, mentionablePeople } from '../lib/team.js';
 
 const DOC = (title, extra = {}) => ({ title, requires_document: true, ...extra });
 const TASK = (title, extra = {}) => ({ title, requires_document: false, ...extra });
@@ -113,8 +115,7 @@ export default async (req) => {
       const [tpl] = await E.ChecklistTemplate.filter({ id: template_id }, '-created_date', 1);
       if (!tpl || tpl.brokerage_id !== me.brokerage_id) return Response.json({ error: 'Template not found' }, { status: 404 });
       const owner = subject_type === 'transaction' ? acc.tx.agent_email : subject_email;
-      const items = (tpl.items || []).map((i) => ({ ...i, id: newId(), status: 'open', assignee_email: i.assignee_email || owner, comments: [], history: [] }));
-      const cl = await E.Checklist.create({ brokerage_id: me.brokerage_id, subject_type, subject_id: subject_id || subject_email, subject_email: owner, template_id, name: tpl.name, items, status: 'open' });
+      const cl = await applyTemplate(E, tpl, { brokerageId: me.brokerage_id, subjectType: subject_type, subjectId: subject_id || subject_email, owner });
       return Response.json({ checklist: cl });
     }
 
@@ -127,6 +128,10 @@ export default async (req) => {
     const log = (what) => item && item.history.push({ at: now, by: myEmail, what });
     const approver = admin || can(me, 'docs.approve');
     const fail = (msg, status = 403) => Response.json({ error: msg }, { status });
+    let mentioned = [];
+    if (body.action === 'mentionable') {
+      return Response.json({ people: [...(await mentionablePeople(E, me.brokerage_id, { tx: acc.tx, subjectEmail: cl.subject_email })).values()].filter((p) => p.email !== myEmail) });
+    }
 
     switch (body.action) {
       case 'remove':
@@ -190,11 +195,19 @@ export default async (req) => {
         log(item.status === 'done' ? 'completed' : 'reopened');
         items[idx] = item;
         break;
-      case 'comment':
+      case 'comment': {
         if (!item) return fail('Item not found', 404);
-        item.comments.push({ at: now, by: myEmail, by_name: me.full_name || null, text: String(body.text || '').slice(0, 2000) });
+        const text = String(body.text || '').slice(0, 2000);
+        if (!text.trim()) return fail('Write a comment', 400);
+        const wanted = new Set([...(Array.isArray(body.mentions) ? body.mentions : []), ...[...text.matchAll(/@([\w.+-]+@[\w.-]+\.\w+)/g)].map((m) => m[1])]
+          .map((e) => String(e).toLowerCase()).filter((e) => e && e !== myEmail));
+        const allowed = wanted.size ? await mentionablePeople(E, me.brokerage_id, { tx: acc.tx, subjectEmail: cl.subject_email }) : new Map();
+        mentioned = [...wanted].filter((e) => allowed.has(e)).map((e) => allowed.get(e));
+        item.comments.push({ at: now, by: myEmail, by_name: me.full_name || null, text, mentions: mentioned.map((p) => ({ email: p.email, name: p.name })) });
+        log(mentioned.length ? `commented and mentioned ${mentioned.map((p) => p.name).join(', ')}` : 'commented');
         items[idx] = item;
         break;
+      }
       default:
         return fail('Unknown action', 400);
     }
@@ -214,10 +227,11 @@ export default async (req) => {
       await notifyPeople(E, { brokerageId: me.brokerage_id, people: [{ email: item.uploaded_by }], link, referenceId: cl.id, referenceType: 'Checklist',
         title: `${body.action === 'approve' ? 'Approved' : 'Needs changes'}: ${item.title}`,
         message: `${me.full_name || me.email} ${body.action === 'approve' ? 'approved' : 'sent back'} "${item.title}" (${label}).${body.note ? ` Note: ${body.note}` : ''}` });
-    } else if (body.action === 'comment') {
-      const mentioned = [...String(body.text || '').matchAll(/@([\w.+-]+@[\w.-]+\.\w+)/g)].map((m) => ({ email: m[1] }));
-      if (mentioned.length) await notifyPeople(E, { brokerageId: me.brokerage_id, people: mentioned, link, referenceId: cl.id, referenceType: 'Checklist',
-        title: `${me.full_name || me.email} mentioned you`, message: `On "${item.title}" (${label}): ${String(body.text).slice(0, 200)}` });
+    } else if (body.action === 'comment' && mentioned.length) {
+      const text = String(body.text).slice(0, 300);
+      await notifyPeople(E, { brokerageId: me.brokerage_id, people: mentioned, link: `${link}${link.includes('?') ? '&' : '?'}item=${item.id}`, referenceId: cl.id, referenceType: 'Checklist',
+        title: `${me.full_name || me.email} mentioned you on ${item.title}`, message: `${label}: ${text}`,
+        emailBody: `<p><b>${esc(me.full_name || me.email)}</b> mentioned you on <b>${esc(item.title)}</b> (${esc(label)}):</p><blockquote style="border-left:3px solid #10b981;margin:0;padding:6px 12px;color:#374151">${esc(text)}</blockquote>` });
     }
     return Response.json({ checklist: saved });
   } catch (error) {

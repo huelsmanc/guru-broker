@@ -1,8 +1,7 @@
 // New (automation): when a transaction or a user is created, adds the checklist templates
 // marked "Add automatically" (transactions: matching deal type or any; users: onboarding).
 import { createClientFromRequest } from '../lib/base44.js';
-
-const newId = () => crypto.randomUUID().slice(0, 12);
+import { applyTemplate } from '../lib/checklists.js';
 
 export default async (req) => {
   try {
@@ -12,6 +11,8 @@ export default async (req) => {
     const row = event?.data;
     if (!row?.brokerage_id) return Response.json({ skipped: 'no brokerage' });
     const isTx = event.entity_name === 'Transaction';
+    // Deals opened from an accepted offer get the checklists the agent picked instead.
+    if (isTx && row.offer_id) return Response.json({ skipped: 'agent chose checklists' });
     const kind = isTx ? 'transaction' : 'onboarding';
     const dealType = isTx ? row.deal_type || row.transaction_type || null : null;
     const templates = (await E.ChecklistTemplate.filter({ brokerage_id: row.brokerage_id, is_default: true }, 'name', 50))
@@ -23,8 +24,7 @@ export default async (req) => {
     let added = 0;
     for (const t of templates) {
       if (existing.some((c) => c.template_id === t.id)) continue;
-      const items = (t.items || []).map((i) => ({ ...i, id: newId(), status: 'open', assignee_email: i.assignee_email || owner, comments: [], history: [] }));
-      await E.Checklist.create({ brokerage_id: row.brokerage_id, subject_type: kind, subject_id: subjectId, subject_email: owner, template_id: t.id, name: t.name, items, status: 'open' });
+      await applyTemplate(E, t, { brokerageId: row.brokerage_id, subjectType: kind, subjectId, owner });
       added += 1;
     }
     return Response.json({ added });

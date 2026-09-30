@@ -191,7 +191,7 @@ export default function Offers() {
       {accepting && (
         <AcceptOffer offer={accepting} brokerageId={brokerageId}
           onClose={() => setAccepting(null)}
-          onDone={(txId) => { setAccepting(null); refresh(); navigate(`/Transactions?open=${txId}`); }} />
+          onDone={(txId) => { setAccepting(null); refresh(); navigate(`/Transactions/${txId}?tab=checklists`); }} />
       )}
     </div>
   );
@@ -435,8 +435,17 @@ function AcceptOffer({ offer, brokerageId, onClose, onDone }) {
   const [users, setUsers] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [templates, setTemplates] = useState(null);
+  const [picked, setPicked] = useState([]);
 
   useEffect(() => {
+    base44.functions.invoke('checklistAction', { action: 'templates' }).then((r) => {
+      const t = (r.data.templates || []).filter((x) => (x.kind || 'transaction') === 'transaction');
+      setTemplates(t);
+      // Start with the buyer checklist (and any the brokerage adds automatically); the agent can change it.
+      const pre = t.filter((x) => x.deal_type === 'buyer' && (x.is_default || !t.some((y) => y.deal_type === 'buyer' && y.is_default)));
+      setPicked(pre.slice(0, 1).concat(t.filter((x) => x.is_default && !x.deal_type)).map((x) => x.id));
+    }).catch(() => setTemplates([]));
     base44.entities.User.filter({ brokerage_id: brokerageId }, 'full_name', 500).then(setUsers).catch(() => {});
     base44.entities.BrokerageSettings.filter({ brokerage_id: brokerageId }).then((r) => setTc(r[0]?.default_tc_email || '')).catch(() => {});
   }, [brokerageId]);
@@ -445,7 +454,7 @@ function AcceptOffer({ offer, brokerageId, onClose, onDone }) {
     setBusy(true);
     setError(null);
     try {
-      const res = await base44.functions.invoke('offerAccepted', { offerId: offer.id, acceptanceDate: date, finalPrice: num(price), tcEmail: tc || undefined });
+      const res = await base44.functions.invoke('offerAccepted', { offerId: offer.id, acceptanceDate: date, finalPrice: num(price), tcEmail: tc || undefined, templateIds: picked });
       onDone(res.data.transaction_id);
     } catch (err) {
       setError(err.message);
@@ -456,8 +465,8 @@ function AcceptOffer({ offer, brokerageId, onClose, onDone }) {
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle>Offer accepted 🎉</DialogTitle></DialogHeader>
-        <p className="text-sm text-muted-foreground">This opens the transaction for {offer.property_address}, sets the contract deadlines, starts the checklist and notifies the transaction coordinator.</p>
+        <DialogHeader><DialogTitle>Under contract 🎉</DialogTitle></DialogHeader>
+        <p className="text-sm text-muted-foreground">This opens the transaction for {offer.property_address}, sets the contract deadlines, adds the checklist you pick and notifies the transaction coordinator.</p>
         <div className="space-y-3 mt-2">
           <div><Label>Acceptance date</Label><Input type="date" className="mt-1" value={date} onChange={(e) => setDate(e.target.value)} /></div>
           <div><Label>Final price (if countered)</Label><Input className="mt-1" inputMode="numeric" value={price} onChange={(e) => setPrice(e.target.value)} /></div>
@@ -467,6 +476,21 @@ function AcceptOffer({ offer, brokerageId, onClose, onDone }) {
               <option value="">Automatic: TC with the fewest open files</option>
               {users.map((u) => <option key={u.id} value={u.email}>{u.display_name || u.full_name || u.email}</option>)}
             </select>
+          </div>
+          <div>
+            <Label>Checklist</Label>
+            {!templates ? <Loader2 className="w-4 h-4 animate-spin mt-2" /> : (
+              <div className="mt-1 max-h-48 overflow-y-auto rounded-md border divide-y">
+                {templates.map((t) => (
+                  <label key={t.id} className="flex items-center gap-3 px-3 py-2 text-sm cursor-pointer hover:bg-muted/50">
+                    <input type="checkbox" checked={picked.includes(t.id)} onChange={(e) => setPicked((p) => (e.target.checked ? [...p, t.id] : p.filter((x) => x !== t.id)))} />
+                    <span className="flex-1">{t.name}</span>
+                    <span className="text-xs text-muted-foreground">{t.items?.length || 0} items</span>
+                  </label>
+                ))}
+              </div>
+            )}
+            {templates && !picked.length && <p className="text-xs text-amber-700 mt-1">No checklist picked. You can add one on the transaction later.</p>}
           </div>
         </div>
         {error && <p className="text-sm text-destructive">{error}</p>}

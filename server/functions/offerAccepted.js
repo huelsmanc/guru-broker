@@ -1,10 +1,11 @@
 // New: "Offer accepted". Creates the transaction from the offer, assigns a transaction
-// coordinator (TC), starts the checklist, and notifies the TC and everyone with the
+// coordinator (TC), adds the checklists the agent picked, and notifies the TC and everyone with the
 // compliance duty.
 // TC choice: the one picked in the dialog -> the agent's own TC -> the brokerage default ->
 // the team member with the TC duty who has the fewest open files.
 import { createClientFromRequest } from '../lib/base44.js';
 import { esc } from '../lib/esign.js';
+import { applyTemplate } from '../lib/checklists.js';
 import { withDuty, leastLoadedTc, notifyPeople, isAdminRole } from '../lib/team.js';
 
 const addDays = (iso, days) => {
@@ -14,26 +15,11 @@ const addDays = (iso, days) => {
   return d.toISOString().slice(0, 10);
 };
 
-const CHECKLIST = [
-  'Send executed offer to all parties',
-  'Confirm earnest money received',
-  'Order / schedule home inspection',
-  'Send contract to lender and title / attorney',
-  'Track inspection contingency deadline',
-  'Order appraisal',
-  'Track financing contingency / loan commitment',
-  'Review title commitment',
-  'Schedule final walk-through',
-  'Confirm closing date, time and location',
-  'Collect all signed disclosures and addenda',
-  'Upload final settlement statement',
-];
-
 export default async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const me = await base44.auth.me();
-    const { offerId, acceptanceDate, tcEmail, finalPrice } = await req.json();
+    const { offerId, acceptanceDate, tcEmail, finalPrice, templateIds } = await req.json();
     const entities = base44.asServiceRole.entities;
     const [offer] = await entities.Offer.filter({ id: offerId }, '-created_date', 1);
     if (!offer) return Response.json({ error: 'Offer not found' }, { status: 404 });
@@ -41,6 +27,15 @@ export default async (req) => {
     if (offer.brokerage_id !== me.brokerage_id && me.role !== 'super_admin') return Response.json({ error: 'Not allowed' }, { status: 403 });
     if (!isAdmin && offer.agent_email !== me.email) return Response.json({ error: 'Only the offer\'s agent or an admin can do this' }, { status: 403 });
     if (offer.transaction_id) return Response.json({ status: 'exists', transaction_id: offer.transaction_id });
+
+    // Checklists the agent picked (validated before anything is created).
+    const picked = [...new Set(Array.isArray(templateIds) ? templateIds : [])].slice(0, 10);
+    const templates = [];
+    for (const id of picked) {
+      const [t] = await entities.ChecklistTemplate.filter({ id }, '-created_date', 1);
+      if (!t || t.brokerage_id !== offer.brokerage_id || (t.kind || 'transaction') !== 'transaction') return Response.json({ error: 'Checklist template not found' }, { status: 400 });
+      templates.push(t);
+    }
 
     const accepted = acceptanceDate || new Date().toISOString().slice(0, 10);
     const [settings] = await entities.BrokerageSettings.filter({ brokerage_id: offer.brokerage_id }, '-created_date', 1);
@@ -72,17 +67,22 @@ export default async (req) => {
       inspection_contingency_date: addDays(accepted, offer.inspection_days),
       financing_contingency_date: offer.financing_type === 'cash' ? null : addDays(accepted, offer.financing_days),
       status: 'active',
-      checklist: CHECKLIST.map((title, i) => ({ id: `${Date.now()}-${i}`, title, completed: false, completed_by: null, completed_at: null })),
       documents,
       updates: [{ id: Date.now().toString(), message: `Offer accepted ${accepted}. Transaction opened from the offer.`, milestone: 'Under Contract', posted_by: me.full_name || me.email, posted_at: new Date().toISOString() }],
       // extra
       transaction_type: 'purchase',
+      deal_type: 'buyer',
       acceptance_date: accepted,
       earnest_money: offer.earnest_money,
       financing_type: offer.financing_type,
       mls_number: offer.mls_number,
       offer_id: offer.id,
     });
+
+    const checklists = [];
+    for (const t of templates) {
+      checklists.push(await applyTemplate(entities, t, { brokerageId: offer.brokerage_id, subjectType: 'transaction', subjectId: tx.id, owner: String(offer.agent_email || '').toLowerCase() }));
+    }
 
     await entities.Offer.update(offer.id, { status: 'accepted', accepted_at: new Date().toISOString(), acceptance_date: accepted, transaction_id: tx.id });
 
@@ -95,8 +95,9 @@ export default async (req) => {
 <li>Inspection deadline: ${esc(tx.inspection_contingency_date || '-')}</li>
 <li>Financing deadline: ${esc(tx.financing_contingency_date || '-')}</li>
 <li>TC: ${esc(tc?.name || 'not assigned yet')}</li>
-</ul><p style="font-size:12px;color:#6b7280">The checklist is started and deadline reminders are on.</p>`;
-    const link = `/Transactions?open=${tx.id}`;
+<li>Checklist: ${esc(templates.map((t) => t.name).join(', ') || 'none picked yet')}</li>
+</ul><p style="font-size:12px;color:#6b7280">Deadline reminders are on.</p>`;
+    const link = `/Transactions/${tx.id}?tab=checklists`;
     if (tc) {
       await notifyPeople(entities, {
         brokerageId: offer.brokerage_id, people: [tc], link, referenceId: tx.id, referenceType: 'Transaction',
@@ -114,7 +115,7 @@ export default async (req) => {
       emailBody: summary,
     });
 
-    return Response.json({ status: 'success', transaction_id: tx.id, tc });
+    return Response.json({ status: 'success', transaction_id: tx.id, tc, checklists: checklists.map((c) => c.id) });
   } catch (error) {
     console.error('offerAccepted:', error);
     return Response.json({ error: error.message }, { status: error.status || 500 });

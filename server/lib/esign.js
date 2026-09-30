@@ -538,6 +538,24 @@ export async function finalize({ entities, sub, doc }) {
     }
   }
 
+  // Put the signed copy on the checklist item it was sent from.
+  if (doc.checklist_id && doc.checklist_item_id) {
+    try {
+      const [cl] = await entities.Checklist.filter({ id: doc.checklist_id }, '-created_date', 1);
+      if (cl && cl.brokerage_id === doc.brokerage_id) {
+        const at = new Date().toISOString();
+        const items = (cl.items || []).map((i) => (i.id !== doc.checklist_item_id ? i : {
+          ...i, document_url: link, document_name: `${doc.title} (signed)`, uploaded_by: 'e-sign', uploaded_at: at,
+          status: ['approved', 'review_requested'].includes(i.status) ? i.status : 'uploaded',
+          history: [...(i.history || []), { at, by: 'e-sign', what: 'signed copy attached' }],
+        }));
+        await entities.Checklist.update(cl.id, { items });
+      }
+    } catch (err) {
+      console.error('Could not attach to checklist:', err.message);
+    }
+  }
+
   // Email everyone the signed PDF.
   const filename = `${ASCII(doc.title || 'Document').replace(/[^A-Za-z0-9 ._-]/g, '').trim() || 'Document'} - signed.pdf`;
   const attach = bytes.length < 9_000_000 ? [{ filename, content: Buffer.from(bytes).toString('base64') }] : undefined;

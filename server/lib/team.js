@@ -66,3 +66,16 @@ ${link ? `<p><a href="${esc(appUrl() + link)}" style="display:inline-block;paddi
   }
   return seen.size;
 }
+
+/** People who may be @mentioned on a deal (or an agent's onboarding): those who can already see it. */
+export async function mentionablePeople(entities, brokerageId, { tx, subjectEmail }) {
+  const people = (await entities.User.filter({ brokerage_id: brokerageId }, 'full_name', 2000)).filter((u) => !u.suspended);
+  const onDeal = new Set((tx ? [tx.agent_email, tx.tc_email, ...(tx.co_agents || []).map((a) => a.email)] : [subjectEmail]).map((e) => String(e || '').toLowerCase()));
+  const out = new Map();
+  for (const u of people) {
+    const e = String(u.email || '').toLowerCase();
+    const ok = onDeal.has(e) || isAdminRole(u.role) || can(u, 'docs.approve') || (tx ? can(u, 'tx.all') : can(u, 'users.manage'));
+    if (ok) out.set(e, { email: e, name: u.display_name || u.full_name || e });
+  }
+  return out;
+}

@@ -13,7 +13,8 @@ globalThis.fetch = async (url, init) => {
 globalThis.__users = { agentTok: { id: 'u1', email: 'ann@x.com' } };
 globalThis.__db = {
   profiles: [{ id: 'u1', email: 'ann@x.com', full_name: 'Ann Agent', role: 'user', brokerage_id: 'B1', extra: {} }],
-  esign_document: [{ id: 'doc1', brokerage_id: 'B1', title: 'Offer <b>12 Elm</b>', document_url: 'https://files/original.pdf', extra: {},
+  checklist: [{ id: 'cl1', brokerage_id: 'B1', subject_type: 'transaction', subject_id: 'tx1', items: [{ id: 'far', title: 'Fully Executed Purchase Agreement', requires_document: true, form_url: 'https://files/original.pdf', status: 'open', history: [] }], extra: {} }],
+  esign_document: [{ id: 'doc1', brokerage_id: 'B1', title: 'Offer <b>12 Elm</b>', document_url: 'https://files/original.pdf', extra: { checklist_id: 'cl1', checklist_item_id: 'far' },
     signers: [{ name: 'Bob', email: 'bob@x.com' }, { name: 'Sue', email: 'sue@x.com' }],
     fields: [
       { id: 'f1', type: 'signature', x: 10, y: 30, width: 30, hPct: 2, signer_index: 0 },
@@ -74,6 +75,9 @@ assert.equal(completion.length, 3, 'sender + 2 signers get the signed PDF');
 assert.ok(completion.every((e) => e.attachments?.[0]?.filename.endsWith('signed.pdf')));
 const tx = globalThis.__db.transaction[0];
 assert.ok(tx.documents.some((d) => d.submission_id === done.id), 'attached to transaction');
+const far = globalThis.__db.checklist[0].items[0];
+assert.equal(far.status, 'uploaded', 'signed copy lands on the checklist item');
+assert.match(far.document_url, /viewSignedDocument|signed/); assert.match(far.document_name, /\(signed\)$/);
 assert.ok(done.signers.every((s) => s.ip_address === '9.9.9.9'), 'server-recorded IP');
 const audit = globalThis.__db.esign_audit_log.map((a) => a.action);
 assert.deepEqual(audit, ['sent', 'viewed', 'signed', 'signed', 'completed']);

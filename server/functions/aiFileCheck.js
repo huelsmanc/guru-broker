@@ -11,6 +11,7 @@ export default async (req) => {
     const tx = await base44.entities.Transaction.get(transactionId); // uses the user's own access
     if (!tx) return Response.json({ error: 'Transaction not found' }, { status: 404 });
 
+    const lists = await base44.entities.Checklist.filter({ subject_type: 'transaction', subject_id: transactionId }, 'created_date', 20).catch(() => []);
     const subs = await base44.entities.ESignSubmission.filter({ transaction_id: transactionId }, '-created_date', 50).catch(() => []);
     const today = new Date().toISOString().slice(0, 10);
     const file = {
@@ -29,7 +30,7 @@ export default async (req) => {
       },
       commission: { type: tx.commission_type, amount: tx.commission_amount, percentage: tx.commission_percentage },
       documents: (tx.documents || []).map((d) => d.name),
-      checklist: (tx.checklist || []).map((c) => `${c.completed ? '[x]' : '[ ]'} ${c.title}`),
+      checklist: lists.flatMap((l) => (l.items || []).map((c) => `[${c.status}] ${c.title}${c.requires_document ? ' (document)' : ''}${c.due_date ? ` due ${c.due_date}` : ''}`)),
       signing_requests: subs.map((s) => ({ status: s.status, signed: (s.signers || []).filter((x) => x.signed).length, of: (s.signers || []).length })),
       recent_updates: (tx.updates || []).slice(-8).map((u) => `${u.posted_at?.slice(0, 10)} ${u.milestone || ''} ${u.message || ''}`),
     };

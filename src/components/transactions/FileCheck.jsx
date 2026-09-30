@@ -29,9 +29,12 @@ export default function FileCheck({ tx, canEdit, onUpdate }) {
   };
 
   const addTask = async (title) => {
-    const checklist = [...(tx.checklist || []), { id: Date.now().toString(), title, completed: false, completed_by: null, completed_at: null }];
-    await base44.entities.Transaction.update(tx.id, { checklist });
-    onUpdate?.();
+    try {
+      const [cl] = await base44.entities.Checklist.filter({ subject_type: 'transaction', subject_id: tx.id }, 'created_date', 1);
+      if (!cl) return window.alert('Add a checklist to this deal first (Checklists tab).');
+      await base44.functions.invoke('checklistAction', { action: 'add_item', checklist_id: cl.id, title, requires_document: false });
+      onUpdate?.();
+    } catch (err) { window.alert(err.message); }
   };
 
   return (

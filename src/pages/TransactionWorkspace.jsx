@@ -2,7 +2,7 @@ import React from 'react';
 import { useParams, useSearchParams, useOutletContext, Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Loader2, ArrowLeft, ListChecks, FileText, Handshake, Users, DollarSign, Share2, Activity, LayoutDashboard } from 'lucide-react';
+import { Loader2, ArrowLeft, ListChecks, FileText, Users, DollarSign, Share2, Activity, LayoutDashboard } from 'lucide-react';
 import { can, isAdminRole } from '../../shared/permissions.generated.js';
 import WorkspaceOverview from '@/components/workspace/WorkspaceOverview';
 import WorkspaceChecklists from '@/components/workspace/WorkspaceChecklists';
@@ -10,7 +10,6 @@ import WorkspaceDocuments from '@/components/workspace/WorkspaceDocuments';
 import WorkspaceContacts from '@/components/workspace/WorkspaceContacts';
 import WorkspaceFinances from '@/components/workspace/WorkspaceFinances';
 import WorkspaceActivity from '@/components/workspace/WorkspaceActivity';
-import WorkspaceOffers from '@/components/workspace/WorkspaceOffers';
 import WorkspaceShared from '@/components/workspace/WorkspaceShared';
 import { useLiveTable } from '@/hooks/useLiveTable';
 
@@ -51,7 +50,6 @@ export default function TransactionWorkspace() {
     ['overview', 'Overview', LayoutDashboard],
     ['checklists', 'Checklists', ListChecks],
     ['documents', 'Documents', FileText],
-    ['offers', 'Offers', Handshake],
     ['contacts', 'Users & contacts', Users],
     ...(admin || can(user, 'tx.view_commissions') || isOwner ? [['finances', 'Finances', DollarSign]] : []),
     ['shared', 'Shared', Share2],
@@ -65,6 +63,7 @@ export default function TransactionWorkspace() {
           <Link to="/Transactions" className="text-xs text-emerald-300 flex items-center gap-1 mb-3 hover:underline"><ArrowLeft className="w-3 h-3" /> All transactions</Link>
           <p className="font-semibold leading-snug">{tx.property_address}</p>
           <p className="text-xs text-slate-400 mt-1">{tx.agent_name || tx.agent_email}{tx.tc_name ? ` · TC ${tx.tc_name}` : ''}</p>
+          {tx.offer_id && <Link to={`/Offers?open=${tx.offer_id}`} className="block text-xs text-emerald-300 hover:underline mt-1">Opened from an accepted offer</Link>}
           <span className={`inline-block mt-2 text-[11px] font-semibold rounded px-2 py-0.5 ${STATUS[tx.status] || 'bg-slate-100 text-slate-700'}`}>{(tx.status || 'active').replace(/_/g, ' ')}</span>
         </div>
         <nav className="flex lg:flex-col overflow-x-auto p-2 gap-1">
@@ -80,7 +79,6 @@ export default function TransactionWorkspace() {
         {tab === 'overview' && <WorkspaceOverview {...ctx} />}
         {tab === 'checklists' && <WorkspaceChecklists {...ctx} />}
         {tab === 'documents' && <WorkspaceDocuments {...ctx} />}
-        {tab === 'offers' && <WorkspaceOffers {...ctx} />}
         {tab === 'contacts' && <WorkspaceContacts {...ctx} />}
         {tab === 'finances' && <WorkspaceFinances {...ctx} />}
         {tab === 'shared' && <WorkspaceShared {...ctx} />}

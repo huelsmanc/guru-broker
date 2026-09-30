@@ -5,9 +5,10 @@ import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Plus, Trash2, ArrowUp, ArrowDown, Save, Copy, FileText, CheckSquare } from 'lucide-react';
+import { Loader2, Plus, Trash2, ArrowUp, ArrowDown, Save, Copy, FileText, CheckSquare, Paperclip, Upload, X } from 'lucide-react';
 import { isAdminRole } from '../../shared/permissions.generated.js';
 import { Empty } from '@/components/workspace/ui';
+import { LibraryPicker } from '@/components/workspace/WorkspaceChecklists';
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 const sel = 'mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm';
@@ -27,6 +28,8 @@ export default function ChecklistTemplates() {
   });
   const [edit, setEdit] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [formFor, setFormFor] = useState(null); // item index choosing a form from the library
+  const [uploading, setUploading] = useState(null);
   if (!isAdminRole(user?.role)) return <div className="p-8 text-sm">Admins only.</div>;
 
   const save = async () => {
@@ -46,6 +49,12 @@ export default function ChecklistTemplates() {
     queryClient.invalidateQueries({ queryKey: key });
   };
   const setItem = (i, patch) => setEdit((e) => ({ ...e, items: e.items.map((x, j) => (j === i ? { ...x, ...patch } : x)) }));
+  const uploadForm = async (i, file) => {
+    if (!file) return;
+    setUploading(i);
+    try { const { file_url } = await base44.integrations.Core.UploadFile({ file }); setItem(i, { form_url: file_url, form_name: file.name }); }
+    catch (err) { window.alert(err.message); } finally { setUploading(null); }
+  };
   const move = (i, d) => setEdit((e) => { const items = [...e.items]; const [x] = items.splice(i, 1); items.splice(i + d, 0, x); return { ...e, items }; });
 
   const groups = [['transaction', 'Transaction checklists'], ['onboarding', 'Agent onboarding']];
@@ -65,7 +74,7 @@ export default function ChecklistTemplates() {
       </aside>
 
       <main>
-        {!edit ? <Empty>Pick a template to edit. Agents and TCs add these to deals from the Checklists tab; onboarding templates go on new agents from Manage Users.</Empty> : (
+        {!edit ? <Empty>Pick a template to edit, or make your own. Attach a blank form to any document item and agents can fill and e-sign it right from the checklist. Agents pick checklists when an offer goes under contract (or from a deal's Checklists tab); onboarding templates go on agents from Manage Users.</Empty> : (
           <div className="rounded-xl border bg-card p-5">
             <div className="grid sm:grid-cols-3 gap-3 mb-5">
               <div className="sm:col-span-3"><Label>Name</Label><Input className="mt-1" value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></div>
@@ -83,6 +92,20 @@ export default function ChecklistTemplates() {
                   <button title={it.requires_document ? 'Needs a document' : 'Task'} className="p-1.5 rounded hover:bg-muted" onClick={() => setItem(i, { requires_document: !it.requires_document })}>{it.requires_document ? <FileText className="w-4 h-4 text-primary" /> : <CheckSquare className="w-4 h-4 text-muted-foreground" />}</button>
                   <Input className="flex-1 min-w-[200px]" value={it.title} placeholder="Item" onChange={(e) => setItem(i, { title: e.target.value })} />
                   <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={it.required !== false} onChange={(e) => setItem(i, { required: e.target.checked })} /> required</label>
+                  {it.requires_document && (it.form_url ? (
+                    <span className="flex items-center gap-1 text-xs rounded bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-1 max-w-[180px]">
+                      <a href={it.form_url} target="_blank" rel="noreferrer" className="truncate hover:underline" title={it.form_name}>{it.form_name || 'Form'}</a>
+                      <button title="Remove form" onClick={() => setItem(i, { form_url: null, form_name: null })}><X className="w-3 h-3" /></button>
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1">
+                      <Button size="sm" variant="ghost" className="h-8 gap-1 text-xs" title="Preload a form from the File Repository" onClick={() => setFormFor(i)}><Paperclip className="w-3.5 h-3.5" /> Form</Button>
+                      <label className="inline-flex items-center h-8 px-2 rounded-md text-xs cursor-pointer hover:bg-muted" title="Upload a blank form">
+                        {uploading === i ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                        <input type="file" accept=".pdf,image/*" className="hidden" onChange={(e) => uploadForm(i, e.target.files?.[0])} />
+                      </label>
+                    </span>
+                  ))}
                   <Button size="icon" variant="ghost" disabled={i === 0} onClick={() => move(i, -1)}><ArrowUp className="w-4 h-4" /></Button>
                   <Button size="icon" variant="ghost" disabled={i === edit.items.length - 1} onClick={() => move(i, 1)}><ArrowDown className="w-4 h-4" /></Button>
                   <Button size="icon" variant="ghost" onClick={() => setEdit({ ...edit, items: edit.items.filter((_, j) => j !== i) })}><Trash2 className="w-4 h-4" /></Button>
@@ -101,6 +124,8 @@ export default function ChecklistTemplates() {
           </div>
         )}
       </main>
+      {formFor != null && <LibraryPicker brokerageId={brokerageId} onClose={() => setFormFor(null)}
+        onPick={(f) => { setItem(formFor, { form_url: f.file_url, form_name: f.file_name }); setFormFor(null); }} />}
     </div>
   );
 }

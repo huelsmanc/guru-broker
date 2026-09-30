@@ -12,7 +12,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Plus, ClipboardList, User, Calendar, DollarSign, CheckCircle, AlertCircle, ChevronDown, ChevronUp, Search, Paperclip, Upload, FileText, Trash2, ExternalLink } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format } from 'date-fns';
-import TransactionChecklist from '@/components/transactions/TransactionChecklist';
 import TransactionESign from '@/components/transactions/TransactionESign';
 import CommissionBreakdown from '@/components/transactions/CommissionBreakdown';
 import ClosingReviewPrompt from '@/components/transactions/ClosingReviewPrompt';
@@ -127,9 +126,18 @@ export default function Transactions() {
 
   const { data: transactions = [] } = useQuery({
     queryKey: ['transactions', brokerageId, user?.email],
-    queryFn: () => isAdmin
-      ? base44.entities.Transaction.filter({ brokerage_id: brokerageId }, '-created_date', 200)
-      : base44.entities.Transaction.filter({ brokerage_id: brokerageId, agent_email: user?.email }, '-created_date', 200),
+    // Security rules decide what comes back: your own deals, deals you're a co-agent or TC on,
+    // your team's (team leaders) or everything (admins).
+    queryFn: () => base44.entities.Transaction.filter({ brokerage_id: brokerageId }, '-created_date', 500),
+    enabled: !!brokerageId && !!user,
+  });
+
+  const { data: checklistsByTx = {} } = useQuery({
+    queryKey: ['tx-checklist-progress', brokerageId],
+    queryFn: async () => {
+      const rows = await base44.entities.Checklist.filter({ brokerage_id: brokerageId, subject_type: 'transaction' }, '-created_date', 2000);
+      return rows.reduce((m, c) => ({ ...m, [c.subject_id]: [...(m[c.subject_id] || []), c] }), {});
+    },
     enabled: !!brokerageId && !!user,
   });
 
@@ -327,8 +335,8 @@ export default function Transactions() {
             const lastUpdate = tx.updates?.[tx.updates.length - 1];
             const hasActionNeeded = tx.updates?.some(u => u.flag === 'action_needed');
             const cfg = STATUS_CONFIG[tx.status] || STATUS_CONFIG.active;
-            const checklist = tx.checklist || [];
-            const checklistDone = checklist.filter(t => t.completed).length;
+            const checklist = (checklistsByTx[tx.id] || []).flatMap((l) => l.items || []);
+            const checklistDone = checklist.filter((t) => ['approved', 'exempt', 'done'].includes(t.status)).length;
             const checklistTotal = checklist.length;
             const buyerDisplay = tx.buyers?.filter(Boolean).join(', ') || tx.buyer_name;
             const hasKeyDates = KEY_DATE_DISPLAY.some(kd => tx[kd.field]);
@@ -539,12 +547,10 @@ export default function Transactions() {
                         />
 
                         {/* Checklist */}
-                        <TransactionChecklist
-                          tx={tx}
-                          isAdmin={isAdmin}
-                          user={user}
-                          onUpdate={() => queryClient.invalidateQueries({ queryKey: ['transactions', brokerageId] })}
-                        />
+                        <Link to={`/Transactions/${tx.id}?tab=checklists`} className="block rounded-xl border p-3 hover:bg-muted/40">
+                          <div className="flex justify-between text-sm"><span className="font-medium">Checklists</span><span className="text-muted-foreground">{checklistTotal ? `${checklistDone} of ${checklistTotal} complete` : 'None yet - add one'}</span></div>
+                          {checklistTotal > 0 && <div className="h-1.5 rounded-full bg-muted mt-2 overflow-hidden"><div className="h-full bg-emerald-500" style={{ width: `${Math.round((checklistDone / checklistTotal) * 100)}%` }} /></div>}
+                        </Link>
 
                         {/* E-Signatures */}
                         <TransactionESign

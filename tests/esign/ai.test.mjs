@@ -36,6 +36,7 @@ const call = async (name, body) => {
   const r = await POST(new Request(`https://gurubroker.app/api/fn/${name}`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer tok' }, body: JSON.stringify(body) }));
   return { status: r.status, body: await r.json() };
 };
+const svc = async (name, body = {}) => { const r = await POST(new Request(`https://gurubroker.app/api/fn/${name}`, { method: 'POST', headers: { 'x-gbh-service': 'hs' }, body: JSON.stringify(body) })); return { status: r.status, body: await r.json() }; };
 
 let r = await call('aiOfferDraft', { property_address: '12 Elm St', offer_price: 440000, buyers: [{ name: 'Bob' }] });
 assert.equal(r.status, 200, JSON.stringify(r.body)); assert.match(r.body.offer_text, /Offer to Purchase/);
@@ -52,7 +53,14 @@ r = await call('aiOfferDraft', { property_address: '12 Elm St', offer_price: 440
 assert.equal(r.status, 200); assert.match(r.body.offer_text, /OpenAI/, 'falls back to ChatGPT when Claude fails');
 failAnthropic = false;
 
-r = await call('offerAccepted', { offerId: 'o1', acceptanceDate: '2026-10-01', finalPrice: 445000 });
+globalThis.__db.checklist_template = [
+  { id: 'ct1', brokerage_id: 'B1', name: 'Buyer Checklist', kind: 'transaction', deal_type: 'buyer', items: [{ id: 'i1', title: 'Fully Executed Purchase Agreement', requires_document: true, form_url: 'https://files/far-bar.pdf', form_name: 'FAR/BAR As-Is' }, { id: 'i2', title: 'Schedule inspection' }], extra: {} },
+  { id: 'ctX', brokerage_id: 'OTHER', name: 'Not ours', kind: 'transaction', items: [], extra: {} },
+];
+r = await call('offerAccepted', { offerId: 'o1', templateIds: ['ctX'] });
+assert.equal(r.status, 400, "can't use another brokerage's checklist");
+assert.equal((globalThis.__db.transaction || []).length, 0, 'nothing created on a bad pick');
+r = await call('offerAccepted', { offerId: 'o1', acceptanceDate: '2026-10-01', finalPrice: 445000, templateIds: ['ct1'] });
 assert.equal(r.status, 200, JSON.stringify(r.body));
 const tx = globalThis.__db.transaction[0];
 assert.equal(tx.sale_price, 445000);
@@ -60,7 +68,14 @@ assert.equal(tx.tc_email, 'tc@x.com');
 assert.equal(tx.inspection_contingency_date, '2026-10-11');
 assert.equal(tx.financing_contingency_date, '2026-10-22');
 assert.deepEqual(tx.buyers, ['Bob']);
-assert.ok(tx.checklist.length >= 10);
+const cls = globalThis.__db.checklist.filter((c) => c.subject_id === tx.id);
+assert.equal(cls.length, 1, 'the checklist the agent picked');
+assert.equal(cls[0].name, 'Buyer Checklist'); assert.equal(cls[0].subject_email, 'ann@x.com');
+assert.equal(cls[0].items[0].form_url, 'https://files/far-bar.pdf', 'preloaded form carried over');
+assert.equal(cls[0].items[0].status, 'open');
+assert.equal(tx.extra?.offer_id ?? tx.offer_id, 'o1');
+r = await svc('applyDefaultChecklists', { event: { entity_name: 'Transaction', data: { ...tx, offer_id: 'o1' } } });
+assert.equal(r.body.skipped, 'agent chose checklists');
 assert.equal(globalThis.__db.offer[0].status, 'accepted');
 assert.ok(globalThis.__db.notification.some((n) => n.user_email === 'tc@x.com'));
 assert.ok(calls.some((c) => c.url.includes('resend') && c.body.to[0] === 'tc@x.com'), 'TC emailed');

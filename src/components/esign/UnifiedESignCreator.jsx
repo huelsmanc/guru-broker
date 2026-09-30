@@ -28,6 +28,7 @@ export default function UnifiedESignCreator({
   initialTitle = '',
   initialDocumentUrl = '',
   transactionId,
+  checklistLink, // { checklist_id, item_id }: the signed copy lands on that checklist item
   initialSigners = [],
   onCancel,
 }) {
@@ -131,6 +132,7 @@ export default function UnifiedESignCreator({
           brokerage_id: brokerageId,
           title,
           ...(transactionId ? { transaction_id: transactionId } : {}),
+          ...(checklistLink ? { checklist_id: checklistLink.checklist_id, checklist_item_id: checklistLink.item_id } : {}),
           document_url: documentUrl,
           fields: [],
           signers: [],
