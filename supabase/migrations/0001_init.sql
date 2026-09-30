@@ -55,6 +55,20 @@ $$;
 create or replace function public.touch_updated_date() returns trigger language plpgsql as $$
 begin new.updated_date = now(); return new; end $$;
 
+-- Base44 filled these in automatically; keep doing that so records never go missing
+-- from a brokerage because a screen forgot to send brokerage_id.
+create or replace function public.fill_owner() returns trigger language plpgsql as $$
+begin
+  if new.created_by is null then new.created_by := nullif(public.auth_email(), ''); end if;
+  if new.brokerage_id is null then new.brokerage_id := public.auth_brokerage_id(); end if;
+  return new;
+end $$;
+create or replace function public.fill_creator() returns trigger language plpgsql as $$
+begin
+  if new.created_by is null then new.created_by := nullif(public.auth_email(), ''); end if;
+  return new;
+end $$;
+
 alter table public.profiles enable row level security;
 drop policy if exists profiles_read on public.profiles;
 create policy profiles_read on public.profiles for select using (
@@ -93,9 +107,9 @@ create table if not exists public.activity_log (
 );
 drop trigger if exists activity_log_touch on public.activity_log;
 create trigger activity_log_touch before update on public.activity_log for each row execute function public.touch_updated_date();
+drop trigger if exists activity_log_fill on public.activity_log;
+create trigger activity_log_fill before insert on public.activity_log for each row execute function public.fill_owner();
 alter table public.activity_log enable row level security;
-drop policy if exists activity_log_access on public.activity_log;
-create policy activity_log_access on public.activity_log for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 create index if not exists activity_log_brokerage_id_idx on public.activity_log (brokerage_id);
 create index if not exists activity_log_user_email_idx on public.activity_log (user_email);
 create index if not exists activity_log_document_id_idx on public.activity_log (document_id);
@@ -114,9 +128,9 @@ create table if not exists public.admin_message (
 );
 drop trigger if exists admin_message_touch on public.admin_message;
 create trigger admin_message_touch before update on public.admin_message for each row execute function public.touch_updated_date();
+drop trigger if exists admin_message_fill on public.admin_message;
+create trigger admin_message_fill before insert on public.admin_message for each row execute function public.fill_owner();
 alter table public.admin_message enable row level security;
-drop policy if exists admin_message_access on public.admin_message;
-create policy admin_message_access on public.admin_message for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 create index if not exists admin_message_brokerage_id_idx on public.admin_message (brokerage_id);
 
 -- AgentSales ------------------------------------------------------------
@@ -135,9 +149,9 @@ create table if not exists public.agent_sales (
 );
 drop trigger if exists agent_sales_touch on public.agent_sales;
 create trigger agent_sales_touch before update on public.agent_sales for each row execute function public.touch_updated_date();
+drop trigger if exists agent_sales_fill on public.agent_sales;
+create trigger agent_sales_fill before insert on public.agent_sales for each row execute function public.fill_owner();
 alter table public.agent_sales enable row level security;
-drop policy if exists agent_sales_access on public.agent_sales;
-create policy agent_sales_access on public.agent_sales for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 create index if not exists agent_sales_brokerage_id_idx on public.agent_sales (brokerage_id);
 
 -- Brokerage -------------------------------------------------------------
@@ -158,11 +172,9 @@ create table if not exists public.brokerage (
 );
 drop trigger if exists brokerage_touch on public.brokerage;
 create trigger brokerage_touch before update on public.brokerage for each row execute function public.touch_updated_date();
+drop trigger if exists brokerage_fill on public.brokerage;
+create trigger brokerage_fill before insert on public.brokerage for each row execute function public.fill_creator();
 alter table public.brokerage enable row level security;
-drop policy if exists brokerage_access on public.brokerage;
-create policy brokerage_access on public.brokerage for select using (id = public.auth_brokerage_id() or public.is_super_admin());
-drop policy if exists brokerage_admin on public.brokerage;
-create policy brokerage_admin on public.brokerage for all using ((id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin());
 
 -- BrokerageSettings -----------------------------------------------------
 create table if not exists public.brokerage_settings (
@@ -178,9 +190,9 @@ create table if not exists public.brokerage_settings (
 );
 drop trigger if exists brokerage_settings_touch on public.brokerage_settings;
 create trigger brokerage_settings_touch before update on public.brokerage_settings for each row execute function public.touch_updated_date();
+drop trigger if exists brokerage_settings_fill on public.brokerage_settings;
+create trigger brokerage_settings_fill before insert on public.brokerage_settings for each row execute function public.fill_owner();
 alter table public.brokerage_settings enable row level security;
-drop policy if exists brokerage_settings_access on public.brokerage_settings;
-create policy brokerage_settings_access on public.brokerage_settings for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 create index if not exists brokerage_settings_brokerage_id_idx on public.brokerage_settings (brokerage_id);
 
 -- CMAsReport ------------------------------------------------------------
@@ -202,9 +214,9 @@ create table if not exists public.cmas_report (
 );
 drop trigger if exists cmas_report_touch on public.cmas_report;
 create trigger cmas_report_touch before update on public.cmas_report for each row execute function public.touch_updated_date();
+drop trigger if exists cmas_report_fill on public.cmas_report;
+create trigger cmas_report_fill before insert on public.cmas_report for each row execute function public.fill_owner();
 alter table public.cmas_report enable row level security;
-drop policy if exists cmas_report_access on public.cmas_report;
-create policy cmas_report_access on public.cmas_report for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 create index if not exists cmas_report_brokerage_id_idx on public.cmas_report (brokerage_id);
 create index if not exists cmas_report_user_email_idx on public.cmas_report (user_email);
 
@@ -222,9 +234,9 @@ create table if not exists public.channel (
 );
 drop trigger if exists channel_touch on public.channel;
 create trigger channel_touch before update on public.channel for each row execute function public.touch_updated_date();
+drop trigger if exists channel_fill on public.channel;
+create trigger channel_fill before insert on public.channel for each row execute function public.fill_owner();
 alter table public.channel enable row level security;
-drop policy if exists channel_access on public.channel;
-create policy channel_access on public.channel for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 create index if not exists channel_brokerage_id_idx on public.channel (brokerage_id);
 
 -- ChannelMember ---------------------------------------------------------
@@ -241,9 +253,9 @@ create table if not exists public.channel_member (
 );
 drop trigger if exists channel_member_touch on public.channel_member;
 create trigger channel_member_touch before update on public.channel_member for each row execute function public.touch_updated_date();
+drop trigger if exists channel_member_fill on public.channel_member;
+create trigger channel_member_fill before insert on public.channel_member for each row execute function public.fill_owner();
 alter table public.channel_member enable row level security;
-drop policy if exists channel_member_access on public.channel_member;
-create policy channel_member_access on public.channel_member for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 create index if not exists channel_member_brokerage_id_idx on public.channel_member (brokerage_id);
 create index if not exists channel_member_user_email_idx on public.channel_member (user_email);
 
@@ -269,9 +281,9 @@ create table if not exists public.client_review (
 );
 drop trigger if exists client_review_touch on public.client_review;
 create trigger client_review_touch before update on public.client_review for each row execute function public.touch_updated_date();
+drop trigger if exists client_review_fill on public.client_review;
+create trigger client_review_fill before insert on public.client_review for each row execute function public.fill_owner();
 alter table public.client_review enable row level security;
-drop policy if exists client_review_access on public.client_review;
-create policy client_review_access on public.client_review for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 create index if not exists client_review_brokerage_id_idx on public.client_review (brokerage_id);
 create index if not exists client_review_review_token_idx on public.client_review (review_token);
 
@@ -292,9 +304,9 @@ create table if not exists public.comment (
 );
 drop trigger if exists comment_touch on public.comment;
 create trigger comment_touch before update on public.comment for each row execute function public.touch_updated_date();
+drop trigger if exists comment_fill on public.comment;
+create trigger comment_fill before insert on public.comment for each row execute function public.fill_owner();
 alter table public.comment enable row level security;
-drop policy if exists comment_access on public.comment;
-create policy comment_access on public.comment for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 create index if not exists comment_brokerage_id_idx on public.comment (brokerage_id);
 
 -- ComplianceAttempt -----------------------------------------------------
@@ -313,9 +325,9 @@ create table if not exists public.compliance_attempt (
 );
 drop trigger if exists compliance_attempt_touch on public.compliance_attempt;
 create trigger compliance_attempt_touch before update on public.compliance_attempt for each row execute function public.touch_updated_date();
+drop trigger if exists compliance_attempt_fill on public.compliance_attempt;
+create trigger compliance_attempt_fill before insert on public.compliance_attempt for each row execute function public.fill_owner();
 alter table public.compliance_attempt enable row level security;
-drop policy if exists compliance_attempt_access on public.compliance_attempt;
-create policy compliance_attempt_access on public.compliance_attempt for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 create index if not exists compliance_attempt_brokerage_id_idx on public.compliance_attempt (brokerage_id);
 
 -- ComplianceQuestion ----------------------------------------------------
@@ -335,11 +347,9 @@ create table if not exists public.compliance_question (
 );
 drop trigger if exists compliance_question_touch on public.compliance_question;
 create trigger compliance_question_touch before update on public.compliance_question for each row execute function public.touch_updated_date();
+drop trigger if exists compliance_question_fill on public.compliance_question;
+create trigger compliance_question_fill before insert on public.compliance_question for each row execute function public.fill_creator();
 alter table public.compliance_question enable row level security;
-drop policy if exists compliance_question_access on public.compliance_question;
-create policy compliance_question_access on public.compliance_question for select using (auth.uid() is not null);
-drop policy if exists compliance_question_admin on public.compliance_question;
-create policy compliance_question_admin on public.compliance_question for all using (public.is_brokerage_admin());
 
 -- ComplianceTraining ----------------------------------------------------
 create table if not exists public.compliance_training (
@@ -357,9 +367,9 @@ create table if not exists public.compliance_training (
 );
 drop trigger if exists compliance_training_touch on public.compliance_training;
 create trigger compliance_training_touch before update on public.compliance_training for each row execute function public.touch_updated_date();
+drop trigger if exists compliance_training_fill on public.compliance_training;
+create trigger compliance_training_fill before insert on public.compliance_training for each row execute function public.fill_owner();
 alter table public.compliance_training enable row level security;
-drop policy if exists compliance_training_access on public.compliance_training;
-create policy compliance_training_access on public.compliance_training for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 create index if not exists compliance_training_brokerage_id_idx on public.compliance_training (brokerage_id);
 
 -- Conversation ----------------------------------------------------------
@@ -383,9 +393,9 @@ create table if not exists public.conversation (
 );
 drop trigger if exists conversation_touch on public.conversation;
 create trigger conversation_touch before update on public.conversation for each row execute function public.touch_updated_date();
+drop trigger if exists conversation_fill on public.conversation;
+create trigger conversation_fill before insert on public.conversation for each row execute function public.fill_owner();
 alter table public.conversation enable row level security;
-drop policy if exists conversation_access on public.conversation;
-create policy conversation_access on public.conversation for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 create index if not exists conversation_brokerage_id_idx on public.conversation (brokerage_id);
 
 -- CultureCalendarEntry --------------------------------------------------
@@ -408,9 +418,9 @@ create table if not exists public.culture_calendar_entry (
 );
 drop trigger if exists culture_calendar_entry_touch on public.culture_calendar_entry;
 create trigger culture_calendar_entry_touch before update on public.culture_calendar_entry for each row execute function public.touch_updated_date();
+drop trigger if exists culture_calendar_entry_fill on public.culture_calendar_entry;
+create trigger culture_calendar_entry_fill before insert on public.culture_calendar_entry for each row execute function public.fill_owner();
 alter table public.culture_calendar_entry enable row level security;
-drop policy if exists culture_calendar_entry_access on public.culture_calendar_entry;
-create policy culture_calendar_entry_access on public.culture_calendar_entry for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 create index if not exists culture_calendar_entry_brokerage_id_idx on public.culture_calendar_entry (brokerage_id);
 
 -- CultureCalendarRSVP ---------------------------------------------------
@@ -429,9 +439,9 @@ create table if not exists public.culture_calendar_rsvp (
 );
 drop trigger if exists culture_calendar_rsvp_touch on public.culture_calendar_rsvp;
 create trigger culture_calendar_rsvp_touch before update on public.culture_calendar_rsvp for each row execute function public.touch_updated_date();
+drop trigger if exists culture_calendar_rsvp_fill on public.culture_calendar_rsvp;
+create trigger culture_calendar_rsvp_fill before insert on public.culture_calendar_rsvp for each row execute function public.fill_owner();
 alter table public.culture_calendar_rsvp enable row level security;
-drop policy if exists culture_calendar_rsvp_access on public.culture_calendar_rsvp;
-create policy culture_calendar_rsvp_access on public.culture_calendar_rsvp for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 create index if not exists culture_calendar_rsvp_brokerage_id_idx on public.culture_calendar_rsvp (brokerage_id);
 create index if not exists culture_calendar_rsvp_user_email_idx on public.culture_calendar_rsvp (user_email);
 
@@ -450,9 +460,9 @@ create table if not exists public.dashboard_announcement (
 );
 drop trigger if exists dashboard_announcement_touch on public.dashboard_announcement;
 create trigger dashboard_announcement_touch before update on public.dashboard_announcement for each row execute function public.touch_updated_date();
+drop trigger if exists dashboard_announcement_fill on public.dashboard_announcement;
+create trigger dashboard_announcement_fill before insert on public.dashboard_announcement for each row execute function public.fill_owner();
 alter table public.dashboard_announcement enable row level security;
-drop policy if exists dashboard_announcement_access on public.dashboard_announcement;
-create policy dashboard_announcement_access on public.dashboard_announcement for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 create index if not exists dashboard_announcement_brokerage_id_idx on public.dashboard_announcement (brokerage_id);
 
 -- DirectMessage ---------------------------------------------------------
@@ -477,9 +487,9 @@ create table if not exists public.direct_message (
 );
 drop trigger if exists direct_message_touch on public.direct_message;
 create trigger direct_message_touch before update on public.direct_message for each row execute function public.touch_updated_date();
+drop trigger if exists direct_message_fill on public.direct_message;
+create trigger direct_message_fill before insert on public.direct_message for each row execute function public.fill_owner();
 alter table public.direct_message enable row level security;
-drop policy if exists direct_message_access on public.direct_message;
-create policy direct_message_access on public.direct_message for all using (lower(sender_email) = public.auth_email() or lower(receiver_email) = public.auth_email() or public.is_super_admin()) with check (lower(sender_email) = public.auth_email() or lower(receiver_email) = public.auth_email());
 create index if not exists direct_message_brokerage_id_idx on public.direct_message (brokerage_id);
 
 -- DocumentTemplate ------------------------------------------------------
@@ -494,9 +504,9 @@ create table if not exists public.document_template (
 );
 drop trigger if exists document_template_touch on public.document_template;
 create trigger document_template_touch before update on public.document_template for each row execute function public.touch_updated_date();
+drop trigger if exists document_template_fill on public.document_template;
+create trigger document_template_fill before insert on public.document_template for each row execute function public.fill_owner();
 alter table public.document_template enable row level security;
-drop policy if exists document_template_access on public.document_template;
-create policy document_template_access on public.document_template for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 create index if not exists document_template_brokerage_id_idx on public.document_template (brokerage_id);
 
 -- ESignAuditLog ---------------------------------------------------------
@@ -515,9 +525,9 @@ create table if not exists public.esign_audit_log (
 );
 drop trigger if exists esign_audit_log_touch on public.esign_audit_log;
 create trigger esign_audit_log_touch before update on public.esign_audit_log for each row execute function public.touch_updated_date();
+drop trigger if exists esign_audit_log_fill on public.esign_audit_log;
+create trigger esign_audit_log_fill before insert on public.esign_audit_log for each row execute function public.fill_creator();
 alter table public.esign_audit_log enable row level security;
-drop policy if exists esign_audit_log_access on public.esign_audit_log;
--- esign_audit_log: no client policy; reached only through server routes (service role).
 create index if not exists esign_audit_log_document_id_idx on public.esign_audit_log (document_id);
 
 -- ESignDocument ---------------------------------------------------------
@@ -554,9 +564,9 @@ create table if not exists public.esign_document (
 );
 drop trigger if exists esign_document_touch on public.esign_document;
 create trigger esign_document_touch before update on public.esign_document for each row execute function public.touch_updated_date();
+drop trigger if exists esign_document_fill on public.esign_document;
+create trigger esign_document_fill before insert on public.esign_document for each row execute function public.fill_owner();
 alter table public.esign_document enable row level security;
-drop policy if exists esign_document_access on public.esign_document;
-create policy esign_document_access on public.esign_document for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 create index if not exists esign_document_brokerage_id_idx on public.esign_document (brokerage_id);
 create index if not exists esign_document_slug_idx on public.esign_document (slug);
 
@@ -585,9 +595,9 @@ create table if not exists public.esign_submission (
 );
 drop trigger if exists esign_submission_touch on public.esign_submission;
 create trigger esign_submission_touch before update on public.esign_submission for each row execute function public.touch_updated_date();
+drop trigger if exists esign_submission_fill on public.esign_submission;
+create trigger esign_submission_fill before insert on public.esign_submission for each row execute function public.fill_owner();
 alter table public.esign_submission enable row level security;
-drop policy if exists esign_submission_access on public.esign_submission;
-create policy esign_submission_access on public.esign_submission for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 create index if not exists esign_submission_brokerage_id_idx on public.esign_submission (brokerage_id);
 create index if not exists esign_submission_document_id_idx on public.esign_submission (document_id);
 
@@ -605,9 +615,9 @@ create table if not exists public.esign_submitter (
 );
 drop trigger if exists esign_submitter_touch on public.esign_submitter;
 create trigger esign_submitter_touch before update on public.esign_submitter for each row execute function public.touch_updated_date();
+drop trigger if exists esign_submitter_fill on public.esign_submitter;
+create trigger esign_submitter_fill before insert on public.esign_submitter for each row execute function public.fill_creator();
 alter table public.esign_submitter enable row level security;
-drop policy if exists esign_submitter_access on public.esign_submitter;
--- esign_submitter: no client policy; reached only through server routes (service role).
 create index if not exists esign_submitter_submission_id_idx on public.esign_submitter (submission_id);
 
 -- ESignTemplate ---------------------------------------------------------
@@ -625,9 +635,9 @@ create table if not exists public.esign_template (
 );
 drop trigger if exists esign_template_touch on public.esign_template;
 create trigger esign_template_touch before update on public.esign_template for each row execute function public.touch_updated_date();
+drop trigger if exists esign_template_fill on public.esign_template;
+create trigger esign_template_fill before insert on public.esign_template for each row execute function public.fill_owner();
 alter table public.esign_template enable row level security;
-drop policy if exists esign_template_access on public.esign_template;
-create policy esign_template_access on public.esign_template for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 create index if not exists esign_template_brokerage_id_idx on public.esign_template (brokerage_id);
 
 -- Event -----------------------------------------------------------------
@@ -645,9 +655,9 @@ create table if not exists public.event (
 );
 drop trigger if exists event_touch on public.event;
 create trigger event_touch before update on public.event for each row execute function public.touch_updated_date();
+drop trigger if exists event_fill on public.event;
+create trigger event_fill before insert on public.event for each row execute function public.fill_owner();
 alter table public.event enable row level security;
-drop policy if exists event_access on public.event;
-create policy event_access on public.event for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 create index if not exists event_brokerage_id_idx on public.event (brokerage_id);
 
 -- EventRSVP -------------------------------------------------------------
@@ -668,9 +678,9 @@ create table if not exists public.event_rsvp (
 );
 drop trigger if exists event_rsvp_touch on public.event_rsvp;
 create trigger event_rsvp_touch before update on public.event_rsvp for each row execute function public.touch_updated_date();
+drop trigger if exists event_rsvp_fill on public.event_rsvp;
+create trigger event_rsvp_fill before insert on public.event_rsvp for each row execute function public.fill_owner();
 alter table public.event_rsvp enable row level security;
-drop policy if exists event_rsvp_access on public.event_rsvp;
-create policy event_rsvp_access on public.event_rsvp for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 create index if not exists event_rsvp_brokerage_id_idx on public.event_rsvp (brokerage_id);
 create index if not exists event_rsvp_user_email_idx on public.event_rsvp (user_email);
 
@@ -695,9 +705,9 @@ create table if not exists public.file_repository (
 );
 drop trigger if exists file_repository_touch on public.file_repository;
 create trigger file_repository_touch before update on public.file_repository for each row execute function public.touch_updated_date();
+drop trigger if exists file_repository_fill on public.file_repository;
+create trigger file_repository_fill before insert on public.file_repository for each row execute function public.fill_owner();
 alter table public.file_repository enable row level security;
-drop policy if exists file_repository_access on public.file_repository;
-create policy file_repository_access on public.file_repository for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 create index if not exists file_repository_brokerage_id_idx on public.file_repository (brokerage_id);
 
 -- GeneratedContract -----------------------------------------------------
@@ -719,9 +729,9 @@ create table if not exists public.generated_contract (
 );
 drop trigger if exists generated_contract_touch on public.generated_contract;
 create trigger generated_contract_touch before update on public.generated_contract for each row execute function public.touch_updated_date();
+drop trigger if exists generated_contract_fill on public.generated_contract;
+create trigger generated_contract_fill before insert on public.generated_contract for each row execute function public.fill_owner();
 alter table public.generated_contract enable row level security;
-drop policy if exists generated_contract_access on public.generated_contract;
-create policy generated_contract_access on public.generated_contract for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 create index if not exists generated_contract_brokerage_id_idx on public.generated_contract (brokerage_id);
 
 -- GroupChat -------------------------------------------------------------
@@ -739,9 +749,9 @@ create table if not exists public.group_chat (
 );
 drop trigger if exists group_chat_touch on public.group_chat;
 create trigger group_chat_touch before update on public.group_chat for each row execute function public.touch_updated_date();
+drop trigger if exists group_chat_fill on public.group_chat;
+create trigger group_chat_fill before insert on public.group_chat for each row execute function public.fill_owner();
 alter table public.group_chat enable row level security;
-drop policy if exists group_chat_access on public.group_chat;
-create policy group_chat_access on public.group_chat for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 create index if not exists group_chat_brokerage_id_idx on public.group_chat (brokerage_id);
 
 -- GroupMessage ----------------------------------------------------------
@@ -762,9 +772,9 @@ create table if not exists public.group_message (
 );
 drop trigger if exists group_message_touch on public.group_message;
 create trigger group_message_touch before update on public.group_message for each row execute function public.touch_updated_date();
+drop trigger if exists group_message_fill on public.group_message;
+create trigger group_message_fill before insert on public.group_message for each row execute function public.fill_owner();
 alter table public.group_message enable row level security;
-drop policy if exists group_message_access on public.group_message;
-create policy group_message_access on public.group_message for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 create index if not exists group_message_brokerage_id_idx on public.group_message (brokerage_id);
 create index if not exists group_message_group_id_idx on public.group_message (group_id);
 
@@ -789,9 +799,9 @@ create table if not exists public.idea (
 );
 drop trigger if exists idea_touch on public.idea;
 create trigger idea_touch before update on public.idea for each row execute function public.touch_updated_date();
+drop trigger if exists idea_fill on public.idea;
+create trigger idea_fill before insert on public.idea for each row execute function public.fill_owner();
 alter table public.idea enable row level security;
-drop policy if exists idea_access on public.idea;
-create policy idea_access on public.idea for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 create index if not exists idea_brokerage_id_idx on public.idea (brokerage_id);
 
 -- IdeaPadNote -----------------------------------------------------------
@@ -808,9 +818,9 @@ create table if not exists public.idea_pad_note (
 );
 drop trigger if exists idea_pad_note_touch on public.idea_pad_note;
 create trigger idea_pad_note_touch before update on public.idea_pad_note for each row execute function public.touch_updated_date();
+drop trigger if exists idea_pad_note_fill on public.idea_pad_note;
+create trigger idea_pad_note_fill before insert on public.idea_pad_note for each row execute function public.fill_creator();
 alter table public.idea_pad_note enable row level security;
-drop policy if exists idea_pad_note_access on public.idea_pad_note;
-create policy idea_pad_note_access on public.idea_pad_note for all using (lower(user_email) = public.auth_email()) with check (lower(user_email) = public.auth_email());
 create index if not exists idea_pad_note_user_email_idx on public.idea_pad_note (user_email);
 
 -- Message ---------------------------------------------------------------
@@ -830,9 +840,9 @@ create table if not exists public.message (
 );
 drop trigger if exists message_touch on public.message;
 create trigger message_touch before update on public.message for each row execute function public.touch_updated_date();
+drop trigger if exists message_fill on public.message;
+create trigger message_fill before insert on public.message for each row execute function public.fill_owner();
 alter table public.message enable row level security;
-drop policy if exists message_access on public.message;
-create policy message_access on public.message for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 create index if not exists message_brokerage_id_idx on public.message (brokerage_id);
 create index if not exists message_conversation_id_idx on public.message (conversation_id);
 
@@ -856,9 +866,9 @@ create table if not exists public.notification (
 );
 drop trigger if exists notification_touch on public.notification;
 create trigger notification_touch before update on public.notification for each row execute function public.touch_updated_date();
+drop trigger if exists notification_fill on public.notification;
+create trigger notification_fill before insert on public.notification for each row execute function public.fill_owner();
 alter table public.notification enable row level security;
-drop policy if exists notification_access on public.notification;
-create policy notification_access on public.notification for all using (lower(user_email) = public.auth_email() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or lower(user_email) = public.auth_email() or public.is_super_admin());
 create index if not exists notification_brokerage_id_idx on public.notification (brokerage_id);
 create index if not exists notification_user_email_idx on public.notification (user_email);
 create index if not exists notification_channel_idx on public.notification (channel);
@@ -878,9 +888,9 @@ create table if not exists public.onboarding (
 );
 drop trigger if exists onboarding_touch on public.onboarding;
 create trigger onboarding_touch before update on public.onboarding for each row execute function public.touch_updated_date();
+drop trigger if exists onboarding_fill on public.onboarding;
+create trigger onboarding_fill before insert on public.onboarding for each row execute function public.fill_owner();
 alter table public.onboarding enable row level security;
-drop policy if exists onboarding_access on public.onboarding;
-create policy onboarding_access on public.onboarding for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 create index if not exists onboarding_brokerage_id_idx on public.onboarding (brokerage_id);
 
 -- Recognition -----------------------------------------------------------
@@ -902,9 +912,9 @@ create table if not exists public.recognition (
 );
 drop trigger if exists recognition_touch on public.recognition;
 create trigger recognition_touch before update on public.recognition for each row execute function public.touch_updated_date();
+drop trigger if exists recognition_fill on public.recognition;
+create trigger recognition_fill before insert on public.recognition for each row execute function public.fill_owner();
 alter table public.recognition enable row level security;
-drop policy if exists recognition_access on public.recognition;
-create policy recognition_access on public.recognition for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 create index if not exists recognition_brokerage_id_idx on public.recognition (brokerage_id);
 
 -- ScheduledCall ---------------------------------------------------------
@@ -922,9 +932,9 @@ create table if not exists public.scheduled_call (
 );
 drop trigger if exists scheduled_call_touch on public.scheduled_call;
 create trigger scheduled_call_touch before update on public.scheduled_call for each row execute function public.touch_updated_date();
+drop trigger if exists scheduled_call_fill on public.scheduled_call;
+create trigger scheduled_call_fill before insert on public.scheduled_call for each row execute function public.fill_owner();
 alter table public.scheduled_call enable row level security;
-drop policy if exists scheduled_call_access on public.scheduled_call;
-create policy scheduled_call_access on public.scheduled_call for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 create index if not exists scheduled_call_brokerage_id_idx on public.scheduled_call (brokerage_id);
 
 -- SignatureData ---------------------------------------------------------
@@ -944,9 +954,9 @@ create table if not exists public.signature_data (
 );
 drop trigger if exists signature_data_touch on public.signature_data;
 create trigger signature_data_touch before update on public.signature_data for each row execute function public.touch_updated_date();
+drop trigger if exists signature_data_fill on public.signature_data;
+create trigger signature_data_fill before insert on public.signature_data for each row execute function public.fill_creator();
 alter table public.signature_data enable row level security;
-drop policy if exists signature_data_access on public.signature_data;
--- signature_data: no client policy; reached only through server routes (service role).
 create index if not exists signature_data_submission_id_idx on public.signature_data (submission_id);
 
 -- SocialMessage ---------------------------------------------------------
@@ -970,9 +980,9 @@ create table if not exists public.social_message (
 );
 drop trigger if exists social_message_touch on public.social_message;
 create trigger social_message_touch before update on public.social_message for each row execute function public.touch_updated_date();
+drop trigger if exists social_message_fill on public.social_message;
+create trigger social_message_fill before insert on public.social_message for each row execute function public.fill_owner();
 alter table public.social_message enable row level security;
-drop policy if exists social_message_access on public.social_message;
-create policy social_message_access on public.social_message for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 create index if not exists social_message_brokerage_id_idx on public.social_message (brokerage_id);
 create index if not exists social_message_channel_idx on public.social_message (channel);
 
@@ -993,9 +1003,9 @@ create table if not exists public.thread_reply (
 );
 drop trigger if exists thread_reply_touch on public.thread_reply;
 create trigger thread_reply_touch before update on public.thread_reply for each row execute function public.touch_updated_date();
+drop trigger if exists thread_reply_fill on public.thread_reply;
+create trigger thread_reply_fill before insert on public.thread_reply for each row execute function public.fill_owner();
 alter table public.thread_reply enable row level security;
-drop policy if exists thread_reply_access on public.thread_reply;
-create policy thread_reply_access on public.thread_reply for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 create index if not exists thread_reply_brokerage_id_idx on public.thread_reply (brokerage_id);
 
 -- Transaction -----------------------------------------------------------
@@ -1048,9 +1058,9 @@ create table if not exists public.transaction (
 );
 drop trigger if exists transaction_touch on public.transaction;
 create trigger transaction_touch before update on public.transaction for each row execute function public.touch_updated_date();
+drop trigger if exists transaction_fill on public.transaction;
+create trigger transaction_fill before insert on public.transaction for each row execute function public.fill_owner();
 alter table public.transaction enable row level security;
-drop policy if exists transaction_access on public.transaction;
-create policy transaction_access on public.transaction for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 create index if not exists transaction_brokerage_id_idx on public.transaction (brokerage_id);
 
 -- UserBadge -------------------------------------------------------------
@@ -1066,11 +1076,101 @@ create table if not exists public.user_badge (
 );
 drop trigger if exists user_badge_touch on public.user_badge;
 create trigger user_badge_touch before update on public.user_badge for each row execute function public.touch_updated_date();
+drop trigger if exists user_badge_fill on public.user_badge;
+create trigger user_badge_fill before insert on public.user_badge for each row execute function public.fill_owner();
 alter table public.user_badge enable row level security;
-drop policy if exists user_badge_access on public.user_badge;
-create policy user_badge_access on public.user_badge for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 create index if not exists user_badge_brokerage_id_idx on public.user_badge (brokerage_id);
 create index if not exists user_badge_user_email_idx on public.user_badge (user_email);
+
+-- Security rules ------------------------------------------------------------
+drop policy if exists activity_log_access on public.activity_log;
+create policy activity_log_access on public.activity_log for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+drop policy if exists admin_message_access on public.admin_message;
+create policy admin_message_access on public.admin_message for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+drop policy if exists agent_sales_access on public.agent_sales;
+create policy agent_sales_access on public.agent_sales for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+drop policy if exists brokerage_access on public.brokerage;
+create policy brokerage_access on public.brokerage for select using (id = public.auth_brokerage_id() or public.is_super_admin());
+drop policy if exists brokerage_admin on public.brokerage;
+create policy brokerage_admin on public.brokerage for all using ((id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin());
+drop policy if exists brokerage_settings_access on public.brokerage_settings;
+create policy brokerage_settings_access on public.brokerage_settings for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+drop policy if exists cmas_report_access on public.cmas_report;
+create policy cmas_report_access on public.cmas_report for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+drop policy if exists channel_access on public.channel;
+create policy channel_access on public.channel for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+drop policy if exists channel_member_access on public.channel_member;
+create policy channel_member_access on public.channel_member for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+drop policy if exists client_review_access on public.client_review;
+create policy client_review_access on public.client_review for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+drop policy if exists comment_access on public.comment;
+create policy comment_access on public.comment for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+drop policy if exists compliance_attempt_access on public.compliance_attempt;
+create policy compliance_attempt_access on public.compliance_attempt for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+drop policy if exists compliance_question_access on public.compliance_question;
+create policy compliance_question_access on public.compliance_question for select using (auth.uid() is not null);
+drop policy if exists compliance_question_admin on public.compliance_question;
+create policy compliance_question_admin on public.compliance_question for all using (public.is_brokerage_admin());
+drop policy if exists compliance_training_access on public.compliance_training;
+create policy compliance_training_access on public.compliance_training for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+drop policy if exists conversation_access on public.conversation;
+create policy conversation_access on public.conversation for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+drop policy if exists culture_calendar_entry_access on public.culture_calendar_entry;
+create policy culture_calendar_entry_access on public.culture_calendar_entry for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+drop policy if exists culture_calendar_rsvp_access on public.culture_calendar_rsvp;
+create policy culture_calendar_rsvp_access on public.culture_calendar_rsvp for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+drop policy if exists dashboard_announcement_access on public.dashboard_announcement;
+create policy dashboard_announcement_access on public.dashboard_announcement for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+drop policy if exists direct_message_access on public.direct_message;
+create policy direct_message_access on public.direct_message for all using (lower(sender_email) = public.auth_email() or lower(receiver_email) = public.auth_email() or public.is_super_admin()) with check (lower(sender_email) = public.auth_email() or lower(receiver_email) = public.auth_email());
+drop policy if exists document_template_access on public.document_template;
+create policy document_template_access on public.document_template for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+drop policy if exists esign_audit_log_access on public.esign_audit_log;
+create policy esign_audit_log_access on public.esign_audit_log for select using (public.is_super_admin() or exists (select 1 from public.esign_document d where d.id = esign_audit_log.document_id and d.brokerage_id = public.auth_brokerage_id()));
+drop policy if exists esign_document_access on public.esign_document;
+create policy esign_document_access on public.esign_document for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+drop policy if exists esign_submission_access on public.esign_submission;
+create policy esign_submission_access on public.esign_submission for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin() or exists (select 1 from public.esign_document d where d.id = esign_submission.document_id and d.brokerage_id = public.auth_brokerage_id())) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+drop policy if exists esign_submitter_access on public.esign_submitter;
+create policy esign_submitter_access on public.esign_submitter for select using (public.is_super_admin() or exists (select 1 from public.esign_submission s where s.id = esign_submitter.submission_id and (s.brokerage_id = public.auth_brokerage_id() or exists (select 1 from public.esign_document d where d.id = s.document_id and d.brokerage_id = public.auth_brokerage_id()))));
+drop policy if exists esign_template_access on public.esign_template;
+create policy esign_template_access on public.esign_template for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+drop policy if exists event_access on public.event;
+create policy event_access on public.event for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+drop policy if exists event_rsvp_access on public.event_rsvp;
+create policy event_rsvp_access on public.event_rsvp for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+drop policy if exists file_repository_access on public.file_repository;
+create policy file_repository_access on public.file_repository for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+drop policy if exists generated_contract_access on public.generated_contract;
+create policy generated_contract_access on public.generated_contract for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+drop policy if exists group_chat_access on public.group_chat;
+create policy group_chat_access on public.group_chat for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+drop policy if exists group_message_access on public.group_message;
+create policy group_message_access on public.group_message for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+drop policy if exists idea_access on public.idea;
+create policy idea_access on public.idea for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+drop policy if exists idea_pad_note_access on public.idea_pad_note;
+create policy idea_pad_note_access on public.idea_pad_note for all using (lower(user_email) = public.auth_email()) with check (lower(user_email) = public.auth_email());
+drop policy if exists message_access on public.message;
+create policy message_access on public.message for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+drop policy if exists notification_access on public.notification;
+create policy notification_access on public.notification for all using (lower(user_email) = public.auth_email() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or lower(user_email) = public.auth_email() or public.is_super_admin());
+drop policy if exists onboarding_access on public.onboarding;
+create policy onboarding_access on public.onboarding for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+drop policy if exists recognition_access on public.recognition;
+create policy recognition_access on public.recognition for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+drop policy if exists scheduled_call_access on public.scheduled_call;
+create policy scheduled_call_access on public.scheduled_call for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+drop policy if exists signature_data_access on public.signature_data;
+create policy signature_data_access on public.signature_data for select using (public.is_super_admin() or exists (select 1 from public.esign_submission s where s.id = signature_data.submission_id and (s.brokerage_id = public.auth_brokerage_id() or exists (select 1 from public.esign_document d where d.id = s.document_id and d.brokerage_id = public.auth_brokerage_id()))));
+drop policy if exists social_message_access on public.social_message;
+create policy social_message_access on public.social_message for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+drop policy if exists thread_reply_access on public.thread_reply;
+create policy thread_reply_access on public.thread_reply for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+drop policy if exists transaction_access on public.transaction;
+create policy transaction_access on public.transaction for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+drop policy if exists user_badge_access on public.user_badge;
+create policy user_badge_access on public.user_badge for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 
 -- Live updates (chat, notifications) ---------------------------------------
 do $$ declare t text; begin

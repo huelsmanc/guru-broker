@@ -9,7 +9,8 @@ import { format } from 'date-fns';
 import ContractForm from '@/components/contracts/ContractForm';
 import ContractPreview from '@/components/contracts/ContractPreview';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import DocuSealUploader from '@/components/esign/DocuSealUploader';
+import UnifiedESignCreator from '@/components/esign/UnifiedESignCreator';
+import { jsPDF } from 'jspdf';
 
 export default function ContractGenerator() {
   const { user, brokerageId } = useOutletContext();
@@ -144,11 +145,25 @@ FORMATTING:
     }).then(() => refetchContracts());
   };
 
+  // Turns the generated contract into a PDF so signature fields can be placed on it,
+  // then opens the built-in e-sign flow (this used to go to DocuSeal).
   const handleSendToESign = async () => {
     setSendingToESign(true);
     try {
-      const blob = new Blob([contractText], { type: 'text/plain' });
-      const file = new File([blob], `Purchase-Agreement-${formData.property_address?.replace(/\s/g, '-') || 'Contract'}.txt`, { type: 'text/plain' });
+      const pdf = new jsPDF({ unit: 'pt', format: 'letter' });
+      const margin = 54;
+      const width = pdf.internal.pageSize.getWidth() - margin * 2;
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      pdf.setFont('times', 'normal');
+      pdf.setFontSize(11);
+      let y = margin;
+      for (const line of pdf.splitTextToSize(contractText || '', width)) {
+        if (y > pageHeight - margin) { pdf.addPage(); y = margin; }
+        pdf.text(line, margin, y);
+        y += 15;
+      }
+      const name = `Purchase-Agreement-${formData.property_address?.replace(/\s/g, '-') || 'Contract'}.pdf`;
+      const file = new File([pdf.output('blob')], name, { type: 'application/pdf' });
       const { file_url } = await base44.integrations.Core.UploadFile({ file });
       setContractFileUrl(file_url);
       setShowESignModal(true);
@@ -159,44 +174,13 @@ FORMATTING:
     setSendingToESign(false);
   };
 
-  const handleESignComplete = async () => {
-    // Save to e-sign list
-    const slug = Math.random().toString(36).substring(2, 16);
-    await base44.entities.ESignDocument.create({
-      brokerage_id: brokerageId,
-      slug,
-      title: `Purchase & Sale Agreement — ${formData.property_address || 'Property'}`,
-      document_url: contractFileUrl,
-      original_document_url: contractFileUrl,
-      created_by_email: user.email,
-      created_by_name: user.full_name,
-      status: 'pending',
-      signatories: [
-        formData.buyer_name && {
-          id: `buyer-${Date.now()}`,
-          email: formData.buyer_email || '',
-          name: formData.buyer_name,
-          signed: false,
-          order: 1,
-        },
-        formData.seller_name && {
-          id: `seller-${Date.now() + 1}`,
-          email: formData.seller_email || '',
-          name: formData.seller_name,
-          signed: false,
-          order: 2,
-        },
-        {
-          id: `agent-${Date.now() + 2}`,
-          email: user.email,
-          name: user.full_name,
-          signed: false,
-          order: 0,
-        },
-      ].filter(Boolean),
-      signature_fields: [],
-    });
-    
+  const contractSigners = [
+    formData.buyer_name && { name: formData.buyer_name, email: formData.buyer_email || '' },
+    formData.seller_name && { name: formData.seller_name, email: formData.seller_email || '' },
+    user?.email && { name: user.full_name, email: user.email },
+  ].filter(Boolean).map((s, i) => ({ id: `signer-${i}`, ...s }));
+
+  const handleESignComplete = () => {
     setShowESignModal(false);
     setESignSuccess(true);
   };
@@ -348,7 +332,7 @@ FORMATTING:
                     </Button>
                   ) : (
                     <div className="flex items-center gap-1.5 text-xs font-medium text-accent bg-accent/10 border border-accent/20 rounded-xl px-3 h-9">
-                      ✅ Sent to E-Sign Platform!
+                      ✅ Sent for signature
                     </div>
                   )}
                   <Button variant="ghost" size="sm" onClick={handleReset} className="gap-1.5 rounded-xl text-xs h-9">
@@ -366,17 +350,16 @@ FORMATTING:
       <Dialog open={showESignModal} onOpenChange={setShowESignModal}>
         <DialogContent className="w-[95vw] max-w-[95vw] h-[95vh] max-h-[95vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Add Signature Fields & Send</DialogTitle>
+            <DialogTitle>Send for signature</DialogTitle>
           </DialogHeader>
           {contractFileUrl && (
-            <DocuSealUploader
-              onComplete={handleESignComplete}
-              brokerageId={brokerageId}
+            <UnifiedESignCreator
               user={user}
-              preloadedFile={{
-                name: `Purchase-Agreement-${formData.property_address || 'Contract'}.txt`,
-                url: contractFileUrl
-              }}
+              brokerageId={brokerageId}
+              initialTitle={`Purchase & Sale Agreement — ${formData.property_address || 'Property'}`}
+              initialDocumentUrl={contractFileUrl}
+              initialSigners={contractSigners}
+              onComplete={handleESignComplete}
             />
           )}
         </DialogContent>

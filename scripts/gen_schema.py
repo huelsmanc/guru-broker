@@ -150,6 +150,20 @@ $$;
 create or replace function public.touch_updated_date() returns trigger language plpgsql as $$
 begin new.updated_date = now(); return new; end $$;
 
+-- Base44 filled these in automatically; keep doing that so records never go missing
+-- from a brokerage because a screen forgot to send brokerage_id.
+create or replace function public.fill_owner() returns trigger language plpgsql as $$
+begin
+  if new.created_by is null then new.created_by := nullif(public.auth_email(), ''); end if;
+  if new.brokerage_id is null then new.brokerage_id := public.auth_brokerage_id(); end if;
+  return new;
+end $$;
+create or replace function public.fill_creator() returns trigger language plpgsql as $$
+begin
+  if new.created_by is null then new.created_by := nullif(public.auth_email(), ''); end if;
+  return new;
+end $$;
+
 alter table public.profiles enable row level security;
 drop policy if exists profiles_read on public.profiles;
 create policy profiles_read on public.profiles for select using (
@@ -171,6 +185,8 @@ create trigger profiles_touch before update on public.profiles for each row exec
 colmap = {"User": {"table": "profiles", "columns": USER_FIELDS.split() + ["id","created_date","updated_date","created_by"],
                     "typed": ["suspended"]}}
 
+pol = []
+pw = pol.append
 for ent, fields in sorted(ENTITIES.items()):
     t = snake(ent)
     fl = sorted(set(fields.split()))
@@ -186,36 +202,49 @@ for ent, fields in sorted(ENTITIES.items()):
     w(f"create table if not exists public.{t} (\n" + ",\n".join(cols) + "\n);")
     w(f"drop trigger if exists {t}_touch on public.{t};")
     w(f"create trigger {t}_touch before update on public.{t} for each row execute function public.touch_updated_date();")
+    fill = "fill_owner" if "brokerage_id" in fl else "fill_creator"
+    w(f"drop trigger if exists {t}_fill on public.{t};")
+    w(f"create trigger {t}_fill before insert on public.{t} for each row execute function public.{fill}();")
     w(f"alter table public.{t} enable row level security;")
-    w(f"drop policy if exists {t}_access on public.{t};")
+    pw(f"drop policy if exists {t}_access on public.{t};")
     if ent in PERSONAL:
         k = PERSONAL[ent]
-        w(f"create policy {t}_access on public.{t} for all using (lower({k}) = public.auth_email()) with check (lower({k}) = public.auth_email());")
+        pw(f"create policy {t}_access on public.{t} for all using (lower({k}) = public.auth_email()) with check (lower({k}) = public.auth_email());")
     elif ent == "DirectMessage":
-        w(f"create policy {t}_access on public.{t} for all using (lower(sender_email) = public.auth_email() or lower(receiver_email) = public.auth_email() or public.is_super_admin()) with check (lower(sender_email) = public.auth_email() or lower(receiver_email) = public.auth_email());")
+        pw(f"create policy {t}_access on public.{t} for all using (lower(sender_email) = public.auth_email() or lower(receiver_email) = public.auth_email() or public.is_super_admin()) with check (lower(sender_email) = public.auth_email() or lower(receiver_email) = public.auth_email());")
     elif ent == "Notification":
-        w(f"create policy {t}_access on public.{t} for all using (lower(user_email) = public.auth_email() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or lower(user_email) = public.auth_email() or public.is_super_admin());")
+        pw(f"create policy {t}_access on public.{t} for all using (lower(user_email) = public.auth_email() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or lower(user_email) = public.auth_email() or public.is_super_admin());")
+    elif ent == "ESignSubmission":
+        pw(f"create policy {t}_access on public.{t} for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin() or exists (select 1 from public.esign_document d where d.id = {t}.document_id and d.brokerage_id = public.auth_brokerage_id())) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());")
+    elif ent == "ESignAuditLog":
+        pw(f"create policy {t}_access on public.{t} for select using (public.is_super_admin() or exists (select 1 from public.esign_document d where d.id = {t}.document_id and d.brokerage_id = public.auth_brokerage_id()));")
+    elif ent in ("SignatureData", "ESignSubmitter"):
+        pw(f"create policy {t}_access on public.{t} for select using (public.is_super_admin() or exists (select 1 from public.esign_submission s where s.id = {t}.submission_id and (s.brokerage_id = public.auth_brokerage_id() or exists (select 1 from public.esign_document d where d.id = s.document_id and d.brokerage_id = public.auth_brokerage_id()))));")
     elif "brokerage_id" in fl:
-        w(f"create policy {t}_access on public.{t} for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());")
+        pw(f"create policy {t}_access on public.{t} for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());")
     elif ent == "Brokerage":
-        w(f"create policy {t}_access on public.{t} for select using (id = public.auth_brokerage_id() or public.is_super_admin());")
-        w(f"drop policy if exists {t}_admin on public.{t};")
-        w(f"create policy {t}_admin on public.{t} for all using ((id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin());")
+        pw(f"create policy {t}_access on public.{t} for select using (id = public.auth_brokerage_id() or public.is_super_admin());")
+        pw(f"drop policy if exists {t}_admin on public.{t};")
+        pw(f"create policy {t}_admin on public.{t} for all using ((id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin());")
     else:
         # Child rows (questions, submitters, signature data, audit log): server-side only,
         # except compliance questions which agents read while taking a quiz.
         if ent == "ComplianceQuestion":
-            w(f"create policy {t}_access on public.{t} for select using (auth.uid() is not null);")
-            w(f"drop policy if exists {t}_admin on public.{t};")
-            w(f"create policy {t}_admin on public.{t} for all using (public.is_brokerage_admin());")
+            pw(f"create policy {t}_access on public.{t} for select using (auth.uid() is not null);")
+            pw(f"drop policy if exists {t}_admin on public.{t};")
+            pw(f"create policy {t}_admin on public.{t} for all using (public.is_brokerage_admin());")
         else:
-            w(f"-- {t}: no client policy; reached only through server routes (service role).")
+            pw(f"-- {t}: no client policy; reached only through server routes (service role).")
     for idx in ("brokerage_id", "user_email", "document_id", "conversation_id", "submission_id", "channel", "group_id", "review_token", "slug"):
         if idx in fl:
             w(f"create index if not exists {t}_{idx}_idx on public.{t} ({idx});")
     w("")
     colmap[ent] = {"table": t, "columns": fl + ["id", "created_date", "updated_date", "created_by"],
                    "typed": [f for f in fl if coltype(f) != "text"]}
+
+w("-- Security rules ------------------------------------------------------------")
+out.extend(pol)
+w("")
 
 # Realtime for the live chat and notification screens
 live = ["notification", "social_message", "direct_message", "group_message", "message", "thread_reply",

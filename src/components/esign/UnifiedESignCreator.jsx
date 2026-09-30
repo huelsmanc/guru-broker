@@ -16,14 +16,27 @@ const STEPS = [
   { id: 'send', label: 'Send', icon: Send },
 ];
 
-export default function UnifiedESignCreator({ onComplete }) {
-  const { user, brokerageId } = useOutletContext();
+// Also used from Transactions and the Contract Generator (replacing DocuSeal):
+// pass `initialTitle` / `initialDocumentUrl` to start from an existing file and
+// `transactionId` to link the signing request to a transaction.
+export default function UnifiedESignCreator({
+  onComplete,
+  user: userProp,
+  brokerageId: brokerageIdProp,
+  initialTitle = '',
+  initialDocumentUrl = '',
+  transactionId,
+  initialSigners = [],
+}) {
+  const outlet = useOutletContext() || {};
+  const user = userProp || outlet.user;
+  const brokerageId = brokerageIdProp || outlet.brokerageId;
   const queryClient = useQueryClient();
 
   const [step, setStep] = useState('upload');
-  const [title, setTitle] = useState('');
-  const [documentUrl, setDocumentUrl] = useState('');
-  const [signers, setSigners] = useState([]);
+  const [title, setTitle] = useState(initialTitle);
+  const [documentUrl, setDocumentUrl] = useState(initialDocumentUrl);
+  const [signers, setSigners] = useState(initialSigners);
   const [error, setError] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -62,7 +75,7 @@ export default function UnifiedESignCreator({ onComplete }) {
   const handleFieldsComplete = async () => {
     // Refetch document to get updated fields
     try {
-      const updated = await base44.entities.ESignDocument.get(currentDoc.id, null);
+      const updated = await base44.entities.ESignDocument.get(currentDoc.id);
       setCurrentDoc(updated);
     } catch (err) {
       console.error('Failed to refresh document:', err);
@@ -80,12 +93,17 @@ export default function UnifiedESignCreator({ onComplete }) {
         documentTitle: currentDoc.title,
         signers: signers.filter(s => s.email),
         sequenceType: 'all_at_once',
+        transactionId,
         createdByEmail: user.email,
         createdByName: user.full_name,
       });
 
       await queryClient.invalidateQueries({ queryKey: ['esign-documents', brokerageId] });
-      onComplete();
+      onComplete?.({
+        document: currentDoc,
+        submissionId: res.data?.submission_id,
+        signers: signers.filter((s) => s.email),
+      });
     } catch (err) {
       setError('Failed to send: ' + (err.message || err));
     } finally {
@@ -100,6 +118,7 @@ export default function UnifiedESignCreator({ onComplete }) {
         const doc = await base44.entities.ESignDocument.create({
           brokerage_id: brokerageId,
           title,
+          ...(transactionId ? { transaction_id: transactionId } : {}),
           document_url: documentUrl,
           fields: [],
           signers: [],

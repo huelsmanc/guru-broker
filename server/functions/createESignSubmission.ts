@@ -1,4 +1,4 @@
-// Ported from Base44 function `createESignSubmission`. Logic unchanged.
+// Ported from Base44 function `createESignSubmission`. Adds a sign-in and ownership check.
 import { createClientFromRequest } from '../lib/base44.js';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
@@ -32,12 +32,22 @@ export default (async (req) => {
     }
 
     const base44 = createClientFromRequest(req);
+    // Migration change: Base44 let anyone call this and trigger signing emails.
+    // Now the sender must be signed in and the document must belong to their brokerage.
+    const me = await base44.auth.me().catch(() => null);
+    if (!me) return Response.json({ error: 'Not authenticated' }, { status: 401 });
     const body = await req.json();
 
     const { documentId, documentTitle, signers, sequenceType, transactionId, createdByEmail, createdByName } = body;
 
     if (!documentId || !signers || !Array.isArray(signers) || signers.length === 0) {
       return Response.json({ error: 'documentId and signers array required' }, { status: 400 });
+    }
+
+    const [ownDoc] = await base44.asServiceRole.entities.ESignDocument.filter({ id: documentId }, '-created_date', 1);
+    if (!ownDoc) return Response.json({ error: 'Document not found' }, { status: 404 });
+    if (ownDoc.brokerage_id !== me.brokerage_id && me.role !== 'super_admin') {
+      return Response.json({ error: 'Not allowed' }, { status: 403 });
     }
 
     const docTitle = documentTitle || 'Document';
@@ -59,6 +69,7 @@ export default (async (req) => {
     // Create submission record using service role
     const created = await base44.asServiceRole.entities.ESignSubmission.create({
       document_id: documentId,
+      brokerage_id: ownDoc.brokerage_id,
       transaction_id: transactionId || '',
       created_by_email: fromEmail,
       created_by_name: fromName,

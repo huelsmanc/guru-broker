@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import DocuSealUploader from '@/components/esign/DocuSealUploader';
+import UnifiedESignCreator from '@/components/esign/UnifiedESignCreator';
 import { Send, RefreshCw, FileSignature, Plus, Trash2, ExternalLink, CheckCircle, Clock, AlertCircle, X } from 'lucide-react';
 
 const STATUS_CONFIG = {
@@ -19,31 +19,33 @@ export default function TransactionESign({ tx, isAdmin, user, onUpdate }) {
   const esignDocs = tx.esign_docs || [];
 
   const [refreshingId, setRefreshingId] = useState(null);
-  const [showDocuSealEditor, setShowDocuSealEditor] = useState(false);
+  const [showCreator, setShowCreator] = useState(false);
+
+  // Signing now runs through the built-in e-sign system. Each entry keeps the
+  // submission id so its status can be checked; older DocuSeal entries (with an
+  // envelope_id) stay listed as they were.
+  const STATUS_MAP = { completed: 'completed', in_progress: 'sent', pending: 'sent', declined: 'declined' };
 
   const refreshStatus = async (doc) => {
-    if (!doc.envelope_id) return;
+    if (!doc.submission_id) return;
     setRefreshingId(doc.id);
-
-    const res = await base44.functions.invoke('docusealGetEnvelope', { envelopeId: doc.envelope_id });
-    const envelope = res.data;
-
-    // Map DocuSeal status
-    const statusMap = { completed: 'completed', pending: 'pending', sent: 'sent', declined: 'declined' };
-    const newStatus = statusMap[envelope.status] || doc.status;
-
-    const updated = esignDocs.map(d =>
-      d.id === doc.id ? { ...d, status: newStatus, signers: envelope.signers || d.signers } : d
-    );
-    await base44.entities.Transaction.update(tx.id, { esign_docs: updated });
-    
-    // If newly completed, add signed document to transaction documents
-    if (newStatus === 'completed' && doc.status !== 'completed') {
-      await handleDocumentCompleted({ ...doc, status: newStatus });
+    try {
+      const sub = await base44.entities.ESignSubmission.get(doc.submission_id);
+      const newStatus = STATUS_MAP[sub.status] || doc.status;
+      const signers = (sub.signers || []).map((s) => ({ name: s.name, email: s.email, signed: s.signed }));
+      const updated = esignDocs.map((d) =>
+        d.id === doc.id ? { ...d, status: newStatus, signers: signers.length ? signers : d.signers } : d
+      );
+      await base44.entities.Transaction.update(tx.id, { esign_docs: updated });
+      if (newStatus === 'completed' && doc.status !== 'completed') {
+        await handleDocumentCompleted({ ...doc, status: newStatus }, sub);
+      }
+      onUpdate();
+    } catch (error) {
+      console.error('Failed to refresh signing status:', error);
+    } finally {
+      setRefreshingId(null);
     }
-    
-    setRefreshingId(null);
-    onUpdate();
   };
 
   const removeDoc = async (docId) => {
@@ -52,29 +54,32 @@ export default function TransactionESign({ tx, isAdmin, user, onUpdate }) {
     onUpdate();
   };
 
-  const handleDocumentCompleted = async (doc) => {
-    if (doc.status !== 'completed') return;
-    
-    try {
-      // Fetch the signed document PDF from DocuSeal
-      const res = await base44.functions.invoke('docusealDownloadDocument', { 
-        envelopeId: doc.envelope_id 
-      });
-      
-      if (res.data?.file_url) {
-        // Add to transaction documents
-        const tx_docs = [...(tx.documents || []), {
-          name: `${doc.title} (Signed)`,
-          url: res.data.file_url,
-          uploaded_at: new Date().toISOString(),
-          uploaded_by: 'DocuSeal'
-        }];
-        await base44.entities.Transaction.update(tx.id, { documents: tx_docs });
-        onUpdate();
-      }
-    } catch (error) {
-      console.error('Failed to add signed document:', error);
-    }
+  const handleDocumentCompleted = async (doc, sub) => {
+    const url = sub?.signed_document_url;
+    if (!url) return;
+    const tx_docs = [...(tx.documents || []), {
+      name: `${doc.title} (Signed)`,
+      url,
+      uploaded_at: new Date().toISOString(),
+      uploaded_by: 'E-Sign',
+    }];
+    await base44.entities.Transaction.update(tx.id, { documents: tx_docs });
+  };
+
+  const handleSent = async ({ document, submissionId, signers }) => {
+    const entry = {
+      id: submissionId || document.id,
+      submission_id: submissionId,
+      esign_document_id: document.id,
+      title: document.title,
+      status: 'sent',
+      signers: (signers || []).map((s) => ({ name: s.name, email: s.email })),
+      sent_by: user?.full_name || user?.email,
+      sent_at: new Date().toISOString(),
+    };
+    await base44.entities.Transaction.update(tx.id, { esign_docs: [...esignDocs, entry] });
+    setShowCreator(false);
+    onUpdate();
   };
 
   return (
@@ -85,7 +90,7 @@ export default function TransactionESign({ tx, isAdmin, user, onUpdate }) {
         </p>
         {isAdmin && (
           <button
-            onClick={() => setShowDocuSealEditor(true)}
+            onClick={() => setShowCreator(true)}
             className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border bg-background border-border/40 hover:bg-muted text-muted-foreground transition-all"
           >
             <FileSignature className="w-3 h-3" /> Create E-Sign Package
@@ -124,14 +129,14 @@ export default function TransactionESign({ tx, isAdmin, user, onUpdate }) {
                     )}
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0">
-                    <button
+                    {doc.submission_id && <button
                       onClick={() => refreshStatus(doc)}
                       disabled={refreshingId === doc.id}
                       className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-primary transition-colors"
                       title="Refresh status"
                     >
                       <RefreshCw className={`w-3.5 h-3.5 ${refreshingId === doc.id ? 'animate-spin' : ''}`} />
-                    </button>
+                    </button>}
                     {isAdmin && (
                       <button
                         onClick={() => removeDoc(doc.id)}
@@ -149,35 +154,21 @@ export default function TransactionESign({ tx, isAdmin, user, onUpdate }) {
         </div>
       )}
 
-      {/* DocuSeal Editor Modal */}
-      {showDocuSealEditor && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-card rounded-xl w-[95vw] max-w-[95vw] h-[95vh] max-h-[95vh] flex flex-col overflow-hidden">
-            <div className="flex items-center justify-between p-4 border-b border-border">
-              <h2 className="font-semibold text-foreground">Create E-Sign Package</h2>
-              <button
-                onClick={() => setShowDocuSealEditor(false)}
-                className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-auto p-4">
-              <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/50 rounded-lg p-4 mb-4">
-                <p className="text-sm text-blue-900 dark:text-blue-200">
-                  Upload documents below and configure signing fields. Click "Publish" to send for signatures.
-                </p>
-              </div>
-              <DocuSealUploader
-                user={user}
-                onComplete={() => {
-                  setShowDocuSealEditor(false);
-                  onUpdate();
-                }}
-              />
-            </div>
-          </div>
-        </div>
+      {showCreator && (
+        <Dialog open={showCreator} onOpenChange={setShowCreator}>
+          <DialogContent className="w-[95vw] max-w-3xl max-h-[92vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Send for signature</DialogTitle>
+            </DialogHeader>
+            <UnifiedESignCreator
+              user={user}
+              brokerageId={tx.brokerage_id}
+              transactionId={tx.id}
+              initialTitle={tx.property_address ? `${tx.property_address} – ` : ''}
+              onComplete={handleSent}
+            />
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );
