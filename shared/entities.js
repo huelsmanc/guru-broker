@@ -68,7 +68,9 @@ function applyFilter(q, def, query) {
         else throw new Error(`Unsupported filter operator ${op}`);
       }
     } else if (Array.isArray(value)) {
-      q = q.contains(c, value);
+      // Array columns are jsonb. supabase-js turns a JS array into Postgres array
+      // syntax, which jsonb rejects, so send JSON text instead.
+      q = q.contains(c, JSON.stringify(value));
     } else {
       q = q.eq(c, isExtra ? String(value) : value);
     }

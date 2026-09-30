@@ -14,6 +14,7 @@ import CustomESignSubmissionManager from '@/components/esign/CustomESignSubmissi
 import DocumentViewer from '@/components/esign/DocumentViewer.jsx';
 import ESignFieldEditor from '@/components/esign/ESignFieldEditor.jsx';
 import ESignActivityLog from '@/components/esign/ESignActivityLog.jsx';
+import SigningRequestStatus from '@/components/esign/SigningRequestStatus.jsx';
 import ESignTemplateManager from '@/components/esign/ESignTemplateManager.jsx';
 import SignerManagementDashboard from '@/components/esign/SignerManagementDashboard.jsx';
 
@@ -139,38 +140,14 @@ export default function ESignDocuments() {
                     </div>
                   </div>
 
-                  {/* Submissions status */}
-                  {(() => {
-                    const docSubmissions = submissions.filter(s => s.document_id === doc.id);
-                    if (docSubmissions.length === 0) return null;
-                    const completed = docSubmissions.filter(s => s.status === 'completed');
-                    const inProgress = docSubmissions.filter(s => s.status === 'in_progress' || s.status === 'pending');
-                    return (
-                      <div className="mb-3 flex flex-wrap gap-2">
-                        {completed.map(sub => (
-                          <div key={sub.id} className="flex items-center gap-1.5 bg-green-50 border border-green-200 rounded-lg px-3 py-1.5">
-                            <CheckCircle className="w-3.5 h-3.5 text-green-600" />
-                            <span className="text-xs text-green-700 font-medium">Fully Signed</span>
-                            {sub.signed_document_url && (
-                              <a href={sub.signed_document_url} target="_blank" rel="noreferrer" className="ml-1 text-green-600 hover:text-green-800">
-                                <ExternalLink className="w-3 h-3" />
-                              </a>
-                            )}
-                          </div>
-                        ))}
-                        {inProgress.map(sub => {
-                          const signedCount = sub.signers?.filter(s => s.signed).length || 0;
-                          const totalCount = sub.signers?.length || 0;
-                          return (
-                            <div key={sub.id} className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 rounded-lg px-3 py-1.5">
-                              <Users className="w-3.5 h-3.5 text-blue-600" />
-                              <span className="text-xs text-blue-700 font-medium">{signedCount}/{totalCount} signed</span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    );
-                  })()}
+                  {/* Signing requests: who has signed, resend, cancel, signed PDF */}
+                  {submissions.filter(s => s.document_id === doc.id).length > 0 && (
+                    <div className="mb-3 space-y-2">
+                      {submissions.filter(s => s.document_id === doc.id).map(sub => (
+                        <SigningRequestStatus key={sub.id} sub={sub} canManage={isCreator || isAdmin} />
+                      ))}
+                    </div>
+                  )}
 
                   {/* Actions */}
                   <div className="flex gap-2 flex-wrap">

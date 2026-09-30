@@ -180,7 +180,8 @@ FORMATTING:
     user?.email && { name: user.full_name, email: user.email },
   ].filter(Boolean).map((s, i) => ({ id: `signer-${i}`, ...s }));
 
-  const handleESignComplete = () => {
+  const handleESignComplete = (result) => {
+    if (!result) { setShowESignModal(false); return; }
     setShowESignModal(false);
     setESignSuccess(true);
   };
@@ -360,6 +361,7 @@ FORMATTING:
               initialDocumentUrl={contractFileUrl}
               initialSigners={contractSigners}
               onComplete={handleESignComplete}
+              onCancel={() => setShowESignModal(false)}
             />
           )}
         </DialogContent>

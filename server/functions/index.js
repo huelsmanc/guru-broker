@@ -13,6 +13,7 @@ export const FUNCTIONS = {
   deleteUserAccount: () => import('./deleteUserAccount.ts'),
   detectPDFFields: () => import('./detectPDFFields.ts'),
   encryptDocument: () => import('./encryptDocument.ts'),
+  esignManage: () => import('./esignManage.ts'),
   exportCommissionSummary: () => import('./exportCommissionSummary.ts'),
   fetchLinkMetadata: () => import('./fetchLinkMetadata.ts'),
   fixDisplayNames: () => import('./fixDisplayNames.ts'),

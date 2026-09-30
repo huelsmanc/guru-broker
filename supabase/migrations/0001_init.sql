@@ -598,6 +598,8 @@ create trigger esign_submission_touch before update on public.esign_submission f
 drop trigger if exists esign_submission_fill on public.esign_submission;
 create trigger esign_submission_fill before insert on public.esign_submission for each row execute function public.fill_owner();
 alter table public.esign_submission enable row level security;
+-- Signing links are looked up by token inside `signers`.
+create index if not exists esign_submission_signers_gin on public.esign_submission using gin (signers jsonb_path_ops);
 create index if not exists esign_submission_brokerage_id_idx on public.esign_submission (brokerage_id);
 create index if not exists esign_submission_document_id_idx on public.esign_submission (document_id);
 

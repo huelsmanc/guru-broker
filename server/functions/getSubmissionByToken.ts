@@ -1,53 +1,52 @@
-// Ported from Base44 function `getSubmissionByToken`. Logic unchanged.
-import { createClientFromRequest, createClient } from '../lib/base44.js';
+// Loads what a signer needs for /sign?token=... Only this signer's details are returned;
+// other signers' links and personal data are never sent to the browser.
+import { createClientFromRequest } from '../lib/base44.js';
+import { findByToken, isExpired, whoseTurn, signerIndexInDoc, audit, clientIp, matchSigner, signerKey } from '../lib/esign.js';
 
-export default (async (req) => {
+export default async (req: Request) => {
   try {
-    if (req.method !== 'POST') {
-      return Response.json({ error: 'Method not allowed' }, { status: 405 });
+    const { token } = await req.json().catch(() => ({}));
+    const entities = createClientFromRequest(req).asServiceRole.entities;
+    const sub = await findByToken(entities, token);
+    if (!sub) return Response.json({ error: 'This signing link is not valid. Ask the sender for a new one.' }, { status: 404 });
+    if (sub.status === 'voided') return Response.json({ error: 'The sender cancelled this signing request.' }, { status: 410 });
+    if (isExpired(sub) && sub.status !== 'completed') {
+      return Response.json({ error: 'This signing link has expired. Ask the sender to resend it.' }, { status: 410 });
     }
 
-    // Public endpoint — always use service role, ignore user auth
-    const base44 = createClientFromRequest(req);
-    const { token } = await req.json();
+    const signer = sub.signers[await matchSigner(sub, token)];
+    const [doc] = await entities.ESignDocument.filter({ id: sub.document_id }, '-created_date', 1);
+    if (!doc) return Response.json({ error: 'Document not found.' }, { status: 404 });
 
-    if (!token) {
-      return Response.json({ error: 'token required' }, { status: 400 });
+    const waiting = !signer.signed && !whoseTurn(sub).some((s) => signerKey(s) === signerKey(signer));
+    if (waiting) {
+      // Signing in order and it isn't this person's turn: show nothing but the title.
+      return Response.json({ waiting: true, signer: { name: signer.name, email: signer.email }, document: { title: doc.title }, senderName: sub.created_by_name });
     }
 
-    const submissions = await base44.asServiceRole.entities.ESignSubmission.list('-created_date', 1000);
-    const submission = submissions.find(s => s.signers?.some(sig => sig.token === token));
-
-    if (!submission) {
-      return Response.json({ error: 'Invalid or expired token' }, { status: 404 });
+    if (!signer.viewed_at && !signer.signed) {
+      signer.viewed_at = new Date().toISOString();
+      await entities.ESignSubmission.update(sub.id, { signers: sub.signers });
+      await audit(entities, { document_id: doc.id, action: 'viewed', signer_email: signer.email, ip_address: clientIp(req), user_agent: req.headers.get('user-agent') });
     }
 
-    // Fetch document
-    const docs = await base44.asServiceRole.entities.ESignDocument.filter({ id: submission.document_id }, '-created_date', 1);
-    const document = docs[0] || null;
-
-    if (!document) {
-      return Response.json({ error: 'Document not found' }, { status: 404 });
-    }
-
-    // If URL looks like a private file URI (starts with /), generate a signed URL
-    let documentUrl = document.document_url;
-    if (documentUrl && documentUrl.startsWith('/')) {
-      try {
-        const signedRes = await base44.asServiceRole.integrations.Core.CreateFileSignedUrl({
-          file_uri: documentUrl,
-          expires_in: 86400,
-        });
-        documentUrl = signedRes.signed_url || documentUrl;
-      } catch (err) {
-        console.error('Failed to create signed URL:', err.message);
-      }
-    }
-
-    console.log('Returning document URL:', documentUrl);
-    return Response.json({ submission, document: { ...document, document_url: documentUrl } });
+    const signerIndex = signerIndexInDoc(doc, sub, signer);
+    return Response.json({
+      signer: { name: signer.name, email: signer.email, signed: signer.signed },
+      signerIndex,
+      alreadySigned: !!signer.signed,
+      waiting: false,
+      senderName: sub.created_by_name,
+      message: sub.message || null,
+      document: {
+        id: doc.id,
+        title: doc.title,
+        document_url: doc.document_url,
+        fields: doc.fields || [],
+      },
+    });
   } catch (error) {
-    console.error('Error fetching submission:', error);
-    return Response.json({ error: error.message }, { status: 500 });
+    console.error('getSubmissionByToken:', error);
+    return Response.json({ error: 'Could not load this document. Please try again.' }, { status: 500 });
   }
-});
+};

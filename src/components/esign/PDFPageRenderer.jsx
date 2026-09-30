@@ -1,133 +1,159 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Loader2 } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Loader2, AlertCircle } from 'lucide-react';
+import { stackRatio } from '../../../shared/esignGeometry.js';
+
+// pdf.js is loaded once and shared.
+let pdfjsPromise;
+function loadPdfjs() {
+  if (!pdfjsPromise) {
+    pdfjsPromise = import('pdfjs-dist').then((lib) => {
+      lib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${lib.version}/pdf.worker.min.js`;
+      return lib;
+    });
+  }
+  return pdfjsPromise;
+}
+
+export function isPdfUrl(url = '') {
+  const clean = url.split('?')[0].toLowerCase();
+  return clean.endsWith('.pdf') || url.includes('application/pdf');
+}
 
 /**
- * Renders a PDF using pdfjs-dist onto canvas elements (sharp, high-DPI).
- * Fields passed as children are positioned as absolute overlays using
- * percentage coordinates relative to the total rendered height.
+ * Shows a document (PDF or image) as pages stacked at full container width, with
+ * `children` laid over it as absolutely positioned overlays. The editor, the signing
+ * page and the final PDF all use this same layout, so fields land in the same place
+ * everywhere (see shared/esignGeometry.js).
+ *
+ * onLayout({ width, height, ratio, pages }) fires whenever the rendered size changes.
  */
-export default function PDFPageRenderer({ url, children, onHeightReady, containerRef: externalRef }) {
+export default function PDFPageRenderer({ url, children, onLayout, onHeightReady, containerRef: externalRef }) {
   const internalRef = useRef(null);
   const containerRef = externalRef || internalRef;
-  const [pages, setPages] = useState([]); // Array of { canvas element, height, width }
-  const [loading, setLoading] = useState(true);
-  const [totalHeight, setTotalHeight] = useState(0);
-  const [containerWidth, setContainerWidth] = useState(0);
-  const renderingRef = useRef(false);
-  const urlRef = useRef(url);
+  const [width, setWidth] = useState(0);
+  const [pages, setPages] = useState(null); // [{ width, height }] in points
+  const [error, setError] = useState(null);
+  const pdfRef = useRef(null);
+  const canvasRefs = useRef([]);
+  const renderTask = useRef(0);
+  const isPdf = isPdfUrl(url);
 
-  const renderPDF = useCallback(async (containerW) => {
-    if (!url || renderingRef.current) return;
-    renderingRef.current = true;
-    setLoading(true);
-
-    try {
-      const pdfjsLib = await import('pdfjs-dist');
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
-
-      const pdf = await pdfjsLib.getDocument({ url, withCredentials: false }).promise;
-
-      const dpr = window.devicePixelRatio || 1;
-      const renderedPages = [];
-      let total = 0;
-
-      for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const viewport = page.getViewport({ scale: 1 });
-        const scale = (containerW / viewport.width) * dpr;
-        const scaledViewport = page.getViewport({ scale });
-
-        const canvas = document.createElement('canvas');
-        canvas.width = scaledViewport.width;
-        canvas.height = scaledViewport.height;
-        // CSS size = logical pixels (not device pixels)
-        canvas.style.width = `${scaledViewport.width / dpr}px`;
-        canvas.style.height = `${scaledViewport.height / dpr}px`;
-
-        const ctx = canvas.getContext('2d');
-        await page.render({ canvasContext: ctx, viewport: scaledViewport }).promise;
-
-        const logicalHeight = scaledViewport.height / dpr;
-        renderedPages.push({ canvas, height: logicalHeight, width: scaledViewport.width / dpr });
-        total += logicalHeight;
-      }
-
-      setPages(renderedPages);
-      setTotalHeight(total);
-      if (onHeightReady) onHeightReady(total);
-    } catch (err) {
-      console.error('PDF render error:', err);
-    } finally {
-      setLoading(false);
-      renderingRef.current = false;
-    }
-  }, [url]);
-
-  // Watch container width via ResizeObserver so we re-render if the dialog/panel resizes
+  // Track the container width.
   useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const measure = () => setWidth(Math.round(el.getBoundingClientRect().width));
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [containerRef]);
+
+  // Load the document and read page sizes.
+  useEffect(() => {
+    let cancelled = false;
+    setPages(null);
+    setError(null);
     if (!url) return;
-
-    const observer = new ResizeObserver((entries) => {
-      const w = entries[0]?.contentRect?.width;
-      if (w && w > 0 && w !== containerWidth) {
-        setContainerWidth(w);
-      }
-    });
-
-    // Also try to get initial width immediately
-    const initialW = containerRef.current?.offsetWidth;
-    if (initialW && initialW > 0) {
-      setContainerWidth(initialW);
-    } else {
-      // Fallback: wait one frame for layout
-      requestAnimationFrame(() => {
-        const w = containerRef.current?.offsetWidth;
-        if (w && w > 0) setContainerWidth(w);
-        else setContainerWidth(800);
-      });
+    if (!isPdf) {
+      const img = new Image();
+      img.onload = () => !cancelled && setPages([{ width: img.naturalWidth, height: img.naturalHeight }]);
+      img.onerror = () => !cancelled && setError('This document could not be loaded.');
+      img.src = url;
+      return () => { cancelled = true; };
     }
-
-    if (containerRef.current) observer.observe(containerRef.current);
-    return () => observer.disconnect();
-  }, [url]);
-
-  // Re-render PDF when we have a valid container width
-  useEffect(() => {
-    if (containerWidth > 0) {
-      renderingRef.current = false; // allow re-render on width change
-      renderPDF(containerWidth);
-    }
-  }, [containerWidth, url]);
-
-  // Attach canvas elements to the DOM via refs
-  const canvasContainerRefs = useRef([]);
-
-  useEffect(() => {
-    pages.forEach((p, i) => {
-      const el = canvasContainerRefs.current[i];
-      if (el && el.children.length === 0) {
-        el.appendChild(p.canvas);
+    (async () => {
+      try {
+        const lib = await loadPdfjs();
+        const pdf = await lib.getDocument({ url, withCredentials: false }).promise;
+        const sizes = [];
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const vp = (await pdf.getPage(i)).getViewport({ scale: 1 });
+          sizes.push({ width: vp.width, height: vp.height });
+        }
+        if (!cancelled) {
+          pdfRef.current = pdf;
+          setPages(sizes);
+        }
+      } catch (err) {
+        console.error('PDF load error:', err);
+        if (!cancelled) setError('This document could not be loaded. Try re-uploading it as a PDF.');
       }
-    });
-  }, [pages]);
+    })();
+    return () => { cancelled = true; };
+  }, [url, isPdf]);
 
+  const ratio = pages ? stackRatio(pages) : 1.294;
+  const totalHeight = width ? width * ratio : 0;
+
+  // Report layout.
+  useEffect(() => {
+    if (!pages || !width) return;
+    onLayout?.({ width, height: totalHeight, ratio, pages });
+    onHeightReady?.(totalHeight);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pages, width]);
+
+  // Draw PDF pages at the current width (sharp on high-DPI screens).
+  useEffect(() => {
+    if (!isPdf || !pages || !width || !pdfRef.current) return;
+    const task = ++renderTask.current;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    (async () => {
+      for (let i = 0; i < pages.length; i++) {
+        if (task !== renderTask.current) return;
+        const canvas = canvasRefs.current[i];
+        if (!canvas) continue;
+        const page = await pdfRef.current.getPage(i + 1);
+        const scale = (width / pages[i].width) * dpr;
+        const vp = page.getViewport({ scale });
+        canvas.width = Math.floor(vp.width);
+        canvas.height = Math.floor(vp.height);
+        try {
+          await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+        } catch (err) {
+          if (task === renderTask.current) console.error('Page render error:', err);
+        }
+      }
+    })();
+  }, [isPdf, pages, width]);
+
+  let offset = 0;
   return (
-    <div ref={containerRef} className="relative w-full" style={{ height: loading ? '400px' : `${totalHeight}px`, overflow: 'visible' }}>
-      {loading ? (
-        <div className="absolute inset-0 flex items-center justify-center gap-2 text-gray-500">
-          <Loader2 className="w-5 h-5 animate-spin" /> Rendering document...
+    <div
+      ref={containerRef}
+      className="relative w-full select-none"
+      style={{ height: pages && width ? `${totalHeight}px` : '420px' }}
+    >
+      {error ? (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-sm text-red-600 p-6 text-center">
+          <AlertCircle className="w-6 h-6" /> {error}
+        </div>
+      ) : !pages || !width ? (
+        <div className="absolute inset-0 flex items-center justify-center gap-2 text-gray-500 text-sm">
+          <Loader2 className="w-5 h-5 animate-spin" /> Loading document…
         </div>
       ) : (
         <>
           {pages.map((p, i) => {
-            const offsetY = pages.slice(0, i).reduce((sum, pg) => sum + pg.height, 0);
+            const h = (p.height / p.width) * width;
+            const top = offset;
+            offset += h;
             return (
               <div
                 key={i}
-                ref={el => canvasContainerRefs.current[i] = el}
-                className="absolute left-0 w-full pointer-events-none"
-                style={{ top: `${offsetY}px`, height: `${p.height}px`, overflow: 'hidden' }}
-              />
+                className="absolute left-0 w-full pointer-events-none bg-white"
+                style={{ top, height: h, borderTop: i ? '1px dashed #cbd5e1' : undefined }}
+              >
+                {isPdf ? (
+                  <canvas ref={(el) => (canvasRefs.current[i] = el)} style={{ width: '100%', height: '100%', display: 'block' }} />
+                ) : (
+                  <img src={url} alt="" draggable={false} style={{ width: '100%', height: '100%', display: 'block' }} />
+                )}
+                {pages.length > 1 && (
+                  <span className="absolute right-2 bottom-1 text-[10px] text-slate-400">Page {i + 1} of {pages.length}</span>
+                )}
+              </div>
             );
           })}
           {children}

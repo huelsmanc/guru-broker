@@ -66,7 +66,9 @@ export default function TransactionESign({ tx, isAdmin, user, onUpdate }) {
     await base44.entities.Transaction.update(tx.id, { documents: tx_docs });
   };
 
-  const handleSent = async ({ document, submissionId, signers }) => {
+  const handleSent = async (result) => {
+    if (!result) { setShowCreator(false); return; }
+    const { document, submissionId, signers } = result;
     const entry = {
       id: submissionId || document.id,
       submission_id: submissionId,
@@ -156,7 +158,7 @@ export default function TransactionESign({ tx, isAdmin, user, onUpdate }) {
 
       {showCreator && (
         <Dialog open={showCreator} onOpenChange={setShowCreator}>
-          <DialogContent className="w-[95vw] max-w-3xl max-h-[92vh] overflow-y-auto">
+          <DialogContent className="w-[96vw] max-w-6xl max-h-[94vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Send for signature</DialogTitle>
             </DialogHeader>
@@ -166,6 +168,7 @@ export default function TransactionESign({ tx, isAdmin, user, onUpdate }) {
               transactionId={tx.id}
               initialTitle={tx.property_address ? `${tx.property_address} – ` : ''}
               onComplete={handleSent}
+              onCancel={() => setShowCreator(false)}
             />
           </DialogContent>
         </Dialog>

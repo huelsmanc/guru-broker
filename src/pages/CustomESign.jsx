@@ -34,7 +34,7 @@ export default function CustomESign() {
 
   const { data: submissions = [] } = useQuery({
     queryKey: ['esign-submissions', brokerageId],
-    queryFn: () => base44.asServiceRole.entities.ESignSubmission.list('-created_date', 100),
+    queryFn: () => base44.entities.ESignSubmission.list('-created_date', 100),
     enabled: !!brokerageId,
   });
 

@@ -60,4 +60,8 @@ assert.equal(sb.log.at(-1).table, 'profiles');
 await E.ESignDocument.filter({ id: 'abc' });
 assert.equal(sb.log.at(-1).table, 'esign_document');
 
+// jsonb containment (used to find signing links)
+await E.ESignSubmission.filter({ signers: [{ token: 'abc' }] });
+assert.deepEqual(sb.log.at(-1).ops.find((o) => o[0] === 'contains'), ['contains', 'signers', '[{"token":"abc"}]']);
+
 console.log('entities: all checks passed');

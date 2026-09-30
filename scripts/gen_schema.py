@@ -235,6 +235,9 @@ for ent, fields in sorted(ENTITIES.items()):
             pw(f"create policy {t}_admin on public.{t} for all using (public.is_brokerage_admin());")
         else:
             pw(f"-- {t}: no client policy; reached only through server routes (service role).")
+    if ent == "ESignSubmission":
+        w(f"-- Signing links are looked up by token inside `signers`.")
+        w(f"create index if not exists {t}_signers_gin on public.{t} using gin (signers jsonb_path_ops);")
     for idx in ("brokerage_id", "user_email", "document_id", "conversation_id", "submission_id", "channel", "group_id", "review_token", "slug"):
         if idx in fl:
             w(f"create index if not exists {t}_{idx}_idx on public.{t} ({idx});")

@@ -1,5 +1,9 @@
-// Ported from Base44 function `viewSignedDocument`. Logic unchanged.
-import { createClientFromRequest } from '../lib/base44.js';
+// Opens a completed document. New requests get the real signed PDF (built by
+// server/lib/esign.js). Documents signed before the migration have no PDF, so they
+// still use the original page, which draws signatures over the document.
+import { createClientFromRequest, adminClient } from '../lib/base44.js';
+
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 function renderSignedPage({ submission, document, signatureDataList, numPages }) {
   const docHeight = numPages * 1056;
@@ -16,15 +20,15 @@ function renderSignedPage({ submission, document, signatureDataList, numPages })
     }
   }
 
-  const fieldsJson = JSON.stringify(document.fields || []);
-  const sigsJson = JSON.stringify(fieldSignatures);
+  const fieldsJson = JSON.stringify(document.fields || []).replace(/</g, '\\u003c');
+  const sigsJson = JSON.stringify(fieldSignatures).replace(/</g, '\\u003c');
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Signed: ${document.title}</title>
+  <title>Signed: ${esc(document.title)}</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f3f4f6; }
@@ -75,7 +79,7 @@ function renderSignedPage({ submission, document, signatureDataList, numPages })
 
 <div class="header">
   <div>
-    <div class="header-title">📄 ${document.title}</div>
+    <div class="header-title">📄 ${esc(document.title)}</div>
     <div class="header-sub">Signed document — read only</div>
   </div>
   <span class="badge">✅ Fully Signed</span>
@@ -104,11 +108,11 @@ function renderSignedPage({ submission, document, signatureDataList, numPages })
       <tbody>
         ${submission.signers.map(s => `
           <tr>
-            <td>${s.name || s.email}</td>
-            <td>${s.email}</td>
+            <td>${esc(s.name || s.email)}</td>
+            <td>${esc(s.email)}</td>
             <td>${s.signed ? '✅ Signed' : '⏳ Pending'}</td>
             <td>${s.signed_at ? new Date(s.signed_at).toLocaleString() : '—'}</td>
-            <td>${s.ip_address || '—'}</td>
+            <td>${esc(s.ip_address || '—')}</td>
           </tr>`).join('')}
       </tbody>
     </table>
@@ -172,6 +176,26 @@ export default (async (req) => {
     const submission = submissions[0];
     if (!submission) {
       return new Response(renderError('Submission not found.'), { headers: { 'Content-Type': 'text/html' }, status: 404 });
+    }
+
+    // Access: the private key from the emailed link, or a signed-in member of the brokerage.
+    const key = url.searchParams.get('key');
+    let allowed = !!submission.access_key && key === submission.access_key;
+    if (!allowed) {
+      const me = await base44.auth.me().catch(() => null);
+      allowed = !!me && (me.role === 'super_admin' || (me.brokerage_id && me.brokerage_id === submission.brokerage_id));
+    }
+    // Submissions from before the migration have no key; keep their old links working.
+    if (!allowed && submission.access_key) {
+      return new Response(renderError('This link is not valid.'), { headers: { 'Content-Type': 'text/html' }, status: 403 });
+    }
+
+    if (submission.signed_pdf_path) {
+      const path = String(submission.signed_pdf_path).replace(/^private-files\//, '');
+      const { data, error } = await adminClient().storage.from('private-files').createSignedUrl(path, 600, {
+        download: url.searchParams.get('download') ? 'signed.pdf' : undefined,
+      });
+      if (!error && data?.signedUrl) return new Response(null, { status: 302, headers: { Location: data.signedUrl } });
     }
 
     // Load document

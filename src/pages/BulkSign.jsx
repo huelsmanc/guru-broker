@@ -136,7 +136,7 @@ export default function BulkSign() {
       // Verify document integrity before signing
       setSubmittingCount(prev => prev + 1);
       try {
-        const integrityCheck = await base44.asServiceRole.functions.invoke('verifyDocumentIntegrity', { docId: docToSign.id });
+        const integrityCheck = await base44.functions.invoke('verifyDocumentIntegrity', { docId: docToSign.id });
         if (!integrityCheck.data.verified) {
           throw new Error('Document integrity verification failed - document may have been tampered with');
         }
@@ -176,7 +176,7 @@ export default function BulkSign() {
         // Generate audit trail PDF if all signatories have signed
         if (allSigned) {
           try {
-            await base44.asServiceRole.functions.invoke('generateAuditTrailPDF', { docId: docToSign.id });
+            await base44.functions.invoke('generateAuditTrailPDF', { docId: docToSign.id });
           } catch (err) {
             console.error('Failed to generate audit trail PDF:', err);
           }
@@ -184,7 +184,7 @@ export default function BulkSign() {
 
         // Capture signing metadata (IP, device, location)
         try {
-          await base44.asServiceRole.functions.invoke('captureSigningMetadata', {
+          await base44.functions.invoke('captureSigningMetadata', {
             docId: docToSign.id,
             email: user.email,
             name: user.full_name,

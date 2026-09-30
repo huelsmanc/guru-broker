@@ -1,99 +1,43 @@
-// Ported from Base44 function `sendSigningReminders`. Logic unchanged.
+// Daily job: reminds signers who haven't signed after 2 days, at most every 2 days,
+// and only when it's their turn. Rewritten during the migration; the old version
+// emailed a link format the signing page never supported.
 import { createClientFromRequest } from '../lib/base44.js';
+import { whoseTurn, isExpired, emailSigner, audit } from '../lib/esign.js';
 
-export default (async (req) => {
+const DAY = 864e5;
+
+export default async (req: Request) => {
   try {
-    const base44 = createClientFromRequest(req);
-
-    // Fetch all pending documents
-    const documents = await base44.asServiceRole.entities.ESignDocument.filter(
-      { status: 'pending' },
-      '-created_date',
-      1000
-    );
-
-    if (!documents || documents.length === 0) {
-      return Response.json({ message: 'No pending documents', remindersSent: 0 });
-    }
-
-    const now = Date.now();
-    const fortyEightHours = 48 * 60 * 60 * 1000;
-    let remindersSent = 0;
-
-    for (const doc of documents) {
-      const createdTime = new Date(doc.created_date).getTime();
-      const docAge = now - createdTime;
-
-      // Only send reminders for documents older than 48 hours
-      if (docAge < fortyEightHours) {
-        continue;
-      }
-
-      // Find unsigned signatories
-      const unsignedSigners = doc.signatories?.filter(s => !s.signed) || [];
-
-      for (const signer of unsignedSigners) {
+    const entities = createClientFromRequest(req).asServiceRole.entities;
+    const open = [
+      ...(await entities.ESignSubmission.filter({ status: 'pending' }, '-created_date', 500)),
+      ...(await entities.ESignSubmission.filter({ status: 'in_progress' }, '-created_date', 500)),
+    ];
+    let sent = 0;
+    for (const sub of open) {
+      if (isExpired(sub)) continue;
+      const due = whoseTurn(sub).filter((s) => {
+        const since = new Date(s.last_reminded_at || s.notified_at || sub.submitted_at || sub.created_date).getTime();
+        return Date.now() - since >= 2 * DAY;
+      });
+      if (!due.length) continue;
+      const [doc] = await entities.ESignDocument.filter({ id: sub.document_id }, '-created_date', 1);
+      if (!doc) continue;
+      for (const s of due) {
         try {
-          // Generate direct signing link
-          const signingLink = `${getBaseUrl(req)}/sign?doc=${doc.id}&signer=${encodeURIComponent(signer.email)}`;
-
-          const emailBody = `
-Hello ${signer.name},
-
-This is a reminder that you have a document pending your signature:
-
-Document: ${doc.title}
-Created: ${new Date(doc.created_date).toLocaleString()}
-Time Since Created: ${Math.round(docAge / (60 * 60 * 1000))} hours
-
-Please click the link below to review and sign the document:
-${signingLink}
-
-This document requires your signature to proceed. If you have any questions, please contact ${doc.created_by_name} at ${doc.created_by_email}.
-
-Thank you,
-Guru Broker
-`;
-
-          // Send email via Core integration
-          await base44.integrations.Core.SendEmail({
-            to: signer.email,
-            subject: `Reminder: Please Sign "${doc.title}"`,
-            body: emailBody,
-            from_name: 'Guru Broker',
-          });
-
-          // Log reminder activity
-          await base44.asServiceRole.entities.ActivityLog.create({
-            brokerage_id: doc.brokerage_id,
-            document_id: doc.id,
-            action_type: 'viewed',
-            user_email: 'system@gurubroker.com',
-            user_name: 'Automated System',
-            details: `Sent signing reminder to ${signer.email}`,
-          });
-
-          remindersSent++;
-        } catch (error) {
-          console.error(`Failed to send reminder to ${signer.email}:`, error);
+          await emailSigner({ sub, doc, signer: s, reminder: true });
+          s.last_reminded_at = new Date().toISOString();
+          sent++;
+          await audit(entities, { document_id: doc.id, action: 'reminder_sent', signer_email: s.email });
+        } catch (err) {
+          console.error('reminder failed', s.email, err.message);
         }
       }
+      await entities.ESignSubmission.update(sub.id, { signers: sub.signers });
     }
-
-    return Response.json({
-      status: 'success',
-      remindersSent,
-      documentsChecked: documents.length,
-      timestamp: new Date().toISOString(),
-    });
+    return Response.json({ status: 'success', remindersSent: sent, checked: open.length });
   } catch (error) {
-    console.error('Reminder system error:', error);
+    console.error('sendSigningReminders:', error);
     return Response.json({ error: error.message }, { status: 500 });
   }
-});
-
-function getBaseUrl(req) {
-  const protocol = req.headers.get('x-forwarded-proto') || 'https';
-  const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || 'localhost:3000';
-  return `${protocol}://${host}`;
-}
+};

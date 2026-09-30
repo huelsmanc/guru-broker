@@ -27,6 +27,7 @@ export default function UnifiedESignCreator({
   initialDocumentUrl = '',
   transactionId,
   initialSigners = [],
+  onCancel,
 }) {
   const outlet = useOutletContext() || {};
   const user = userProp || outlet.user;
@@ -42,6 +43,8 @@ export default function UnifiedESignCreator({
   const [creating, setCreating] = useState(false);
 
   const [currentDoc, setCurrentDoc] = useState(null);
+  const [sequential, setSequential] = useState(false);
+  const [message, setMessage] = useState('');
 
   const handleFileUpload = async (e) => {
     const file = e.target.files?.[0];
@@ -92,7 +95,8 @@ export default function UnifiedESignCreator({
         documentId: currentDoc.id,
         documentTitle: currentDoc.title,
         signers: signers.filter(s => s.email),
-        sequenceType: 'all_at_once',
+        sequenceType: sequential ? 'sequential' : 'all_at_once',
+        message: message.trim() || undefined,
         transactionId,
         createdByEmail: user.email,
         createdByName: user.full_name,
@@ -115,6 +119,12 @@ export default function UnifiedESignCreator({
     if (step === 'upload') {
       setError(null);
       try {
+        if (currentDoc) {
+          const updated = await base44.entities.ESignDocument.update(currentDoc.id, { title, document_url: documentUrl });
+          setCurrentDoc(updated);
+          setStep('signers');
+          return;
+        }
         const doc = await base44.entities.ESignDocument.create({
           brokerage_id: brokerageId,
           title,
@@ -147,6 +157,16 @@ export default function UnifiedESignCreator({
   };
 
   const currentStepIndex = STEPS.findIndex(s => s.id === step);
+
+  const docFields = currentDoc?.fields || [];
+  const missingSignature = signers
+    .map((s, i) => ({ s, i }))
+    .filter(({ s, i }) => s.email && !docFields.some((f) => {
+      const n = Number(f.signer_index);
+      const idx = Number.isInteger(n) && n >= 0 ? n : 0;
+      return idx === i && (f.type === 'signature' || f.type === 'initial');
+    }))
+    .map(({ s }) => s.name || s.email);
 
   return (
     <div className="space-y-6 py-4">
@@ -274,11 +294,32 @@ export default function UnifiedESignCreator({
               </div>
             </div>
 
-            <div className="bg-accent/10 border border-accent rounded-lg p-4">
-              <p className="text-sm text-accent-foreground">
-                Ready to send signing requests to {signers.length} recipient{signers.length !== 1 ? 's' : ''}?
-              </p>
-            </div>
+            {signers.length > 1 && (
+              <label className="flex items-start gap-3 rounded-lg border border-border/60 p-3 text-sm cursor-pointer">
+                <input type="checkbox" className="mt-0.5" checked={sequential} onChange={(e) => setSequential(e.target.checked)} />
+                <span>
+                  <span className="font-medium">Sign in order</span>
+                  <span className="block text-muted-foreground text-xs">Each person gets the email only after the one before them signs, in the order listed.</span>
+                </span>
+              </label>
+            )}
+            <label className="block text-sm">
+              <span className="font-medium">Message to signers (optional)</span>
+              <textarea className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm" rows={3}
+                value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Please review and sign at your earliest convenience." />
+            </label>
+            {missingSignature.length > 0 ? (
+              <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 text-sm text-amber-900">
+                {missingSignature.join(', ')} {missingSignature.length === 1 ? 'has' : 'have'} no signature or initials field.
+                Go back to Fields and add one, so every signature ends up on the document.
+              </div>
+            ) : (
+              <div className="bg-accent/10 border border-accent rounded-lg p-4">
+                <p className="text-sm text-accent-foreground">
+                  Ready to send to {signers.length} recipient{signers.length !== 1 ? 's' : ''}. Everyone gets the fully signed PDF by email when the last person signs.
+                </p>
+              </div>
+            )}
           </motion.div>
         )}
       </div>
@@ -299,7 +340,7 @@ export default function UnifiedESignCreator({
         <Button
           variant="outline"
           onClick={() => {
-            if (step === 'upload') onComplete();
+            if (step === 'upload') (onCancel ? onCancel() : onComplete?.(null));
             else setStep(STEPS[currentStepIndex - 1].id);
           }}
           disabled={creating}
@@ -321,7 +362,7 @@ export default function UnifiedESignCreator({
         {step === 'send' && (
           <Button
             onClick={handleSend}
-            disabled={creating}
+            disabled={creating || missingSignature.length > 0}
             className="gap-2"
           >
             {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
