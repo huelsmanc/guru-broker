@@ -270,6 +270,11 @@ export default function CMABuilder() {
                 </div>
 
                 <p className="text-sm text-foreground">{cmaReport.summary}</p>
+                {cmaReport.source === 'mls' ? (
+                  <p className="mt-2 text-xs text-green-700">Based on {cmaReport.comparables?.length} recent sales from your MLS.</p>
+                ) : cmaReport.source === 'web' ? (
+                  <p className="mt-2 text-xs text-amber-700">No MLS sales synced for this area yet, so these comps came from a web search. Verify them before sharing.</p>
+                ) : null}
               </Card>
 
               {/* Market Analysis - Enhanced Visual */}

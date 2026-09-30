@@ -8,7 +8,7 @@ import { setInvoker, SERVICE_HEADER, isServiceRequest } from './base44.js';
 // in the app calls any more, several of which skipped login checks.
 export const SERVICE_ONLY = new Set([
   // scheduled
-  'closingDateReminder', 'sendSigningReminders', 'sendCultureEventReminders',
+  'closingDateReminder', 'sendSigningReminders', 'sendCultureEventReminders', 'mlsSync',
   // database automations
   'notifyAgentsNewTraining', 'notifyDocumentActivity', 'notifyNewSocialMessage', 'notifySignatureUpdate',
   // unused by the app

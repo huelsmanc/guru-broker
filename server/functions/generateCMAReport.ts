@@ -1,5 +1,56 @@
-// Ported from Base44 function `generateCMAReport`. Logic unchanged.
+// CMA report. When MLS data is synced, comparables are real sales from the MLS and AI
+// picks the best ones and explains adjustments. Without MLS data it falls back to the
+// original web-search version (flagged so agents know to verify it).
 import { createClientFromRequest } from '../lib/base44.js';
+import { findSubject, findComps, compSummary } from '../lib/comps.js';
+import { InvokeLLM } from '../lib/integrations.js';
+
+async function mlsCma({ address, propertyDetails }) {
+  const subject = (await findSubject({ address, mls_number: propertyDetails?.mls_number })) || {};
+  const zip = String(address).match(/\b\d{5}\b/)?.[0];
+  const comps = await findComps({
+    subject, zip,
+    city: subject.city || String(address).split(',')[1]?.trim(),
+    beds: propertyDetails?.bedrooms ?? subject.beds,
+    sqft: propertyDetails?.sqft ?? subject.living_area,
+  });
+  if (comps.length < 3) return null;
+  const list = comps.map(compSummary);
+  const ai = await InvokeLLM({
+    max_tokens: 3000,
+    system: 'You are a residential appraiser-minded listing agent. Use only the comparable sales provided. Be concrete with dollar adjustments.',
+    response_json_schema: {
+      type: 'object',
+      properties: {
+        chosen: { type: 'array', items: { type: 'object', properties: {
+          id: { type: 'string' }, adjustment: { type: 'number', description: 'net $ adjustment to compare with the subject' }, notes: { type: 'string' },
+        }, required: ['id', 'adjustment', 'notes'] } },
+        marketAnalysis: { type: 'object', properties: {
+          avgPricePerSqft: { type: 'number' }, avgDaysOnMarket: { type: 'number' }, marketTrend: { type: 'string' },
+          marketCondition: { type: 'string' }, recommendedPriceRange: { type: 'string' }, priceAdjustments: { type: 'string' },
+        } },
+        rehabAssessment: { type: 'string' },
+        summary: { type: 'string' },
+      },
+      required: ['chosen', 'marketAnalysis', 'summary'],
+    },
+    prompt: `Subject: ${address}
+Beds ${propertyDetails?.bedrooms ?? subject.beds ?? '?'}, baths ${propertyDetails?.bathrooms ?? subject.baths_total ?? '?'}, sqft ${subject.living_area ?? '?'}, year built ${subject.year_built ?? '?'}.
+Agent notes: ${propertyDetails?.notes || 'none'}
+
+Recent MLS sales (JSON):
+${JSON.stringify(list)}
+
+Pick the 4-6 most comparable sales, give each a net dollar adjustment toward the subject with a short reason, then give the market analysis and a recommended list price range for the subject.`,
+  });
+  const byId = new Map(list.map((c) => [c.id, c]));
+  const comparables = (ai.chosen || []).map((c) => {
+    const base = byId.get(c.id);
+    return base ? { ...base, adjustment: c.adjustment, adjustedPrice: base.soldPrice + (c.adjustment || 0), notes: c.notes, condition: '', upgrades: [] } : null;
+  }).filter(Boolean);
+  if (comparables.length < 3) return null;
+  return { comparables, marketAnalysis: ai.marketAnalysis, rehabAssessment: ai.rehabAssessment || '', summary: ai.summary, source: 'mls', subject: subject.id ? { mls_number: subject.mls_number, status: subject.status } : null };
+}
 
 export default (async (req) => {
   try {
@@ -10,7 +61,14 @@ export default (async (req) => {
       return Response.json({ error: 'Missing address or brokerageId' }, { status: 400 });
     }
 
-    // Use InvokeLLM with web search to find comparable properties
+    try {
+      const fromMls = await mlsCma({ address, propertyDetails });
+      if (fromMls) return Response.json(fromMls);
+    } catch (err) {
+      console.error('MLS CMA failed, falling back to web search:', err.message);
+    }
+
+    // No MLS data for this area: fall back to web search (verify these comps).
     const searchPrompt = `Find recent comparable property sales near "${address}" for a ${propertyDetails?.bedrooms || '3'} bed, ${propertyDetails?.bathrooms || '2'} bath property.
 
 Return JSON with:
@@ -82,7 +140,8 @@ Return JSON with:
         priceAdjustments: 'Analysis in progress'
       },
       rehabAssessment: cmaData?.rehabAssessment || 'Assessment pending',
-      summary: cmaData?.summary || 'CMA analysis complete'
+      summary: cmaData?.summary || 'CMA analysis complete',
+      source: 'web',
     };
 
     // Ensure we have comparables

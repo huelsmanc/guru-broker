@@ -168,6 +168,30 @@ function OfferEditor({ offer, user, brokerageId, onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const set = (k) => (e) => setF((x) => ({ ...x, [k]: e?.target ? (e.target.type === 'checkbox' ? e.target.checked : e.target.value) : e }));
+  const [looking, setLooking] = useState(false);
+
+  // Fill property details from the synced MLS listing.
+  const lookup = async () => {
+    setLooking(true);
+    setError(null);
+    try {
+      const res = await base44.functions.invoke('mlsSearch', { mls_number: f.mls_number });
+      const l = res.data.listing;
+      if (!l) { setError('That MLS number isn\'t in the synced MLS data yet.'); return; }
+      setF((x) => ({
+        ...x,
+        property_address: [l.street_address, l.unit ? `#${l.unit}` : null].filter(Boolean).join(' ') || x.property_address,
+        city: l.city || x.city, state: l.state || x.state, zip: l.zip || x.zip,
+        list_price: l.list_price ?? x.list_price,
+        listing_agent_name: l.list_agent_name || x.listing_agent_name,
+        listing_agent_email: l.list_agent_email || x.listing_agent_email,
+      }));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLooking(false);
+    }
+  };
 
   // Loan amount follows price and down payment unless typed.
   const suggestedLoan = useMemo(() => {
@@ -232,7 +256,15 @@ function OfferEditor({ offer, user, brokerageId, onClose, onSaved }) {
           <div className="sm:col-span-3"><Label>City</Label><Input className="mt-1" value={f.city} onChange={set('city')} /></div>
           <div><Label>State</Label><Input className="mt-1" value={f.state} onChange={set('state')} maxLength={2} placeholder="CT" /></div>
           <div className="sm:col-span-2"><Label>ZIP</Label><Input className="mt-1" value={f.zip} onChange={set('zip')} /></div>
-          <div className="sm:col-span-2"><Label>MLS #</Label><Input className="mt-1" value={f.mls_number} onChange={set('mls_number')} /></div>
+          <div className="sm:col-span-2">
+            <Label>MLS #</Label>
+            <div className="mt-1 flex gap-1">
+              <Input value={f.mls_number} onChange={set('mls_number')} />
+              <Button type="button" variant="outline" size="sm" className="h-10" disabled={!f.mls_number || looking} onClick={lookup} title="Fill from MLS">
+                {looking ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Fill'}
+              </Button>
+            </div>
+          </div>
           <div className="sm:col-span-2"><Label>List price</Label><Input className="mt-1" inputMode="numeric" value={f.list_price} onChange={set('list_price')} /></div>
           <div className="sm:col-span-2"><Label>Offer price</Label><Input className="mt-1" inputMode="numeric" value={f.offer_price} onChange={set('offer_price')} /></div>
           <div className="sm:col-span-2"><Label>Earnest money</Label><Input className="mt-1" inputMode="numeric" value={f.earnest_money} onChange={set('earnest_money')} /></div>

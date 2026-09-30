@@ -6,6 +6,9 @@ function matches(row, ops) {
   for (const [op, col, val] of ops) {
     const get = (c) => c.startsWith('extra->>') ? (row.extra || {})[c.slice(8)] : row[c];
     if (op === 'eq' && String(get(col)) !== String(val)) return false;
+    if (op === 'gte' && !(get(col) >= val)) return false;
+    if (op === 'lte' && !(get(col) <= val)) return false;
+    if (op === 'neq' && String(get(col)) === String(val)) return false;
     if (op === 'is' && get(col) != null) return false;
     if (op === 'in' && !val.map(String).includes(String(get(col)))) return false;
     if (op === 'contains') {
@@ -17,9 +20,17 @@ function matches(row, ops) {
 }
 export function createClient(url, key, opts) {
   const from = (table) => {
-    const ops = []; let action = 'select', payload = null, single = false;
+    const ops = []; let action = 'select', payload = null, single = false, opts = null;
     const run = () => {
       const rows = (db[table] ||= []);
+      if (action === 'upsert') {
+        const key = opts?.onConflict || 'id';
+        for (const p of (Array.isArray(payload) ? payload : [payload])) {
+          const hit = rows.find((r) => r[key] === p[key]);
+          if (hit) Object.assign(hit, p); else rows.push({ ...p });
+        }
+        return { data: null, error: null };
+      }
       if (action === 'insert') {
         const items = (Array.isArray(payload) ? payload : [payload]).map((p) => ({ id: p.id || `id${++n}`, created_date: new Date(Date.now() + n).toISOString(), extra: {}, ...p }));
         rows.push(...items);
@@ -37,7 +48,7 @@ export function createClient(url, key, opts) {
     const chain = new Proxy({}, { get(_, op) {
       if (op === 'then') return (res, rej) => Promise.resolve(run()).then(res, rej);
       return (...a) => {
-        if (op === 'insert' || op === 'update' || op === 'delete') { action = op; payload = a[0]; }
+        if (op === 'insert' || op === 'update' || op === 'delete' || op === 'upsert') { action = op; payload = a[0]; opts = a[1]; }
         else if (op === 'single' || op === 'maybeSingle') single = true;
         else if (op !== 'select') ops.push([op, ...a]);
         return chain;
