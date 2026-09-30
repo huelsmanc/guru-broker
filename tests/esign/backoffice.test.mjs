@@ -119,4 +119,32 @@ r = await as('boss')('ceoThankYou', { transactionId: 't1' });
 assert.equal(r.body.sent, 1);
 assert.equal(calls.filter((c) => c.url.includes('resend')).map((c) => JSON.parse(c.init.body)).at(-1).to[0], 'carla@home.com');
 
+// Checklists
+r = await as('ann')('checklistAction', { action: 'templates' });
+assert.ok(r.body.templates.length >= 7, JSON.stringify(r.body));
+const buyerTpl = r.body.templates.find((t) => t.name === 'Buyer Checklist');
+r = await as('ann')('checklistAction', { action: 'apply', subject_type: 'transaction', subject_id: 't1', template_id: buyerTpl.id });
+assert.equal(r.status, 200, JSON.stringify(r.body));
+const cl = r.body.checklist; const b2b = cl.items.find((i) => i.title === 'B2B');
+r = await as('ann')('checklistAction', { action: 'submit', checklist_id: cl.id, item_id: b2b.id });
+assert.equal(r.status, 400, 'needs a document first');
+r = await as('ann')('checklistAction', { action: 'attach', checklist_id: cl.id, item_id: b2b.id, url: 'https://files/b2b.pdf', name: 'B2B.pdf' });
+r = await as('ann')('checklistAction', { action: 'submit', checklist_id: cl.id, item_id: b2b.id });
+assert.equal(r.body.checklist.items.find((i) => i.id === b2b.id).status, 'review_requested');
+assert.ok(globalThis.__db.notification.some((n) => n.user_email === 'boss@x.com' && /Review requested: B2B/.test(n.title)));
+r = await as('ann')('checklistAction', { action: 'approve', checklist_id: cl.id, item_id: b2b.id });
+assert.equal(r.status, 403, 'agents cannot approve');
+r = await as('boss')('checklistAction', { action: 'approve', checklist_id: cl.id, item_id: b2b.id, note: 'Looks good' });
+assert.equal(r.body.checklist.items.find((i) => i.id === b2b.id).status, 'approved');
+const task = cl.items.find((i) => !i.requires_document);
+r = await as('ann')('checklistAction', { action: 'complete', checklist_id: cl.id, item_id: task.id });
+assert.equal(r.body.checklist.items.find((i) => i.id === task.id).status, 'done');
+
+// Sides: listing 0%, buying 2.5% of 800k with two agents 50/50
+globalThis.__db.transaction.push({ id: 't2', brokerage_id: 'B1', agent_email: 'ann@x.com', property_address: '3905 Aquilla Dr', sale_price: 800000, status: 'active',
+  sides: [{ side: 'listing', pct: 0, agents: [] }, { side: 'buying', pct: 2.5, agents: [{ email: 'ann@x.com', pct: 50 }, { email: 'sam@x.com', pct: 50 }] }], extra: {} });
+r = await as('boss')('commissionPreview', { transactionId: 't2' });
+assert.equal(r.body.result.totals.gross, 20000);
+assert.deepEqual(r.body.result.agents.map((a) => [a.email, a.share]), [['ann@x.com', 10000], ['sam@x.com', 10000]]);
+
 console.log('Back office: all checks passed');

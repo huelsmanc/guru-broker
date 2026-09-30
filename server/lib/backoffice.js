@@ -19,6 +19,15 @@ export async function agentContext(entities, email, { brokerageId, on = new Date
   if (!plan && brokerageId) {
     [plan] = await entities.CommissionPlan.filter({ brokerage_id: brokerageId, is_default: true }, '-created_date', 1);
   }
+  // Per-agent annual cap overrides the plan's cap.
+  if (plan && profile?.annual_cap != null && profile.annual_cap !== '') {
+    plan = { ...plan, config: { ...(plan.config || {}), cap: { ...(plan.config?.cap || {}), amount: Number(profile.annual_cap) } } };
+  }
+  let team = null;
+  if (profile?.team_id) [team] = await entities.Team.filter({ id: profile.team_id }, '-created_date', 1);
+  if (team?.lead_pct != null && team.lead_pct !== '' && plan) {
+    plan = { ...plan, config: { ...(plan.config || {}), team: { ...(plan.config?.team || {}), lead_pct: Number(team.lead_pct) } } };
+  }
   const capStart = capYearStart(profile?.cap_start_date || profile?.start_date, on);
   const records = await entities.CommissionRecord.filter(
     { agent_email: String(email).toLowerCase(), cap_year_start: capStart, status: { $in: ['approved', 'paid'] } }, 'closed_date', 1000);
@@ -51,7 +60,7 @@ export async function agentContext(entities, email, { brokerageId, on = new Date
     plan: plan ? { id: plan.id, name: plan.name, config: plan.config || {} } : { id: null, name: 'No plan (agent keeps 100%)', config: {} },
     cap_year_start: capStart,
     ytd,
-    team_lead_email: profile?.team_lead_email || null,
+    team_lead_email: (team?.leader_email && team.leader_email.toLowerCase() !== String(email).toLowerCase() ? team.leader_email : null) || profile?.team_lead_email || null,
     sponsors,
   };
 }
@@ -65,8 +74,30 @@ export async function calculateForTransaction(entities, tx, input = {}) {
       : tx.commission_type === 'flat' ? num(tx.commission_flat)
         : salePrice * num(tx.commission_percentage) / 100;
   }
-  const agentList = (input.agents?.length ? input.agents : tx.co_agents?.length ? tx.co_agents : [{ email: tx.agent_email, split_pct: 100 }])
-    .filter((a) => a.email);
+  // Brokermint-style sides: [{ side: 'listing' | 'buying', pct, flat, agents: [{ email, pct }] }].
+  // Each side's commission is split among its agents; everyone is then expressed as a
+  // share of the whole deal for the engine.
+  let agentList;
+  const sides = input.sides ?? tx.sides;
+  if (Array.isArray(sides) && sides.length) {
+    const sideGross = sides.map((sd) => (sd.flat != null && sd.flat !== '' ? num(sd.flat) : salePrice * num(sd.pct) / 100));
+    if (input.gross_commission == null) gross = sideGross.reduce((a, b) => a + b, 0);
+    const total = sideGross.reduce((a, b) => a + b, 0) || 1;
+    const shares = new Map();
+    sides.forEach((sd, i) => {
+      const ags = (sd.agents || []).filter((a) => a.email);
+      const pctSum = ags.reduce((a, b) => a + num(b.pct, 100 / (ags.length || 1)), 0) || 100;
+      for (const a of ags) {
+        const part = sideGross[i] * num(a.pct, 100 / ags.length) / pctSum;
+        const k = String(a.email).toLowerCase();
+        shares.set(k, (shares.get(k) || 0) + part / total * 100);
+      }
+    });
+    agentList = [...shares].map(([email, split_pct]) => ({ email, split_pct }));
+  } else {
+    agentList = (input.agents?.length ? input.agents : tx.co_agents?.length ? [{ email: tx.agent_email, split_pct: 100 - tx.co_agents.reduce((s, a) => s + num(a.split_pct), 0) }, ...tx.co_agents] : [{ email: tx.agent_email, split_pct: 100 }]);
+  }
+  agentList = agentList.filter((a) => a.email && num(a.split_pct) > 0);
   const on = input.closed_date ? new Date(`${input.closed_date}T12:00:00Z`) : new Date();
   const contexts = [];
   for (const a of agentList) {

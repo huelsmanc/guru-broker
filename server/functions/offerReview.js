@@ -2,7 +2,7 @@
 //   action 'request' (agent): asks admins/brokers to review, with an optional note
 //   action 'approve' | 'changes' (admin/broker): answers, with an optional note
 import { createClientFromRequest } from '../lib/base44.js';
-import { admins, withDuty, notifyPeople, ADMIN_ROLES } from '../lib/team.js';
+import { admins, withDuty, notifyPeople, isAdminRole } from '../lib/team.js';
 import { esc } from '../lib/esign.js';
 
 const money = (n) => (n == null ? '-' : `$${Number(n).toLocaleString('en-US')}`);
@@ -16,7 +16,7 @@ export default async (req) => {
     const [offer] = await entities.Offer.filter({ id: offerId }, '-created_date', 1);
     if (!offer) return Response.json({ error: 'Offer not found' }, { status: 404 });
     if (offer.brokerage_id !== me.brokerage_id && me.role !== 'super_admin') return Response.json({ error: 'Not allowed' }, { status: 403 });
-    const isReviewer = ADMIN_ROLES.includes(me.role);
+    const isReviewer = isAdminRole(me.role);
     const cleanNote = note ? String(note).slice(0, 2000) : null;
     const history = Array.isArray(offer.review_history) ? offer.review_history : [];
     const entry = { action, by: me.email, by_name: me.full_name || me.email, note: cleanNote, at: new Date().toISOString() };

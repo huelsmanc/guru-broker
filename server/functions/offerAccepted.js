@@ -1,11 +1,11 @@
 // New: "Offer accepted". Creates the transaction from the offer, assigns a transaction
 // coordinator (TC), starts the checklist, and notifies the TC and everyone with the
 // compliance duty.
-// TC choice: the one picked in the dialog -> the brokerage default in Settings ->
+// TC choice: the one picked in the dialog -> the agent's own TC -> the brokerage default ->
 // the team member with the TC duty who has the fewest open files.
 import { createClientFromRequest } from '../lib/base44.js';
 import { esc } from '../lib/esign.js';
-import { withDuty, leastLoadedTc, notifyPeople } from '../lib/team.js';
+import { withDuty, leastLoadedTc, notifyPeople, isAdminRole } from '../lib/team.js';
 
 const addDays = (iso, days) => {
   if (!iso || !days) return null;
@@ -37,7 +37,7 @@ export default async (req) => {
     const entities = base44.asServiceRole.entities;
     const [offer] = await entities.Offer.filter({ id: offerId }, '-created_date', 1);
     if (!offer) return Response.json({ error: 'Offer not found' }, { status: 404 });
-    const isAdmin = ['admin', 'broker', 'super_admin'].includes(me.role);
+    const isAdmin = isAdminRole(me.role);
     if (offer.brokerage_id !== me.brokerage_id && me.role !== 'super_admin') return Response.json({ error: 'Not allowed' }, { status: 403 });
     if (!isAdmin && offer.agent_email !== me.email) return Response.json({ error: 'Only the offer\'s agent or an admin can do this' }, { status: 403 });
     if (offer.transaction_id) return Response.json({ status: 'exists', transaction_id: offer.transaction_id });
@@ -45,7 +45,8 @@ export default async (req) => {
     const accepted = acceptanceDate || new Date().toISOString().slice(0, 10);
     const [settings] = await entities.BrokerageSettings.filter({ brokerage_id: offer.brokerage_id }, '-created_date', 1);
     let tc = null;
-    const pickEmail = tcEmail || settings?.default_tc_email;
+    const [agentProfile] = await entities.User.filter({ email: offer.agent_email }, '-created_date', 1);
+    const pickEmail = tcEmail || agentProfile?.tc_email || settings?.default_tc_email;
     if (pickEmail) {
       const [u] = await entities.User.filter({ email: pickEmail }, '-created_date', 1);
       tc = { email: pickEmail, name: u?.display_name || u?.full_name || settings?.default_tc_name || pickEmail };

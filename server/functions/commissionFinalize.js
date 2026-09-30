@@ -2,13 +2,13 @@
 // creates payouts waiting for approval.
 import { createClientFromRequest } from '../lib/base44.js';
 import { calculateForTransaction, finalizeCommission } from '../lib/backoffice.js';
-import { ADMIN_ROLES } from '../lib/team.js';
+import { isAdminRole, can } from '../lib/team.js';
 
 export default async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const me = await base44.auth.me();
-    if (!ADMIN_ROLES.includes(me.role)) return Response.json({ error: 'Admins only' }, { status: 403 });
+    if (!can(me, 'accounting.access')) return Response.json({ error: 'Admins only' }, { status: 403 });
     const { transactionId, input = {} } = await req.json();
     const entities = base44.asServiceRole.entities;
     const tx = await entities.Transaction.get(transactionId);

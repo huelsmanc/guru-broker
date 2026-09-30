@@ -5,7 +5,7 @@
 //   cancel    -> pending_approval/approved -> void
 // Money only moves on 'send', one payout at a time, and never twice.
 import { createClientFromRequest, adminClient } from '../lib/base44.js';
-import { ADMIN_ROLES } from '../lib/team.js';
+import { isAdminRole, can } from '../lib/team.js';
 import { sendCredit, payloadConfigured } from '../lib/payload.js';
 
 async function claim(id, from, to, patch = {}) {
@@ -17,7 +17,7 @@ export default async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const me = await base44.auth.me();
-    if (!ADMIN_ROLES.includes(me.role)) return Response.json({ error: 'Admins only' }, { status: 403 });
+    if (!can(me, 'accounting.access')) return Response.json({ error: 'Admins only' }, { status: 403 });
     const { payoutIds = [], action, memo } = await req.json();
     const entities = base44.asServiceRole.entities;
     const results = [];

@@ -4,7 +4,7 @@
 import { createClientFromRequest, adminClient } from '../lib/base44.js';
 import { SendEmail } from '../lib/integrations.js';
 import { esc } from '../lib/esign.js';
-import { ADMIN_ROLES } from '../lib/team.js';
+import { isAdminRole, can } from '../lib/team.js';
 
 async function download(url) {
   const res = await fetch(url);
@@ -21,7 +21,7 @@ export default async (req) => {
     const [offer] = await entities.Offer.filter({ id: offerId }, '-created_date', 1);
     if (!offer) return Response.json({ error: 'Offer not found' }, { status: 404 });
     if (offer.brokerage_id !== me.brokerage_id && me.role !== 'super_admin') return Response.json({ error: 'Not allowed' }, { status: 403 });
-    if (offer.agent_email !== me.email && !ADMIN_ROLES.includes(me.role)) return Response.json({ error: 'Only the offer\'s agent can send it' }, { status: 403 });
+    if (offer.agent_email !== me.email && !isAdminRole(me.role)) return Response.json({ error: 'Only the offer\'s agent can send it' }, { status: 403 });
     const recipient = String(to || offer.listing_agent_email || '').trim();
     if (!/\S+@\S+\.\S+/.test(recipient)) return Response.json({ error: 'Add the listing agent\'s email first' }, { status: 400 });
 

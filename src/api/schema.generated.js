@@ -23,6 +23,21 @@ export const SCHEMA = {
       "commission_plan_id",
       "team_lead_email",
       "sponsor_email",
+      "first_name",
+      "last_name",
+      "personal_company",
+      "birthday",
+      "address",
+      "city",
+      "state",
+      "zip",
+      "alternate_name",
+      "tc_email",
+      "licenses",
+      "annual_cap",
+      "team_id",
+      "permissions",
+      "alerts_sent",
       "id",
       "created_date",
       "updated_date",
@@ -35,7 +50,12 @@ export const SCHEMA = {
       "license_expiration",
       "eo_expiration",
       "start_date",
-      "cap_start_date"
+      "cap_start_date",
+      "birthday",
+      "licenses",
+      "annual_cap",
+      "permissions",
+      "alerts_sent"
     ]
   },
   "ActivityEvent": {
@@ -217,6 +237,26 @@ export const SCHEMA = {
     ],
     "typed": []
   },
+  "Checklist": {
+    "table": "checklist",
+    "columns": [
+      "brokerage_id",
+      "items",
+      "name",
+      "status",
+      "subject_email",
+      "subject_id",
+      "subject_type",
+      "template_id",
+      "id",
+      "created_date",
+      "updated_date",
+      "created_by"
+    ],
+    "typed": [
+      "items"
+    ]
+  },
   "ChecklistTemplate": {
     "table": "checklist_template",
     "columns": [
@@ -225,6 +265,7 @@ export const SCHEMA = {
       "deal_type",
       "is_default",
       "items",
+      "kind",
       "name",
       "id",
       "created_date",
@@ -1043,6 +1084,22 @@ export const SCHEMA = {
       "pinned",
       "reactions",
       "read_by"
+    ]
+  },
+  "Team": {
+    "table": "team",
+    "columns": [
+      "brokerage_id",
+      "lead_pct",
+      "leader_email",
+      "name",
+      "id",
+      "created_date",
+      "updated_date",
+      "created_by"
+    ],
+    "typed": [
+      "lead_pct"
     ]
   },
   "ThreadReply": {

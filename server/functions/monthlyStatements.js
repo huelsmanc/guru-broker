@@ -2,7 +2,7 @@
 // commission statement PDF for the month, stores it, and emails it to them.
 import { createClientFromRequest, adminClient, appUrl } from '../lib/base44.js';
 import { isServiceRequest } from '../lib/base44.js';
-import { ADMIN_ROLES } from '../lib/team.js';
+import { isAdminRole, can } from '../lib/team.js';
 import { SendEmail } from '../lib/integrations.js';
 import { createDoc, money } from '../lib/pdfdoc.js';
 import { agentContext } from '../lib/backoffice.js';
@@ -54,7 +54,7 @@ export default async (req) => {
     let me = null;
     if (!service) {
       me = await base44.auth.me();
-      if (!ADMIN_ROLES.includes(me.role)) return Response.json({ error: 'Admins only' }, { status: 403 });
+      if (!can(me, 'accounting.access')) return Response.json({ error: 'Admins only' }, { status: 403 });
     }
     const body = await req.json().catch(() => ({}));
     const now = new Date();

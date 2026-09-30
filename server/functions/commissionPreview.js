@@ -2,7 +2,7 @@
 // Agents can preview their own deals; admins any deal. Nothing is saved.
 import { createClientFromRequest } from '../lib/base44.js';
 import { calculateForTransaction } from '../lib/backoffice.js';
-import { ADMIN_ROLES } from '../lib/team.js';
+import { isAdminRole, can } from '../lib/team.js';
 
 export default async (req) => {
   try {
@@ -11,7 +11,7 @@ export default async (req) => {
     const { transactionId, input = {} } = await req.json();
     const entities = base44.asServiceRole.entities;
     const tx = await entities.Transaction.get(transactionId);
-    const isAdmin = ADMIN_ROLES.includes(me.role);
+    const isAdmin = isAdminRole(me.role);
     if (tx.brokerage_id !== me.brokerage_id && me.role !== 'super_admin') return Response.json({ error: 'Not allowed' }, { status: 403 });
     const mine = [tx.agent_email, ...(tx.co_agents || []).map((a) => a.email)].map((e) => String(e || '').toLowerCase()).includes(me.email.toLowerCase());
     if (!isAdmin && !mine) return Response.json({ error: 'Not allowed' }, { status: 403 });

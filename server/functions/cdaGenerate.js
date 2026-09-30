@@ -2,14 +2,14 @@
 // attorney, from the saved commission calculation. Returns a short-lived link and the
 // public URL to send it through e-sign for the broker's signature.
 import { createClientFromRequest, adminClient } from '../lib/base44.js';
-import { ADMIN_ROLES } from '../lib/team.js';
+import { isAdminRole, can } from '../lib/team.js';
 import { createDoc, money } from '../lib/pdfdoc.js';
 
 export default async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const me = await base44.auth.me();
-    if (!ADMIN_ROLES.includes(me.role)) return Response.json({ error: 'Admins only' }, { status: 403 });
+    if (!can(me, 'accounting.access')) return Response.json({ error: 'Admins only' }, { status: 403 });
     const { transactionId } = await req.json();
     const entities = base44.asServiceRole.entities;
     const tx = await entities.Transaction.get(transactionId);

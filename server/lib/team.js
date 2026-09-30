@@ -5,16 +5,20 @@ import { appUrl } from './base44.js';
 import { SendEmail } from './integrations.js';
 import { esc } from './esign.js';
 
-export const ADMIN_ROLES = ['admin', 'broker', 'super_admin'];
+import { isAdminRole, can, normalizeRole } from '../../shared/permissions.generated.js';
+export { isAdminRole, can };
+// Kept for older call sites; prefer isAdminRole(role) / can(profile, key).
+export const ADMIN_ROLES = ['admin', 'broker', 'owner', 'office_admin', 'super_admin'];
 
+// People with a duty: ticked in Manage Users, or (for TCs) given the TC role.
 export async function withDuty(entities, brokerageId, duty) {
-  const rows = await entities.User.filter({ brokerage_id: brokerageId, duties: [duty] }, 'full_name', 200);
-  return rows.filter((u) => !u.suspended);
+  const rows = await entities.User.filter({ brokerage_id: brokerageId }, 'full_name', 2000);
+  return rows.filter((u) => !u.suspended && ((u.duties || []).includes(duty) || (duty === 'tc' && normalizeRole(u.role) === 'tc')));
 }
 
 export async function admins(entities, brokerageId) {
-  const rows = await entities.User.filter({ brokerage_id: brokerageId, role: { $in: ['admin', 'broker'] } }, 'full_name', 200);
-  return rows.filter((u) => !u.suspended);
+  const rows = await entities.User.filter({ brokerage_id: brokerageId }, 'full_name', 2000);
+  return rows.filter((u) => !u.suspended && ['owner', 'broker', 'office_admin'].includes(normalizeRole(u.role)));
 }
 
 /** The TC with the fewest open transactions (ties: alphabetical). */

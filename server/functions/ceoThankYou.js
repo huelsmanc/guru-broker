@@ -2,7 +2,7 @@
 // thank-you from the CEO with a video (thumbnail that opens YouTube; email apps can't
 // play embedded video). { preview: true } returns the email without sending.
 import { createClientFromRequest } from '../lib/base44.js';
-import { ADMIN_ROLES } from '../lib/team.js';
+import { isAdminRole, can } from '../lib/team.js';
 import { SendEmail } from '../lib/integrations.js';
 import { esc } from '../lib/esign.js';
 
@@ -45,7 +45,7 @@ export default async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const me = await base44.auth.me();
-    if (!ADMIN_ROLES.includes(me.role)) return Response.json({ error: 'Admins only' }, { status: 403 });
+    if (!isAdminRole(me.role)) return Response.json({ error: 'Admins only' }, { status: 403 });
     const { transactionId, preview, contactIds } = await req.json();
     const entities = base44.asServiceRole.entities;
     const tx = await entities.Transaction.get(transactionId);

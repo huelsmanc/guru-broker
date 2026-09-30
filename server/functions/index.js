@@ -10,6 +10,7 @@ export const FUNCTIONS = {
   captureSigningMetadata: () => import('./captureSigningMetadata.js'),
   cdaGenerate: () => import('./cdaGenerate.js'),
   ceoThankYou: () => import('./ceoThankYou.js'),
+  checklistAction: () => import('./checklistAction.js'),
   closingDateReminder: () => import('./closingDateReminder.js'),
   commissionFinalize: () => import('./commissionFinalize.js'),
   commissionPreview: () => import('./commissionPreview.js'),

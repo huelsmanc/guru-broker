@@ -1,7 +1,7 @@
 // New: admin reports. Every report returns { columns, rows, summary } so the Reports page
 // can show a table, totals and a CSV download the same way for all of them.
 import { createClientFromRequest } from '../lib/base44.js';
-import { ADMIN_ROLES } from '../lib/team.js';
+import { isAdminRole, can } from '../lib/team.js';
 import { agentContext } from '../lib/backoffice.js';
 
 const n = (v) => Number(v) || 0;
@@ -159,7 +159,7 @@ export default async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const me = await base44.auth.me();
-    if (!ADMIN_ROLES.includes(me.role)) return Response.json({ error: 'Admins only' }, { status: 403 });
+    if (!can(me, 'reports.company')) return Response.json({ error: 'Admins only' }, { status: 403 });
     const body = await req.json();
     if (body.list) return Response.json({ reports: REPORTS });
     const out = await run(base44.asServiceRole.entities, me.brokerage_id, body);

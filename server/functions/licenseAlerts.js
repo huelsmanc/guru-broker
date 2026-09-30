@@ -12,9 +12,15 @@ export default async (req) => {
   let sent = 0;
   for (const u of people) {
     if (u.suspended || !u.brokerage_id) continue;
-    for (const [field, label] of [['license_expiration', 'Real estate license'], ['eo_expiration', 'E&O insurance']]) {
-      if (!u[field]) continue;
-      const days = Math.round((new Date(u[field]) - today) / 864e5);
+    const items = [
+      ['license_expiration', 'Real estate license', u.license_expiration],
+      ['eo_expiration', 'E&O insurance', u.eo_expiration],
+      ...(Array.isArray(u.licenses) ? u.licenses : []).map((l, i) => [`licenses.${i}`, `${l.state || ''} real estate license ${l.number || ''}`.trim(), l.expiration]),
+    ];
+    for (const [field, label, date] of items) {
+      if (!date) continue;
+      u[field] = date;
+      const days = Math.round((new Date(date) - today) / 864e5);
       const step = STEPS.find((s) => days === s || (s === 0 && days < 0 && days > -3));
       if (step === undefined) continue;
       const key = `${field}:${u[field]}:${step}`;

@@ -2,7 +2,7 @@
 // connect their bank; 'status' refreshes where that stands. Agents can do their own;
 // admins can do anyone's. Bank numbers stay with Payload.
 import { createClientFromRequest } from '../lib/base44.js';
-import { ADMIN_ROLES } from '../lib/team.js';
+import { isAdminRole, can } from '../lib/team.js';
 import { requestBankLink, getActivation, payloadConfigured } from '../lib/payload.js';
 import { profileByEmail } from '../lib/backoffice.js';
 
@@ -24,7 +24,7 @@ export default async (req) => {
     const me = await base44.auth.me();
     const { action = 'status', email } = await req.json();
     const target = String(email || me.email).toLowerCase();
-    const isAdmin = ADMIN_ROLES.includes(me.role);
+    const isAdmin = isAdminRole(me.role);
     if (target !== me.email.toLowerCase() && !isAdmin) return Response.json({ error: 'Not allowed' }, { status: 403 });
     const entities = base44.asServiceRole.entities;
     const profile = await profileByEmail(entities, target);
