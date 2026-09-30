@@ -12,6 +12,17 @@ export const SCHEMA = {
       "headshot",
       "agent_status",
       "duties",
+      "license_number",
+      "license_state",
+      "license_expiration",
+      "eo_expiration",
+      "mls_ids",
+      "phone",
+      "start_date",
+      "cap_start_date",
+      "commission_plan_id",
+      "team_lead_email",
+      "sponsor_email",
       "id",
       "created_date",
       "updated_date",
@@ -19,7 +30,31 @@ export const SCHEMA = {
     ],
     "typed": [
       "suspended",
-      "duties"
+      "duties",
+      "mls_ids",
+      "license_expiration",
+      "eo_expiration",
+      "start_date",
+      "cap_start_date"
+    ]
+  },
+  "ActivityEvent": {
+    "table": "activity_event",
+    "columns": [
+      "actor_email",
+      "brokerage_id",
+      "changed",
+      "op",
+      "record_id",
+      "summary",
+      "table_name",
+      "id",
+      "created_date",
+      "updated_date",
+      "created_by"
+    ],
+    "typed": [
+      "changed"
     ]
   },
   "ActivityLog": {
@@ -58,6 +93,26 @@ export const SCHEMA = {
       "created_by"
     ],
     "typed": []
+  },
+  "AgentPrivate": {
+    "table": "agent_private",
+    "columns": [
+      "bank_linked_at",
+      "bank_status",
+      "brokerage_id",
+      "payload_activation_id",
+      "payload_payment_method_id",
+      "tax_classification",
+      "user_email",
+      "w9_file_uri",
+      "id",
+      "created_date",
+      "updated_date",
+      "created_by"
+    ],
+    "typed": [
+      "bank_linked_at"
+    ]
   },
   "AgentSales": {
     "table": "agent_sales",
@@ -162,6 +217,26 @@ export const SCHEMA = {
     ],
     "typed": []
   },
+  "ChecklistTemplate": {
+    "table": "checklist_template",
+    "columns": [
+      "active",
+      "brokerage_id",
+      "deal_type",
+      "is_default",
+      "items",
+      "name",
+      "id",
+      "created_date",
+      "updated_date",
+      "created_by"
+    ],
+    "typed": [
+      "active",
+      "is_default",
+      "items"
+    ]
+  },
   "ClientReview": {
     "table": "client_review",
     "columns": [
@@ -205,6 +280,66 @@ export const SCHEMA = {
     ],
     "typed": [
       "mentions"
+    ]
+  },
+  "CommissionPlan": {
+    "table": "commission_plan",
+    "columns": [
+      "active",
+      "brokerage_id",
+      "config",
+      "description",
+      "is_default",
+      "name",
+      "id",
+      "created_date",
+      "updated_date",
+      "created_by"
+    ],
+    "typed": [
+      "active",
+      "config",
+      "is_default"
+    ]
+  },
+  "CommissionRecord": {
+    "table": "commission_record",
+    "columns": [
+      "agent_email",
+      "agent_name",
+      "agent_net",
+      "approved_at",
+      "approved_by",
+      "brokerage_id",
+      "calc",
+      "cap_year_start",
+      "closed_date",
+      "company_dollar",
+      "fees",
+      "gross_share",
+      "property_address",
+      "revshare_total",
+      "sale_price",
+      "status",
+      "team_lead",
+      "transaction_id",
+      "id",
+      "created_date",
+      "updated_date",
+      "created_by"
+    ],
+    "typed": [
+      "agent_net",
+      "approved_at",
+      "calc",
+      "cap_year_start",
+      "closed_date",
+      "company_dollar",
+      "fees",
+      "gross_share",
+      "revshare_total",
+      "sale_price",
+      "team_lead"
     ]
   },
   "ComplianceAttempt": {
@@ -789,6 +924,41 @@ export const SCHEMA = {
       "items"
     ]
   },
+  "Payout": {
+    "table": "payout",
+    "columns": [
+      "amount",
+      "approved_at",
+      "approved_by",
+      "brokerage_id",
+      "commission_record_id",
+      "failure_reason",
+      "for_agent",
+      "kind",
+      "level",
+      "memo",
+      "method",
+      "paid_at",
+      "payee_email",
+      "payee_name",
+      "payload_status",
+      "payload_transaction_id",
+      "sent_at",
+      "status",
+      "transaction_id",
+      "id",
+      "created_date",
+      "updated_date",
+      "created_by"
+    ],
+    "typed": [
+      "amount",
+      "approved_at",
+      "level",
+      "paid_at",
+      "sent_at"
+    ]
+  },
   "Recognition": {
     "table": "recognition",
     "columns": [
@@ -909,6 +1079,9 @@ export const SCHEMA = {
       "buyer_name",
       "buyers",
       "checklist",
+      "checklist_template_id",
+      "client_contacts",
+      "closed_date",
       "closing_date",
       "commission_amount",
       "commission_flat",
@@ -930,6 +1103,7 @@ export const SCHEMA = {
       "status",
       "tc_email",
       "tc_name",
+      "thank_you_sent_at",
       "title_deadline_date",
       "transaction_fee",
       "transaction_fee_flat",
@@ -950,6 +1124,8 @@ export const SCHEMA = {
       "brokerage_fee_percentage",
       "buyers",
       "checklist",
+      "client_contacts",
+      "closed_date",
       "closing_date",
       "commission_amount",
       "commission_flat",
@@ -964,6 +1140,7 @@ export const SCHEMA = {
       "loan_approval_date",
       "sale_price",
       "sellers",
+      "thank_you_sent_at",
       "title_deadline_date",
       "transaction_fee",
       "transaction_fee_flat",

@@ -48,6 +48,12 @@ ENTITIES = {
     "IdeaPadNote": "content messages title user_email",
     "Message": "brokerage_id content conversation_id read sender_email sender_name sender_role",
     "Notification": "action_url brokerage_id channel description read reference_id reference_type title type user_email",
+    "CommissionPlan": "brokerage_id name description config is_default active",
+    "CommissionRecord": "brokerage_id transaction_id agent_email agent_name property_address cap_year_start closed_date sale_price status gross_share company_dollar agent_net fees team_lead revshare_total calc approved_by approved_at",
+    "Payout": "brokerage_id commission_record_id transaction_id payee_email payee_name kind level for_agent amount status approved_by approved_at payload_transaction_id payload_status sent_at paid_at failure_reason method memo",
+    "AgentPrivate": "brokerage_id user_email payload_activation_id payload_payment_method_id bank_status bank_linked_at w9_file_uri tax_classification",
+    "ChecklistTemplate": "brokerage_id name deal_type items active is_default",
+    "ActivityEvent": "brokerage_id actor_email table_name op record_id summary changed",
     "Offer": "brokerage_id agent_email agent_name property_address city state zip mls_number list_price offer_price earnest_money financing_type down_payment_percent loan_amount closing_date offer_expiration inspection_days financing_days appraisal_contingency seller_concessions included_items special_terms buyers sellers listing_agent_name listing_agent_email status offer_text document_url esign_document_id submission_id transaction_id accepted_at acceptance_date",
     "Onboarding": "agent_email agent_name brokerage_id items status",
     "Recognition": "brokerage_id category from_email from_name is_anonymous message reactions to_email to_name",
@@ -55,23 +61,23 @@ ENTITIES = {
     "SignatureData": "fields ip_address signed_at signer_email signer_name submission_id user_agent",
     "SocialMessage": "brokerage_id channel content mentions pinned pinned_by reactions read_by sender_email sender_name sender_photo",
     "ThreadReply": "brokerage_id content message_id reactions sender_email sender_name sender_photo",
-    "Transaction": "agent_email agent_name agent_net agent_split_percentage brokerage_fee brokerage_fee_flat brokerage_fee_percentage brokerage_fee_type brokerage_id buyer_name buyers checklist closing_date commission_amount commission_flat commission_notes commission_percentage commission_sale_price commission_type completed_dates documents esign_docs property_address sale_price seller_name sellers status tc_email tc_name transaction_fee transaction_fee_flat transaction_fee_percentage transaction_fee_type updates inspection_date appraisal_date financing_contingency_date inspection_contingency_date loan_approval_date title_deadline_date",
+    "Transaction": "client_contacts closed_date checklist_template_id thank_you_sent_at agent_email agent_name agent_net agent_split_percentage brokerage_fee brokerage_fee_flat brokerage_fee_percentage brokerage_fee_type brokerage_id buyer_name buyers checklist closing_date commission_amount commission_flat commission_notes commission_percentage commission_sale_price commission_type completed_dates documents esign_docs property_address sale_price seller_name sellers status tc_email tc_name transaction_fee transaction_fee_flat transaction_fee_percentage transaction_fee_type updates inspection_date appraisal_date financing_contingency_date inspection_contingency_date loan_approval_date title_deadline_date",
     "UserBadge": "brokerage_id user_email badge_type",
 }
 
 # User lives in `profiles`, linked 1:1 to Supabase auth.users.
-USER_FIELDS = "email full_name display_name role brokerage_id suspended headshot agent_status duties"
+USER_FIELDS = "email full_name display_name role brokerage_id suspended headshot agent_status duties license_number license_state license_expiration eo_expiration mls_ids phone start_date cap_start_date commission_plan_id team_lead_email sponsor_email"
 
-JSON_FIELDS = set("""answers buyers checklist completed_dates details documents encryption_metadata esign_docs fields items
+JSON_FIELDS = set("""config calc items changed client_contacts mls_ids answers buyers checklist completed_dates details documents encryption_metadata esign_docs fields items
 members mentions messages options reactions read_by sellers signatories signature_fields signers tags tech_links updates
 versions cma_report""".split())
-BOOL_FIELDS = set("appraisal_contingency read pinned encrypted suspended submitted checked_in is_active is_anonymous is_featured signed passed require_sequential_signing".split())
-INT_FIELDS = set("inspection_days financing_days bathrooms bedrooms downloads_count downvotes upvotes guests_count order passing_score rating signer_index version file_size score".split())
-NUM_FIELDS = set("""list_price offer_price earnest_money down_payment_percent loan_amount seller_concessions agent_net agent_split_percentage brokerage_fee brokerage_fee_flat brokerage_fee_percentage commission_amount
+BOOL_FIELDS = set("is_default active appraisal_contingency read pinned encrypted suspended submitted checked_in is_active is_anonymous is_featured signed passed require_sequential_signing".split())
+INT_FIELDS = set("level inspection_days financing_days bathrooms bedrooms downloads_count downvotes upvotes guests_count order passing_score rating signer_index version file_size score".split())
+NUM_FIELDS = set("""gross_share company_dollar agent_net fees team_lead revshare_total amount list_price offer_price earnest_money down_payment_percent loan_amount seller_concessions agent_net agent_split_percentage brokerage_fee brokerage_fee_flat brokerage_fee_percentage commission_amount
 commission_flat commission_percentage commission_sale_price sale_price sales_amount transaction_fee transaction_fee_flat
 transaction_fee_percentage purchase_price""".split())
-DATE_FIELDS = set("acceptance_date date closing_date inspection_date appraisal_date financing_contingency_date inspection_contingency_date loan_approval_date title_deadline_date".split())
-TS_FIELDS = set("offer_expiration accepted_at completed_at submitted_at signed_at response_date scheduled_at".split())
+DATE_FIELDS = set("cap_year_start closed_date license_expiration eo_expiration start_date cap_start_date acceptance_date date closing_date inspection_date appraisal_date financing_contingency_date inspection_contingency_date loan_approval_date title_deadline_date".split())
+TS_FIELDS = set("approved_at sent_at paid_at bank_linked_at thank_you_sent_at offer_expiration accepted_at completed_at submitted_at signed_at response_date scheduled_at".split())
 
 # Tables not scoped by brokerage (owned by a user or reached via a parent)
 PERSONAL = {"IdeaPadNote": "user_email"}
@@ -119,6 +125,18 @@ create table if not exists public.profiles (
 );
 
 alter table public.profiles add column if not exists duties jsonb not null default '[]'::jsonb;
+-- Agent profile (back office)
+alter table public.profiles add column if not exists license_number text;
+alter table public.profiles add column if not exists license_state text;
+alter table public.profiles add column if not exists license_expiration date;
+alter table public.profiles add column if not exists eo_expiration date;
+alter table public.profiles add column if not exists mls_ids jsonb not null default '[]'::jsonb;
+alter table public.profiles add column if not exists phone text;
+alter table public.profiles add column if not exists start_date date;
+alter table public.profiles add column if not exists cap_start_date date;          -- cap year anniversary (defaults to start_date)
+alter table public.profiles add column if not exists commission_plan_id text;
+alter table public.profiles add column if not exists team_lead_email text;
+alter table public.profiles add column if not exists sponsor_email text;           -- who recruited them (downline level 1)
 create index if not exists profiles_brokerage_idx on public.profiles (brokerage_id);
 
 -- Create a profile row whenever someone signs up
@@ -184,12 +202,32 @@ drop policy if exists profiles_admin on public.profiles;
 create policy profiles_admin on public.profiles for update using (
   (public.is_brokerage_admin() and brokerage_id = public.auth_brokerage_id()) or public.is_super_admin())
   with check (public.is_super_admin() or (role <> 'super_admin' and brokerage_id = public.auth_brokerage_id()));
+-- Agents can edit their own profile, but not the fields that decide pay, permissions or team.
+create or replace function public.guard_profile_self_edit() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null or public.is_brokerage_admin() then return new; end if;
+  if new.role is distinct from old.role
+     or new.brokerage_id is distinct from old.brokerage_id
+     or new.duties is distinct from old.duties
+     or new.commission_plan_id is distinct from old.commission_plan_id
+     or new.team_lead_email is distinct from old.team_lead_email
+     or new.sponsor_email is distinct from old.sponsor_email
+     or new.cap_start_date is distinct from old.cap_start_date
+     or new.start_date is distinct from old.start_date
+     or new.suspended is distinct from old.suspended then
+    raise exception 'Only an admin can change role, team, plan or sponsor fields';
+  end if;
+  return new;
+end $$;
+drop trigger if exists profiles_guard on public.profiles;
+create trigger profiles_guard before update on public.profiles for each row execute function public.guard_profile_self_edit();
 drop trigger if exists profiles_touch on public.profiles;
 create trigger profiles_touch before update on public.profiles for each row execute function public.touch_updated_date();
 """)
 
 colmap = {"User": {"table": "profiles", "columns": USER_FIELDS.split() + ["id","created_date","updated_date","created_by"],
-                    "typed": ["suspended", "duties"]}}
+                    "typed": ["suspended", "duties", "mls_ids", "license_expiration", "eo_expiration", "start_date", "cap_start_date"]}}
 
 pol = []
 pw = pol.append
@@ -220,6 +258,22 @@ for ent, fields in sorted(ENTITIES.items()):
         pw(f"create policy {t}_access on public.{t} for all using (lower(sender_email) = public.auth_email() or lower(receiver_email) = public.auth_email() or public.is_super_admin()) with check (lower(sender_email) = public.auth_email() or lower(receiver_email) = public.auth_email());")
     elif ent == "Notification":
         pw(f"create policy {t}_access on public.{t} for all using (lower(user_email) = public.auth_email() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or lower(user_email) = public.auth_email() or public.is_super_admin());")
+    elif ent in ("CommissionPlan", "ChecklistTemplate"):
+        pw(f"create policy {t}_access on public.{t} for select using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());")
+        pw(f"drop policy if exists {t}_admin on public.{t};")
+        pw(f"create policy {t}_admin on public.{t} for all using ((brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin()) with check ((brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin());")
+    elif ent == "CommissionRecord":
+        pw(f"create policy {t}_access on public.{t} for select using (lower(agent_email) = public.auth_email() or (brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin());")
+        pw(f"-- {t}: written only by server routes.")
+    elif ent == "Payout":
+        pw(f"create policy {t}_access on public.{t} for select using (lower(payee_email) = public.auth_email() or (brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin());")
+        pw(f"-- {t}: written only by server routes (approvals and sending money).")
+    elif ent == "AgentPrivate":
+        pw(f"create policy {t}_access on public.{t} for select using (lower(user_email) = public.auth_email() or (brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin());")
+        pw(f"-- {t}: written only by server routes.")
+    elif ent == "ActivityEvent":
+        pw(f"create policy {t}_access on public.{t} for select using ((brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin());")
+        pw(f"-- {t}: written by the activity trigger and server routes only.")
     elif ent == "ESignSubmission":
         pw(f"create policy {t}_access on public.{t} for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin() or exists (select 1 from public.esign_document d where d.id = {t}.document_id and d.brokerage_id = public.auth_brokerage_id())) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());")
     elif ent == "ESignAuditLog":
@@ -244,7 +298,9 @@ for ent, fields in sorted(ENTITIES.items()):
     if ent == "ESignSubmission":
         w(f"-- Signing links are looked up by token inside `signers`.")
         w(f"create index if not exists {t}_signers_gin on public.{t} using gin (signers jsonb_path_ops);")
-    for idx in ("brokerage_id", "user_email", "document_id", "conversation_id", "submission_id", "channel", "group_id", "review_token", "slug"):
+    if ent == "ActivityEvent":
+        w(f"create index if not exists {t}_recent_idx on public.{t} (brokerage_id, created_date desc);")
+    for idx in ("brokerage_id", "agent_email", "payee_email", "transaction_id", "user_email", "document_id", "conversation_id", "submission_id", "channel", "group_id", "review_token", "slug"):
         if idx in fl:
             w(f"create index if not exists {t}_{idx}_idx on public.{t} ({idx});")
     w("")

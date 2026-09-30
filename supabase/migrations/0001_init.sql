@@ -23,6 +23,18 @@ create table if not exists public.profiles (
 );
 
 alter table public.profiles add column if not exists duties jsonb not null default '[]'::jsonb;
+-- Agent profile (back office)
+alter table public.profiles add column if not exists license_number text;
+alter table public.profiles add column if not exists license_state text;
+alter table public.profiles add column if not exists license_expiration date;
+alter table public.profiles add column if not exists eo_expiration date;
+alter table public.profiles add column if not exists mls_ids jsonb not null default '[]'::jsonb;
+alter table public.profiles add column if not exists phone text;
+alter table public.profiles add column if not exists start_date date;
+alter table public.profiles add column if not exists cap_start_date date;          -- cap year anniversary (defaults to start_date)
+alter table public.profiles add column if not exists commission_plan_id text;
+alter table public.profiles add column if not exists team_lead_email text;
+alter table public.profiles add column if not exists sponsor_email text;           -- who recruited them (downline level 1)
 create index if not exists profiles_brokerage_idx on public.profiles (brokerage_id);
 
 -- Create a profile row whenever someone signs up
@@ -88,8 +100,51 @@ drop policy if exists profiles_admin on public.profiles;
 create policy profiles_admin on public.profiles for update using (
   (public.is_brokerage_admin() and brokerage_id = public.auth_brokerage_id()) or public.is_super_admin())
   with check (public.is_super_admin() or (role <> 'super_admin' and brokerage_id = public.auth_brokerage_id()));
+-- Agents can edit their own profile, but not the fields that decide pay, permissions or team.
+create or replace function public.guard_profile_self_edit() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null or public.is_brokerage_admin() then return new; end if;
+  if new.role is distinct from old.role
+     or new.brokerage_id is distinct from old.brokerage_id
+     or new.duties is distinct from old.duties
+     or new.commission_plan_id is distinct from old.commission_plan_id
+     or new.team_lead_email is distinct from old.team_lead_email
+     or new.sponsor_email is distinct from old.sponsor_email
+     or new.cap_start_date is distinct from old.cap_start_date
+     or new.start_date is distinct from old.start_date
+     or new.suspended is distinct from old.suspended then
+    raise exception 'Only an admin can change role, team, plan or sponsor fields';
+  end if;
+  return new;
+end $$;
+drop trigger if exists profiles_guard on public.profiles;
+create trigger profiles_guard before update on public.profiles for each row execute function public.guard_profile_self_edit();
 drop trigger if exists profiles_touch on public.profiles;
 create trigger profiles_touch before update on public.profiles for each row execute function public.touch_updated_date();
+
+-- ActivityEvent ---------------------------------------------------------
+create table if not exists public.activity_event (
+  id text primary key default replace(gen_random_uuid()::text, '-', ''),
+  actor_email text,
+  brokerage_id text,
+  changed jsonb,
+  op text,
+  record_id text,
+  summary text,
+  table_name text,
+  extra jsonb not null default '{}'::jsonb,
+  created_date timestamptz not null default now(),
+  updated_date timestamptz not null default now(),
+  created_by text
+);
+drop trigger if exists activity_event_touch on public.activity_event;
+create trigger activity_event_touch before update on public.activity_event for each row execute function public.touch_updated_date();
+drop trigger if exists activity_event_fill on public.activity_event;
+create trigger activity_event_fill before insert on public.activity_event for each row execute function public.fill_owner();
+alter table public.activity_event enable row level security;
+create index if not exists activity_event_recent_idx on public.activity_event (brokerage_id, created_date desc);
+create index if not exists activity_event_brokerage_id_idx on public.activity_event (brokerage_id);
 
 -- ActivityLog -----------------------------------------------------------
 create table if not exists public.activity_log (
@@ -138,6 +193,30 @@ create trigger admin_message_fill before insert on public.admin_message for each
 alter table public.admin_message enable row level security;
 create index if not exists admin_message_brokerage_id_idx on public.admin_message (brokerage_id);
 
+-- AgentPrivate ----------------------------------------------------------
+create table if not exists public.agent_private (
+  id text primary key default replace(gen_random_uuid()::text, '-', ''),
+  bank_linked_at timestamptz,
+  bank_status text,
+  brokerage_id text,
+  payload_activation_id text,
+  payload_payment_method_id text,
+  tax_classification text,
+  user_email text,
+  w9_file_uri text,
+  extra jsonb not null default '{}'::jsonb,
+  created_date timestamptz not null default now(),
+  updated_date timestamptz not null default now(),
+  created_by text
+);
+drop trigger if exists agent_private_touch on public.agent_private;
+create trigger agent_private_touch before update on public.agent_private for each row execute function public.touch_updated_date();
+drop trigger if exists agent_private_fill on public.agent_private;
+create trigger agent_private_fill before insert on public.agent_private for each row execute function public.fill_owner();
+alter table public.agent_private enable row level security;
+create index if not exists agent_private_brokerage_id_idx on public.agent_private (brokerage_id);
+create index if not exists agent_private_user_email_idx on public.agent_private (user_email);
+
 -- AgentSales ------------------------------------------------------------
 create table if not exists public.agent_sales (
   id text primary key default replace(gen_random_uuid()::text, '-', ''),
@@ -158,6 +237,7 @@ drop trigger if exists agent_sales_fill on public.agent_sales;
 create trigger agent_sales_fill before insert on public.agent_sales for each row execute function public.fill_owner();
 alter table public.agent_sales enable row level security;
 create index if not exists agent_sales_brokerage_id_idx on public.agent_sales (brokerage_id);
+create index if not exists agent_sales_agent_email_idx on public.agent_sales (agent_email);
 
 -- Brokerage -------------------------------------------------------------
 create table if not exists public.brokerage (
@@ -264,6 +344,27 @@ alter table public.channel_member enable row level security;
 create index if not exists channel_member_brokerage_id_idx on public.channel_member (brokerage_id);
 create index if not exists channel_member_user_email_idx on public.channel_member (user_email);
 
+-- ChecklistTemplate -----------------------------------------------------
+create table if not exists public.checklist_template (
+  id text primary key default replace(gen_random_uuid()::text, '-', ''),
+  active boolean,
+  brokerage_id text,
+  deal_type text,
+  is_default boolean,
+  items jsonb,
+  name text,
+  extra jsonb not null default '{}'::jsonb,
+  created_date timestamptz not null default now(),
+  updated_date timestamptz not null default now(),
+  created_by text
+);
+drop trigger if exists checklist_template_touch on public.checklist_template;
+create trigger checklist_template_touch before update on public.checklist_template for each row execute function public.touch_updated_date();
+drop trigger if exists checklist_template_fill on public.checklist_template;
+create trigger checklist_template_fill before insert on public.checklist_template for each row execute function public.fill_owner();
+alter table public.checklist_template enable row level security;
+create index if not exists checklist_template_brokerage_id_idx on public.checklist_template (brokerage_id);
+
 -- ClientReview ----------------------------------------------------------
 create table if not exists public.client_review (
   id text primary key default replace(gen_random_uuid()::text, '-', ''),
@@ -290,6 +391,7 @@ drop trigger if exists client_review_fill on public.client_review;
 create trigger client_review_fill before insert on public.client_review for each row execute function public.fill_owner();
 alter table public.client_review enable row level security;
 create index if not exists client_review_brokerage_id_idx on public.client_review (brokerage_id);
+create index if not exists client_review_agent_email_idx on public.client_review (agent_email);
 create index if not exists client_review_review_token_idx on public.client_review (review_token);
 
 -- Comment ---------------------------------------------------------------
@@ -314,6 +416,62 @@ create trigger comment_fill before insert on public.comment for each row execute
 alter table public.comment enable row level security;
 create index if not exists comment_brokerage_id_idx on public.comment (brokerage_id);
 
+-- CommissionPlan --------------------------------------------------------
+create table if not exists public.commission_plan (
+  id text primary key default replace(gen_random_uuid()::text, '-', ''),
+  active boolean,
+  brokerage_id text,
+  config jsonb,
+  description text,
+  is_default boolean,
+  name text,
+  extra jsonb not null default '{}'::jsonb,
+  created_date timestamptz not null default now(),
+  updated_date timestamptz not null default now(),
+  created_by text
+);
+drop trigger if exists commission_plan_touch on public.commission_plan;
+create trigger commission_plan_touch before update on public.commission_plan for each row execute function public.touch_updated_date();
+drop trigger if exists commission_plan_fill on public.commission_plan;
+create trigger commission_plan_fill before insert on public.commission_plan for each row execute function public.fill_owner();
+alter table public.commission_plan enable row level security;
+create index if not exists commission_plan_brokerage_id_idx on public.commission_plan (brokerage_id);
+
+-- CommissionRecord ------------------------------------------------------
+create table if not exists public.commission_record (
+  id text primary key default replace(gen_random_uuid()::text, '-', ''),
+  agent_email text,
+  agent_name text,
+  agent_net numeric,
+  approved_at timestamptz,
+  approved_by text,
+  brokerage_id text,
+  calc jsonb,
+  cap_year_start date,
+  closed_date date,
+  company_dollar numeric,
+  fees numeric,
+  gross_share numeric,
+  property_address text,
+  revshare_total numeric,
+  sale_price numeric,
+  status text,
+  team_lead numeric,
+  transaction_id text,
+  extra jsonb not null default '{}'::jsonb,
+  created_date timestamptz not null default now(),
+  updated_date timestamptz not null default now(),
+  created_by text
+);
+drop trigger if exists commission_record_touch on public.commission_record;
+create trigger commission_record_touch before update on public.commission_record for each row execute function public.touch_updated_date();
+drop trigger if exists commission_record_fill on public.commission_record;
+create trigger commission_record_fill before insert on public.commission_record for each row execute function public.fill_owner();
+alter table public.commission_record enable row level security;
+create index if not exists commission_record_brokerage_id_idx on public.commission_record (brokerage_id);
+create index if not exists commission_record_agent_email_idx on public.commission_record (agent_email);
+create index if not exists commission_record_transaction_id_idx on public.commission_record (transaction_id);
+
 -- ComplianceAttempt -----------------------------------------------------
 create table if not exists public.compliance_attempt (
   id text primary key default replace(gen_random_uuid()::text, '-', ''),
@@ -334,6 +492,7 @@ drop trigger if exists compliance_attempt_fill on public.compliance_attempt;
 create trigger compliance_attempt_fill before insert on public.compliance_attempt for each row execute function public.fill_owner();
 alter table public.compliance_attempt enable row level security;
 create index if not exists compliance_attempt_brokerage_id_idx on public.compliance_attempt (brokerage_id);
+create index if not exists compliance_attempt_agent_email_idx on public.compliance_attempt (agent_email);
 
 -- ComplianceQuestion ----------------------------------------------------
 create table if not exists public.compliance_question (
@@ -402,6 +561,7 @@ drop trigger if exists conversation_fill on public.conversation;
 create trigger conversation_fill before insert on public.conversation for each row execute function public.fill_owner();
 alter table public.conversation enable row level security;
 create index if not exists conversation_brokerage_id_idx on public.conversation (brokerage_id);
+create index if not exists conversation_agent_email_idx on public.conversation (agent_email);
 
 -- CultureCalendarEntry --------------------------------------------------
 create table if not exists public.culture_calendar_entry (
@@ -606,6 +766,7 @@ alter table public.esign_submission enable row level security;
 -- Signing links are looked up by token inside `signers`.
 create index if not exists esign_submission_signers_gin on public.esign_submission using gin (signers jsonb_path_ops);
 create index if not exists esign_submission_brokerage_id_idx on public.esign_submission (brokerage_id);
+create index if not exists esign_submission_transaction_id_idx on public.esign_submission (transaction_id);
 create index if not exists esign_submission_document_id_idx on public.esign_submission (document_id);
 
 -- ESignSubmitter --------------------------------------------------------
@@ -928,6 +1089,8 @@ drop trigger if exists offer_fill on public.offer;
 create trigger offer_fill before insert on public.offer for each row execute function public.fill_owner();
 alter table public.offer enable row level security;
 create index if not exists offer_brokerage_id_idx on public.offer (brokerage_id);
+create index if not exists offer_agent_email_idx on public.offer (agent_email);
+create index if not exists offer_transaction_id_idx on public.offer (transaction_id);
 create index if not exists offer_submission_id_idx on public.offer (submission_id);
 
 -- Onboarding ------------------------------------------------------------
@@ -949,6 +1112,43 @@ drop trigger if exists onboarding_fill on public.onboarding;
 create trigger onboarding_fill before insert on public.onboarding for each row execute function public.fill_owner();
 alter table public.onboarding enable row level security;
 create index if not exists onboarding_brokerage_id_idx on public.onboarding (brokerage_id);
+create index if not exists onboarding_agent_email_idx on public.onboarding (agent_email);
+
+-- Payout ----------------------------------------------------------------
+create table if not exists public.payout (
+  id text primary key default replace(gen_random_uuid()::text, '-', ''),
+  amount numeric,
+  approved_at timestamptz,
+  approved_by text,
+  brokerage_id text,
+  commission_record_id text,
+  failure_reason text,
+  for_agent text,
+  kind text,
+  level integer,
+  memo text,
+  method text,
+  paid_at timestamptz,
+  payee_email text,
+  payee_name text,
+  payload_status text,
+  payload_transaction_id text,
+  sent_at timestamptz,
+  status text,
+  transaction_id text,
+  extra jsonb not null default '{}'::jsonb,
+  created_date timestamptz not null default now(),
+  updated_date timestamptz not null default now(),
+  created_by text
+);
+drop trigger if exists payout_touch on public.payout;
+create trigger payout_touch before update on public.payout for each row execute function public.touch_updated_date();
+drop trigger if exists payout_fill on public.payout;
+create trigger payout_fill before insert on public.payout for each row execute function public.fill_owner();
+alter table public.payout enable row level security;
+create index if not exists payout_brokerage_id_idx on public.payout (brokerage_id);
+create index if not exists payout_payee_email_idx on public.payout (payee_email);
+create index if not exists payout_transaction_id_idx on public.payout (transaction_id);
 
 -- Recognition -----------------------------------------------------------
 create table if not exists public.recognition (
@@ -993,6 +1193,7 @@ drop trigger if exists scheduled_call_fill on public.scheduled_call;
 create trigger scheduled_call_fill before insert on public.scheduled_call for each row execute function public.fill_owner();
 alter table public.scheduled_call enable row level security;
 create index if not exists scheduled_call_brokerage_id_idx on public.scheduled_call (brokerage_id);
+create index if not exists scheduled_call_agent_email_idx on public.scheduled_call (agent_email);
 
 -- SignatureData ---------------------------------------------------------
 create table if not exists public.signature_data (
@@ -1081,6 +1282,9 @@ create table if not exists public.transaction (
   buyer_name text,
   buyers jsonb,
   checklist jsonb,
+  checklist_template_id text,
+  client_contacts jsonb,
+  closed_date date,
   closing_date date,
   commission_amount numeric,
   commission_flat numeric,
@@ -1102,6 +1306,7 @@ create table if not exists public.transaction (
   status text,
   tc_email text,
   tc_name text,
+  thank_you_sent_at timestamptz,
   title_deadline_date date,
   transaction_fee numeric,
   transaction_fee_flat numeric,
@@ -1119,6 +1324,7 @@ drop trigger if exists transaction_fill on public.transaction;
 create trigger transaction_fill before insert on public.transaction for each row execute function public.fill_owner();
 alter table public.transaction enable row level security;
 create index if not exists transaction_brokerage_id_idx on public.transaction (brokerage_id);
+create index if not exists transaction_agent_email_idx on public.transaction (agent_email);
 
 -- UserBadge -------------------------------------------------------------
 create table if not exists public.user_badge (
@@ -1140,10 +1346,16 @@ create index if not exists user_badge_brokerage_id_idx on public.user_badge (bro
 create index if not exists user_badge_user_email_idx on public.user_badge (user_email);
 
 -- Security rules ------------------------------------------------------------
+drop policy if exists activity_event_access on public.activity_event;
+create policy activity_event_access on public.activity_event for select using ((brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin());
+-- activity_event: written by the activity trigger and server routes only.
 drop policy if exists activity_log_access on public.activity_log;
 create policy activity_log_access on public.activity_log for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 drop policy if exists admin_message_access on public.admin_message;
 create policy admin_message_access on public.admin_message for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+drop policy if exists agent_private_access on public.agent_private;
+create policy agent_private_access on public.agent_private for select using (lower(user_email) = public.auth_email() or (brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin());
+-- agent_private: written only by server routes.
 drop policy if exists agent_sales_access on public.agent_sales;
 create policy agent_sales_access on public.agent_sales for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 drop policy if exists brokerage_access on public.brokerage;
@@ -1158,10 +1370,21 @@ drop policy if exists channel_access on public.channel;
 create policy channel_access on public.channel for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 drop policy if exists channel_member_access on public.channel_member;
 create policy channel_member_access on public.channel_member for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+drop policy if exists checklist_template_access on public.checklist_template;
+create policy checklist_template_access on public.checklist_template for select using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+drop policy if exists checklist_template_admin on public.checklist_template;
+create policy checklist_template_admin on public.checklist_template for all using ((brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin()) with check ((brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin());
 drop policy if exists client_review_access on public.client_review;
 create policy client_review_access on public.client_review for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 drop policy if exists comment_access on public.comment;
 create policy comment_access on public.comment for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+drop policy if exists commission_plan_access on public.commission_plan;
+create policy commission_plan_access on public.commission_plan for select using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+drop policy if exists commission_plan_admin on public.commission_plan;
+create policy commission_plan_admin on public.commission_plan for all using ((brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin()) with check ((brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin());
+drop policy if exists commission_record_access on public.commission_record;
+create policy commission_record_access on public.commission_record for select using (lower(agent_email) = public.auth_email() or (brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin());
+-- commission_record: written only by server routes.
 drop policy if exists compliance_attempt_access on public.compliance_attempt;
 create policy compliance_attempt_access on public.compliance_attempt for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 drop policy if exists compliance_question_access on public.compliance_question;
@@ -1216,6 +1439,9 @@ drop policy if exists offer_access on public.offer;
 create policy offer_access on public.offer for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 drop policy if exists onboarding_access on public.onboarding;
 create policy onboarding_access on public.onboarding for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+drop policy if exists payout_access on public.payout;
+create policy payout_access on public.payout for select using (lower(payee_email) = public.auth_email() or (brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin());
+-- payout: written only by server routes (approvals and sending money).
 drop policy if exists recognition_access on public.recognition;
 create policy recognition_access on public.recognition for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 drop policy if exists scheduled_call_access on public.scheduled_call;
