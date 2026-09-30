@@ -1,0 +1,14 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "functions": {
+    "api/fn/[name].js": { "maxDuration": 60, "includeFiles": "server/**" },
+    "api/hooks/db.js": { "maxDuration": 60, "includeFiles": "server/**" }
+  },
+  "rewrites": [
+    { "source": "/api/functions/:name", "destination": "/api/fn/:name" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ]
+}

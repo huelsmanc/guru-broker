@@ -5,7 +5,7 @@ import Sidebar from './Sidebar';
 import NotificationBell from './NotificationBell';
 import NotificationSetup from '@/components/notifications/NotificationSetup';
 import PushNotificationBanner from '@/components/notifications/PushNotificationBanner';
-import NotificationManager from '@/components/notifications/NotificationManager';
+import NotificationManager from '@/components/notifications/notificationManager';
 import MobileTabBar from './MobileTabBar';
 import IdeaPadBubble from '@/components/ideapad/IdeaPadBubble';
 import { Menu, X } from 'lucide-react';

@@ -1,7 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { NotificationManager } from '@/components/notifications/notificationManager';
 import { Bell, BellOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+
+// The original imported a helper that never existed, so this button crashed.
+// Browser notifications are shown by the notification manager while the app is open.
+const NotificationManager = {
+  async requestPermission() {
+    try { return (await Notification.requestPermission()) === 'granted'; } catch { return false; }
+  },
+  async subscribeToPushNotifications() {},
+};
 
 export default function NotificationSetup() {
   const [isSupported, setIsSupported] = useState(false);
@@ -27,14 +35,7 @@ export default function NotificationSetup() {
       setHasPermission(true);
       await NotificationManager.subscribeToPushNotifications();
       
-      // Show test notification
-      if ('serviceWorker' in navigator) {
-        const registration = await navigator.serviceWorker.ready;
-        registration.showNotification('Notifications Enabled', {
-          body: 'You will now receive push notifications',
-          icon: '/icon-192x192.png',
-        });
-      }
+      new Notification('Notifications enabled', { body: 'You will now get alerts while Go Broker Hub is open.' });
     }
     
     setIsLoading(false);

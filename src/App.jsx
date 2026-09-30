@@ -51,6 +51,8 @@ const PublicReview = lazy(() => import('@/pages/PublicReview'));
 const Reviews = lazy(() => import('@/pages/Reviews'));
 const Transactions = lazy(() => import('@/pages/Transactions'));
 const ClientPortal = lazy(() => import('@/pages/ClientPortal'));
+const Login = lazy(() => import('@/pages/Login'));
+const ResetPassword = lazy(() => import('@/pages/ResetPassword'));
 
 // Loading fallback component
 const PageLoader = () => (
@@ -63,7 +65,7 @@ const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
   const location = useLocation();
 
-  const isPublicRoute = ['/sign', '/custom-sign', '/BulkSign', '/review'].includes(location.pathname);
+  const isPublicRoute = ['/sign', '/custom-sign', '/BulkSign', '/review', '/login', '/reset-password'].includes(location.pathname);
 
   // Always render public routes immediately - no auth required
   if (isPublicRoute) {
@@ -74,6 +76,8 @@ const AuthenticatedApp = () => {
           <Route path="/custom-sign" element={<CustomSign />} />
           <Route path="/BulkSign" element={<BulkSign />} />
           <Route path="/review" element={<PublicReview />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
         </Routes>
       </Suspense>
     );

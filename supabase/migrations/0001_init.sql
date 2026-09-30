@@ -67,7 +67,8 @@ create policy profiles_update_self on public.profiles for update using (id = aut
 -- Joining a brokerage or changing roles goes through server routes (service role).
 drop policy if exists profiles_admin on public.profiles;
 create policy profiles_admin on public.profiles for update using (
-  (public.is_brokerage_admin() and brokerage_id = public.auth_brokerage_id()) or public.is_super_admin());
+  (public.is_brokerage_admin() and brokerage_id = public.auth_brokerage_id()) or public.is_super_admin())
+  with check (public.is_super_admin() or (role <> 'super_admin' and brokerage_id = public.auth_brokerage_id()));
 drop trigger if exists profiles_touch on public.profiles;
 create trigger profiles_touch before update on public.profiles for each row execute function public.touch_updated_date();
 

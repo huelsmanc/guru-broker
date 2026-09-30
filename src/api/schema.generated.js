@@ -15,6 +15,9 @@ export const SCHEMA = {
       "created_date",
       "updated_date",
       "created_by"
+    ],
+    "typed": [
+      "suspended"
     ]
   },
   "ActivityLog": {
@@ -35,6 +38,9 @@ export const SCHEMA = {
       "created_date",
       "updated_date",
       "created_by"
+    ],
+    "typed": [
+      "details"
     ]
   },
   "AdminMessage": {
@@ -48,7 +54,8 @@ export const SCHEMA = {
       "created_date",
       "updated_date",
       "created_by"
-    ]
+    ],
+    "typed": []
   },
   "AgentSales": {
     "table": "agent_sales",
@@ -63,6 +70,9 @@ export const SCHEMA = {
       "created_date",
       "updated_date",
       "created_by"
+    ],
+    "typed": [
+      "sales_amount"
     ]
   },
   "Brokerage": {
@@ -80,7 +90,8 @@ export const SCHEMA = {
       "created_date",
       "updated_date",
       "created_by"
-    ]
+    ],
+    "typed": []
   },
   "BrokerageSettings": {
     "table": "brokerage_settings",
@@ -93,6 +104,9 @@ export const SCHEMA = {
       "created_date",
       "updated_date",
       "created_by"
+    ],
+    "typed": [
+      "tech_links"
     ]
   },
   "CMAsReport": {
@@ -111,6 +125,11 @@ export const SCHEMA = {
       "created_date",
       "updated_date",
       "created_by"
+    ],
+    "typed": [
+      "bathrooms",
+      "bedrooms",
+      "cma_report"
     ]
   },
   "Channel": {
@@ -124,7 +143,8 @@ export const SCHEMA = {
       "created_date",
       "updated_date",
       "created_by"
-    ]
+    ],
+    "typed": []
   },
   "ChannelMember": {
     "table": "channel_member",
@@ -137,7 +157,8 @@ export const SCHEMA = {
       "created_date",
       "updated_date",
       "created_by"
-    ]
+    ],
+    "typed": []
   },
   "ClientReview": {
     "table": "client_review",
@@ -158,6 +179,11 @@ export const SCHEMA = {
       "created_date",
       "updated_date",
       "created_by"
+    ],
+    "typed": [
+      "rating",
+      "reactions",
+      "submitted"
     ]
   },
   "Comment": {
@@ -174,6 +200,9 @@ export const SCHEMA = {
       "created_date",
       "updated_date",
       "created_by"
+    ],
+    "typed": [
+      "mentions"
     ]
   },
   "ComplianceAttempt": {
@@ -189,6 +218,11 @@ export const SCHEMA = {
       "created_date",
       "updated_date",
       "created_by"
+    ],
+    "typed": [
+      "answers",
+      "passed",
+      "score"
     ]
   },
   "ComplianceQuestion": {
@@ -205,6 +239,10 @@ export const SCHEMA = {
       "created_date",
       "updated_date",
       "created_by"
+    ],
+    "typed": [
+      "options",
+      "order"
     ]
   },
   "ComplianceTraining": {
@@ -220,6 +258,9 @@ export const SCHEMA = {
       "created_date",
       "updated_date",
       "created_by"
+    ],
+    "typed": [
+      "passing_score"
     ]
   },
   "Conversation": {
@@ -240,6 +281,9 @@ export const SCHEMA = {
       "created_date",
       "updated_date",
       "created_by"
+    ],
+    "typed": [
+      "tags"
     ]
   },
   "CultureCalendarEntry": {
@@ -259,6 +303,9 @@ export const SCHEMA = {
       "created_date",
       "updated_date",
       "created_by"
+    ],
+    "typed": [
+      "date"
     ]
   },
   "CultureCalendarRSVP": {
@@ -274,6 +321,9 @@ export const SCHEMA = {
       "created_date",
       "updated_date",
       "created_by"
+    ],
+    "typed": [
+      "response_date"
     ]
   },
   "DashboardAnnouncement": {
@@ -288,7 +338,8 @@ export const SCHEMA = {
       "created_date",
       "updated_date",
       "created_by"
-    ]
+    ],
+    "typed": []
   },
   "DirectMessage": {
     "table": "direct_message",
@@ -309,6 +360,10 @@ export const SCHEMA = {
       "created_date",
       "updated_date",
       "created_by"
+    ],
+    "typed": [
+      "reactions",
+      "read"
     ]
   },
   "DocumentTemplate": {
@@ -320,6 +375,9 @@ export const SCHEMA = {
       "created_date",
       "updated_date",
       "created_by"
+    ],
+    "typed": [
+      "is_active"
     ]
   },
   "ESignAuditLog": {
@@ -335,6 +393,9 @@ export const SCHEMA = {
       "created_date",
       "updated_date",
       "created_by"
+    ],
+    "typed": [
+      "details"
     ]
   },
   "ESignDocument": {
@@ -368,6 +429,17 @@ export const SCHEMA = {
       "created_date",
       "updated_date",
       "created_by"
+    ],
+    "typed": [
+      "encrypted",
+      "encryption_metadata",
+      "fields",
+      "require_sequential_signing",
+      "signatories",
+      "signature_fields",
+      "signers",
+      "version",
+      "versions"
     ]
   },
   "ESignSubmission": {
@@ -392,6 +464,12 @@ export const SCHEMA = {
       "created_date",
       "updated_date",
       "created_by"
+    ],
+    "typed": [
+      "completed_at",
+      "signer_index",
+      "signers",
+      "submitted_at"
     ]
   },
   "ESignSubmitter": {
@@ -405,6 +483,10 @@ export const SCHEMA = {
       "created_date",
       "updated_date",
       "created_by"
+    ],
+    "typed": [
+      "order",
+      "signed"
     ]
   },
   "ESignTemplate": {
@@ -419,6 +501,9 @@ export const SCHEMA = {
       "created_date",
       "updated_date",
       "created_by"
+    ],
+    "typed": [
+      "fields"
     ]
   },
   "Event": {
@@ -433,6 +518,9 @@ export const SCHEMA = {
       "created_date",
       "updated_date",
       "created_by"
+    ],
+    "typed": [
+      "date"
     ]
   },
   "EventRSVP": {
@@ -450,6 +538,10 @@ export const SCHEMA = {
       "created_date",
       "updated_date",
       "created_by"
+    ],
+    "typed": [
+      "checked_in",
+      "guests_count"
     ]
   },
   "FileRepository": {
@@ -470,6 +562,12 @@ export const SCHEMA = {
       "created_date",
       "updated_date",
       "created_by"
+    ],
+    "typed": [
+      "downloads_count",
+      "file_size",
+      "is_featured",
+      "tags"
     ]
   },
   "GeneratedContract": {
@@ -488,6 +586,9 @@ export const SCHEMA = {
       "created_date",
       "updated_date",
       "created_by"
+    ],
+    "typed": [
+      "purchase_price"
     ]
   },
   "GroupChat": {
@@ -502,6 +603,9 @@ export const SCHEMA = {
       "created_date",
       "updated_date",
       "created_by"
+    ],
+    "typed": [
+      "members"
     ]
   },
   "GroupMessage": {
@@ -519,6 +623,9 @@ export const SCHEMA = {
       "created_date",
       "updated_date",
       "created_by"
+    ],
+    "typed": [
+      "reactions"
     ]
   },
   "Idea": {
@@ -539,6 +646,11 @@ export const SCHEMA = {
       "created_date",
       "updated_date",
       "created_by"
+    ],
+    "typed": [
+      "downvotes",
+      "is_anonymous",
+      "upvotes"
     ]
   },
   "IdeaPadNote": {
@@ -552,6 +664,9 @@ export const SCHEMA = {
       "created_date",
       "updated_date",
       "created_by"
+    ],
+    "typed": [
+      "messages"
     ]
   },
   "Message": {
@@ -568,6 +683,9 @@ export const SCHEMA = {
       "created_date",
       "updated_date",
       "created_by"
+    ],
+    "typed": [
+      "read"
     ]
   },
   "Notification": {
@@ -587,6 +705,9 @@ export const SCHEMA = {
       "created_date",
       "updated_date",
       "created_by"
+    ],
+    "typed": [
+      "read"
     ]
   },
   "Onboarding": {
@@ -601,6 +722,9 @@ export const SCHEMA = {
       "created_date",
       "updated_date",
       "created_by"
+    ],
+    "typed": [
+      "items"
     ]
   },
   "Recognition": {
@@ -619,6 +743,10 @@ export const SCHEMA = {
       "created_date",
       "updated_date",
       "created_by"
+    ],
+    "typed": [
+      "is_anonymous",
+      "reactions"
     ]
   },
   "ScheduledCall": {
@@ -633,6 +761,9 @@ export const SCHEMA = {
       "created_date",
       "updated_date",
       "created_by"
+    ],
+    "typed": [
+      "scheduled_at"
     ]
   },
   "SignatureData": {
@@ -649,6 +780,10 @@ export const SCHEMA = {
       "created_date",
       "updated_date",
       "created_by"
+    ],
+    "typed": [
+      "fields",
+      "signed_at"
     ]
   },
   "SocialMessage": {
@@ -669,6 +804,12 @@ export const SCHEMA = {
       "created_date",
       "updated_date",
       "created_by"
+    ],
+    "typed": [
+      "mentions",
+      "pinned",
+      "reactions",
+      "read_by"
     ]
   },
   "ThreadReply": {
@@ -685,6 +826,9 @@ export const SCHEMA = {
       "created_date",
       "updated_date",
       "created_by"
+    ],
+    "typed": [
+      "reactions"
     ]
   },
   "Transaction": {
@@ -734,6 +878,35 @@ export const SCHEMA = {
       "created_date",
       "updated_date",
       "created_by"
+    ],
+    "typed": [
+      "agent_net",
+      "agent_split_percentage",
+      "appraisal_date",
+      "brokerage_fee",
+      "brokerage_fee_flat",
+      "brokerage_fee_percentage",
+      "buyers",
+      "checklist",
+      "closing_date",
+      "commission_amount",
+      "commission_flat",
+      "commission_percentage",
+      "commission_sale_price",
+      "completed_dates",
+      "documents",
+      "esign_docs",
+      "financing_contingency_date",
+      "inspection_contingency_date",
+      "inspection_date",
+      "loan_approval_date",
+      "sale_price",
+      "sellers",
+      "title_deadline_date",
+      "transaction_fee",
+      "transaction_fee_flat",
+      "transaction_fee_percentage",
+      "updates"
     ]
   },
   "UserBadge": {
@@ -746,6 +919,7 @@ export const SCHEMA = {
       "created_date",
       "updated_date",
       "created_by"
-    ]
+    ],
+    "typed": []
   }
 };

@@ -41,7 +41,7 @@ export default function RecognitionCard({ recognition, isOwn, user, brokerageId,
   });
 
   const handleAddReaction = async (emoji) => {
-    const newReactions = recognition.reactions ? [...recognition.reactions] : [];
+    let newReactions = recognition.reactions ? [...recognition.reactions] : [];
     const existingReaction = newReactions.find(r => r.emoji === emoji);
     
     if (existingReaction) {

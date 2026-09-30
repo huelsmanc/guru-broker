@@ -1,0 +1,9 @@
+{
+  "name": "Go Broker Hub",
+  "short_name": "Broker Hub",
+  "start_url": "/Dashboard",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0f172a",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}
