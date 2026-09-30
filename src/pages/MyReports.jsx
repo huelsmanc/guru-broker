@@ -12,6 +12,7 @@ import { motion } from 'framer-motion';
 import { format } from 'date-fns';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
+import { isAdminRole, normalizeRole, can } from '../../shared/permissions.generated.js';
 
 export default function MyReports() {
   const { user, brokerageId } = useOutletContext();
@@ -21,7 +22,7 @@ export default function MyReports() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
   const [downloadingId, setDownloadingId] = useState(null);
 
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = isAdminRole(user?.role);
 
   const { data: reports = [], isLoading } = useQuery({
     queryKey: ['cma-reports', user?.email, isAdmin],

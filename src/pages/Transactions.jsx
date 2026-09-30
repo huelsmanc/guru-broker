@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { useOutletContext, useSearchParams } from 'react-router-dom';
+import { useOutletContext, useSearchParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
@@ -18,6 +18,7 @@ import CommissionBreakdown from '@/components/transactions/CommissionBreakdown';
 import ClosingReviewPrompt from '@/components/transactions/ClosingReviewPrompt';
 import ScanContractButton from '@/components/transactions/ScanContractButton';
 import FileCheck from '@/components/transactions/FileCheck';
+import { isAdminRole, normalizeRole, can } from '../../shared/permissions.generated.js';
 
 
 const MILESTONES = [
@@ -68,7 +69,7 @@ const EMPTY_FORM = {
 export default function Transactions() {
   const { user, brokerageId } = useOutletContext();
   const queryClient = useQueryClient();
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = isAdminRole(user?.role);
   const isClosedOrCancelled = (tx) => tx.status === 'closed' || tx.status === 'cancelled';
   const canEditTx = (tx) => (isAdmin || tx.agent_email === user?.email) && !isClosedOrCancelled(tx);
 
@@ -81,11 +82,12 @@ export default function Transactions() {
   const [updateForm, setUpdateForm] = useState({ message: '', milestone: '', flag: 'none' });
   const [uploadingFor, setUploadingFor] = useState(null);
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   // Links like /Transactions?open=<id> (from "Offer accepted" and TC emails) open that file.
   useEffect(() => {
     const id = searchParams.get('open');
-    if (id) setExpandedId(id);
-  }, [searchParams]);
+    if (id) navigate(`/Transactions/${id}`, { replace: true });
+  }, [searchParams, navigate]);
 
   // Fill the new-file form from an AI contract scan.
   const applyScan = (r, files) => {
@@ -349,7 +351,8 @@ export default function Transactions() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap mb-1">
-                        <p className="font-semibold text-foreground">{tx.property_address}</p>
+                        <Link to={`/Transactions/${tx.id}`} onClick={(e) => e.stopPropagation()} className="font-semibold text-foreground hover:underline">{tx.property_address}</Link>
+                        <Link to={`/Transactions/${tx.id}`} onClick={(e) => e.stopPropagation()} className="text-xs rounded-md border px-2 py-0.5 text-primary hover:bg-primary/10">Open file</Link>
                         <Badge className={`text-xs border ${cfg.color}`}>{cfg.label}</Badge>
                         {hasActionNeeded && (
                           <Badge className="text-xs bg-orange-100 text-orange-700 border-orange-200">⚠ Action Needed</Badge>
@@ -704,7 +707,7 @@ export default function Transactions() {
                 <Label>Transaction Coordinator</Label>
                 <select value={form.tc_email} onChange={e => handleTCSelect(e.target.value)} className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
                   <option value="">Select TC...</option>
-                  {brokerageUsers.filter(u => u.role === 'admin').map(u => (
+                  {brokerageUsers.filter(u => isAdminRole(u.role)).map(u => (
                     <option key={u.id} value={u.email}>{u.display_name || u.full_name}</option>
                   ))}
                 </select>

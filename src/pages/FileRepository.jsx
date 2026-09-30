@@ -9,6 +9,7 @@ import { motion } from 'framer-motion';
 import { format } from 'date-fns';
 import UploadDocumentDialog from '@/components/repository/UploadDocumentDialog';
 import FileCard from '@/components/repository/FileCard';
+import { isAdminRole, normalizeRole, can } from '../../shared/permissions.generated.js';
 
 const CATEGORIES = [
   { id: 'training', label: '📚 Training', color: 'bg-blue-100 text-blue-700' },
@@ -22,7 +23,7 @@ const CATEGORIES = [
 export default function FileRepository() {
   const { user, brokerageId } = useOutletContext();
   const queryClient = useQueryClient();
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = isAdminRole(user?.role);
   const [showUpload, setShowUpload] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');

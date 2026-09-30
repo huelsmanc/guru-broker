@@ -19,6 +19,7 @@ import MessageThread from '@/components/chat/MessageThread';
 import UserProfilePanel from '@/components/chat/UserProfilePanel';
 import LinkPreviewCard from '@/components/chat/LinkPreviewCard';
 import FilePreview from '@/components/viewer/FilePreview';
+import { isAdminRole, normalizeRole, can } from '../../shared/permissions.generated.js';
 
 function formatDayLabel(dateStr) {
   const d = new Date(dateStr);
@@ -65,7 +66,7 @@ export default function SocialChat() {
     emojiOpenTime: useRef(Date.now()),
   };
 
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = isAdminRole(user?.role);
 
   // ────── Queries ──────
   const { data: channels = [] } = useQuery({

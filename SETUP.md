@@ -21,9 +21,13 @@ Do these in order. Budget about an hour.
    **Check first:** if the project already has tables from the earlier migration attempt and they only hold test data, it's cleanest to remove them (Database → Tables). The setup SQL only adds what's missing, so an old table with the same name but different columns would cause errors.
 2. **Database → Extensions:** turn on `pg_cron` and `pg_net`.
 3. **SQL Editor:** open each file below from this repo, paste it in, and click Run, in this order:
-   1. `supabase/migrations/0001_init.sql`: all 44 tables, security rules, storage buckets, realtime
+   1. `supabase/migrations/0001_init.sql`: all 53 tables, roles and permissions, security rules, storage buckets, realtime
    2. `supabase/migrations/0002_automations.sql`: scheduled jobs and database automations
    3. `supabase/migrations/0003_mls.sql`: MLS listings and the 15-minute sync
+   4. `supabase/migrations/0004_backoffice.sql`: activity log, live updates for admins, license alerts, monthly statements, payout status sync
+   5. `supabase/migrations/0005_default_checklists.sql`: adds "Add automatically" checklists to new deals and new agents
+
+   Every file is safe to run again, so after pulling new code just re-run them in order.
 4. Still in the SQL editor, run this once, with your real domain and a long random secret (you'll use the same secret as `HOOK_SECRET` in Vercel):
    ```sql
    update private.app_config
@@ -54,6 +58,10 @@ Do these in order. Budget about an hour.
    | `EMAIL_FROM` | `Guru Broker <noreply@gurubroker.app>` |
    | `ANTHROPIC_API_KEY` and/or `OPENAI_API_KEY` | at least one |
    | `AI_PROVIDER` | `anthropic` or `openai` (the other one is the backup) |
+   | `PAYLOAD_SECRET_KEY` | Payload → Settings → API keys (the secret key) |
+   | `PAYLOAD_PROCESSING_ID` | Payload → your processing account id (the account payouts are paid from) |
+
+   Without the two Payload values everything still works except the "Send direct deposit" button; you can still mark payouts paid by check.
 
 3. Deploy, then open the preview URL and check that the sign-in page loads.
 
@@ -76,6 +84,13 @@ Add and verify the `gurubroker.app` domain (Resend shows the DNS records to add)
    update public.profiles set role = 'super_admin' where email = 'cody@gurubroker.com';  -- the email you sign in with
    ```
 
+4. **Bring your agents over from Brokermint** (optional, fills in profiles, licenses, teams, recruiters and anniversaries). In Brokermint, export the users list to CSV, then:
+   ```bash
+   SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... node scripts/import-brokermint-users.mjs brokermint-users.csv --brokerage <your brokerage id> --dry-run
+   SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... node scripts/import-brokermint-users.mjs brokermint-users.csv --brokerage <your brokerage id>
+   ```
+   Your brokerage id is in Supabase → Table editor → `brokerage`. Add `--invite` to email everyone a set-password link. Then assign commission plans under **Manage Users**.
+
 **Passwords:** Base44 can't export them. Everyone signs in the first time with **"Email me a sign-in link"** or **"Forgot password"** on the sign-in page. Send your agents a heads-up.
 
 ## 5. SmartMLS
@@ -97,7 +112,16 @@ SMARTMLS_CLASS=...           # the property class name SmartMLS gives you
 The first full download spreads over several 15-minute runs. Progress shows in the `mls_sync_state` table.
 Another MLS later: add its id to `MLS_SOURCES` (e.g. `smartmls,njmls`) and the same variables with its prefix. Web API feeds use `<ID>_TYPE=webapi`, `<ID>_API_URL`, `<ID>_TOKEN`.
 
-## 6. Switch the domain
+## 6. Back office first run
+
+1. **Commission Plans:** build your plans (split and cap, sliding scale, flat fee, team, downline). Mark one as the default.
+2. **Manage Users → Edit:** for each agent, set the plan, cap anniversary, team, recruiter ("Recruited by"), licenses and E&O dates. The Direct deposit tab sends them a Payload bank-link email.
+3. **Checklist Templates:** the starter set (Buyer, Listing, Rentals, Dual, Referral, Agent Onboarding) appears the first time you open it. Tick "Add automatically" on the ones every new deal or agent should get.
+4. **Settings:** fill in the CEO thank-you (name, message, YouTube link) and whether CDAs pay agents directly.
+
+Payout flow: save the commission on a deal (Finances) → payouts appear in **Payouts** waiting approval → approve → mark funds received from title on the deal → Send direct deposit. Statements email on the 1st of each month; license and E&O reminders go out 60, 30 and 7 days before expiry.
+
+## 7. Switch the domain
 
 When the preview looks right: Vercel → Settings → Domains → add `gurubroker.app`, update DNS as Vercel shows, then turn off the Base44 app.
 
@@ -106,6 +130,7 @@ When the preview looks right: Vercel → Settings → Domains → add `gurubroke
 ## What changed from Base44
 
 - **E-sign rebuilt.** Fields line up everywhere, the editor works with mouse and touch, signing in order is enforced, and a real signed PDF with a certificate page is emailed to everyone and attached to the transaction. Old emailed links still work. DocuSeal is removed.
+- **Back office (replaces Brokermint):** transaction workspace (checklists, documents, offers, contacts, finances, shared, activity), commission plans with caps, sliding scales, team splits and multi-level revenue share, payouts with approval and Payload direct deposit, monthly statements, CDAs, 1099 worksheet, reports, a live activity feed, license tracking, role permissions per user, and the CEO closing thank-you.
 - **New:** Offer Builder (AI-written offers, "Offer accepted" opens the transaction and assigns the TC), contract scanner, AI-placed signature fields, AI file check, MLS sync with real-sale CMAs.
 - **Security fixes found during the move:** functions that let anyone trigger emails or read documents without signing in are now locked; the OpenAI key setting that every agent could read is removed; signing link codes are stored hashed and encrypted; page titles and names are escaped in emails.
 - **Bug fixes:** removing a reaction crashed, the notifications button crashed, "delete my account" didn't delete anything, signing reminders pointed to a dead link.
@@ -115,5 +140,5 @@ When the preview looks right: Vercel → Settings → Domains → add `gurubroke
 ```bash
 npm install
 npm run build          # the app compiles
-npm run test:esign     # e-sign, AI and MLS tests with fake email/database
+npm run test:esign     # e-sign, AI, MLS and back-office tests with fake email/database
 ```

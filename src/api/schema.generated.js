@@ -68,6 +68,7 @@ export const SCHEMA = {
       "record_id",
       "summary",
       "table_name",
+      "transaction_id",
       "id",
       "created_date",
       "updated_date",

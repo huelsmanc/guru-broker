@@ -69,6 +69,9 @@ r = await as('boss')('payoutAction', { payoutIds: [agentPay.id, sponsorPay.id], 
 assert.ok(r.body.results.every((x) => x.ok));
 r = await svc('payoutSync'); // picks up Ann's linked bank
 assert.equal(r.body.linked, 1);
+r = await as('boss')('payoutAction', { payoutIds: [agentPay.id], action: 'send' });
+assert.match(r.body.results[0].error, /received from title/, 'no direct deposit before the commission check arrives');
+globalThis.__db.transaction.find((t) => t.id === 't1').commission_received_amount = 12500;
 r = await as('boss')('payoutAction', { payoutIds: [agentPay.id, sponsorPay.id], action: 'send' });
 assert.equal(r.body.results[0].ok, true, JSON.stringify(r.body));
 assert.equal(r.body.results[1].ok, false); assert.match(r.body.results[1].error, /hasn't linked/);
@@ -146,5 +149,30 @@ globalThis.__db.transaction.push({ id: 't2', brokerage_id: 'B1', agent_email: 'a
 r = await as('boss')('commissionPreview', { transactionId: 't2' });
 assert.equal(r.body.result.totals.gross, 20000);
 assert.deepEqual(r.body.result.agents.map((a) => [a.email, a.share]), [['ann@x.com', 10000], ['sam@x.com', 10000]]);
+
+// My Commissions: agent sees own cap progress; can't look at someone else's
+r = await as('ann')('myCommission', {});
+assert.equal(r.status, 200, JSON.stringify(r.body));
+assert.equal(r.body.cap, 18000); assert.equal(r.body.cap_year_start, '2026-03-01'); assert.equal(r.body.cap_year_end, '2027-03-01');
+assert.ok(r.body.ytd.company_dollar > 0 && r.body.records.length === 1 && r.body.payouts.length >= 1, JSON.stringify(r.body));
+r = await as('ann')('myCommission', { email: 'sam@x.com' });
+assert.equal(r.status, 403);
+r = await as('boss')('myCommission', { email: 'ann@x.com' });
+assert.equal(r.status, 200);
+
+// "Add automatically" templates go on new deals (matching deal type) and new users (onboarding)
+const tpls = globalThis.__db.checklist_template;
+tpls.find((t) => t.name === 'Buyer Checklist').is_default = true;
+tpls.find((t) => t.name === 'Listing Checklist').is_default = true;
+tpls.find((t) => t.kind === 'onboarding').is_default = true;
+r = await as('ann')('applyDefaultChecklists', { event: { entity_name: 'Transaction', data: { id: 't9', brokerage_id: 'B1', agent_email: 'ann@x.com', deal_type: 'buyer' } } });
+assert.equal(r.status, 403, 'automation is service-only');
+r = await svc('applyDefaultChecklists', { event: { entity_name: 'Transaction', data: { id: 't9', brokerage_id: 'B1', agent_email: 'ann@x.com', deal_type: 'buyer' } } });
+assert.equal(r.body.added, 1, JSON.stringify(r.body));
+r = await svc('applyDefaultChecklists', { event: { entity_name: 'Transaction', data: { id: 't9', brokerage_id: 'B1', agent_email: 'ann@x.com', deal_type: 'buyer' } } });
+assert.equal(r.body.added, 0, 'not added twice');
+r = await svc('applyDefaultChecklists', { event: { entity_name: 'User', data: { id: 'u9', brokerage_id: 'B1', email: 'New@x.com' } } });
+assert.equal(r.body.added, 1);
+assert.ok(globalThis.__db.checklist.some((c) => c.subject_type === 'onboarding' && c.subject_id === 'new@x.com'));
 
 console.log('Back office: all checks passed');

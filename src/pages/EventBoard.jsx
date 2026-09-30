@@ -11,11 +11,12 @@ import EventCard from '@/components/events/EventCard';
 import RSVPDialog from '@/components/events/RSVPDialog';
 import AttendanceTracker from '@/components/events/AttendanceTracker';
 import { format } from 'date-fns';
+import { isAdminRole, normalizeRole, can } from '../../shared/permissions.generated.js';
 
 export default function EventBoard() {
   const { user, brokerageId } = useOutletContext();
   const queryClient = useQueryClient();
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = isAdminRole(user?.role);
   const [showCreate, setShowCreate] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [showRSVP, setShowRSVP] = useState(false);

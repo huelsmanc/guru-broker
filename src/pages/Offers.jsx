@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Handshake, Plus, Sparkles, Loader2, Send, CheckCircle, XCircle, FileText, ArrowRight, Trash2, ShieldQuestion, Mail } from 'lucide-react';
 import UnifiedESignCreator from '@/components/esign/UnifiedESignCreator';
+import { isAdminRole, can } from '../../shared/permissions.generated.js';
 import { textToPdfFile } from '@/lib/textToPdf';
 
 const STATUS = {
@@ -42,7 +43,7 @@ export default function Offers() {
   const { user, brokerageId } = useOutletContext();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const isAdmin = ['admin', 'broker', 'super_admin'].includes(user?.role);
+  const isAdmin = isAdminRole(user?.role);
   const [editing, setEditing] = useState(null); // offer being edited (object) or null
   const [sending, setSending] = useState(null);
   const [accepting, setAccepting] = useState(null);

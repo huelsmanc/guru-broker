@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import ImageCropModal from '@/components/profile/ImageCropModal';
 import DeleteAccountDialog from '@/components/profile/DeleteAccountDialog';
 import { format, differenceInDays } from 'date-fns';
+import { isAdminRole, normalizeRole, can } from '../../shared/permissions.generated.js';
 
 export default function Profile() {
   const { user, brokerageId } = useOutletContext();
@@ -29,7 +30,7 @@ export default function Profile() {
   const [agentStatus, setAgentStatus] = useState(user?.agent_status || 'offline');
   const [timezone, setTimezone] = useState(user?.timezone || 'America/New_York');
   const [googleReviewUrl, setGoogleReviewUrl] = useState(user?.google_review_url || '');
-  const isAgent = user?.role === 'user';
+  const isAgent = normalizeRole(user?.role) === 'agent';
 
   const { data: cultureEvents = [] } = useQuery({
     queryKey: ['culture-events-profile', brokerageId],
@@ -90,7 +91,7 @@ export default function Profile() {
     setTimeout(() => setSaved(false), 3000);
   };
 
-  const roleLabel = user?.role === 'admin' ? 'Broker / Admin' : user?.role === 'super_admin' ? 'Super Admin' : 'Agent';
+  const roleLabel = isAdminRole(user?.role) ? 'Broker / Admin' : user?.role === 'super_admin' ? 'Super Admin' : 'Agent';
 
   // Filter upcoming events and attendance history
   const now = new Date();

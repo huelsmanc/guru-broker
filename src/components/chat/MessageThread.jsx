@@ -8,6 +8,7 @@ import { format } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import EmojiPicker from './EmojiPicker';
+import { isAdminRole, normalizeRole, can } from '../../../shared/permissions.generated.js';
 
 export default function MessageThread({ messageId, brokerageId, user, brokerageUsers }) {
   const [replyText, setReplyText] = useState('');
@@ -214,7 +215,7 @@ export default function MessageThread({ messageId, brokerageId, user, brokerageU
                           </button>
 
                         </div>
-                        {(reply.sender_email === user?.email || user?.role === 'admin') && (
+                        {(reply.sender_email === user?.email || isAdminRole(user?.role)) && (
                           <>
                             <button
                               onClick={() => {

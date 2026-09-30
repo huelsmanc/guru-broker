@@ -8,6 +8,7 @@ import { motion } from 'framer-motion';
 import IdeaCard from '@/components/ideas/IdeaCard';
 import SubmitIdeaDialog from '@/components/ideas/SubmitIdeaDialog';
 import AdminIdeaPanel from '@/components/ideas/AdminIdeaPanel';
+import { isAdminRole, normalizeRole, can } from '../../shared/permissions.generated.js';
 
 const CATEGORIES = [
   { id: 'process', label: 'Process' },
@@ -21,7 +22,7 @@ const CATEGORIES = [
 export default function IdeaHub() {
   const { user, brokerageId } = useOutletContext();
   const queryClient = useQueryClient();
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = isAdminRole(user?.role);
   const [showSubmit, setShowSubmit] = useState(false);
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterCategory, setFilterCategory] = useState('all');

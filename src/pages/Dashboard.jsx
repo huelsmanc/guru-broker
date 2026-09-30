@@ -14,6 +14,7 @@ import NotificationsDropdown from '@/components/dashboard/NotificationsDropdown'
 import MobileSafeScroll from '@/components/layout/MobileSafeScroll';
 
 import { motion } from 'framer-motion';
+import { isAdminRole, normalizeRole, can } from '../../shared/permissions.generated.js';
 
 
 export default function Dashboard() {
@@ -23,7 +24,7 @@ export default function Dashboard() {
   const [showNewConvo, setShowNewConvo] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
 
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = isAdminRole(user?.role);
 
   const { data: brokerageSettings } = useQuery({
     queryKey: ['brokerage-settings', brokerageId],

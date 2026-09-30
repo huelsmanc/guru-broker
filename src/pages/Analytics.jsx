@@ -7,6 +7,7 @@ import { TrendingUp, MessageSquare, CheckCircle, Clock, Activity, DollarSign, Us
 import { motion } from 'framer-motion';
 import StatsCard from '@/components/dashboard/StatsCard';
 import { cn } from '@/lib/utils';
+import { isAdminRole, normalizeRole, can } from '../../shared/permissions.generated.js';
 
 const categoryColors = {
   transaction: '#3b82f6',
@@ -20,7 +21,7 @@ const categoryColors = {
 
 export default function Analytics() {
   const { user, brokerageId } = useOutletContext();
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = isAdminRole(user?.role);
 
   const { data: conversations = [] } = useQuery({
     queryKey: ['all-conversations-analytics', brokerageId],

@@ -11,7 +11,7 @@ export const SERVICE_ONLY = new Set([
   'closingDateReminder', 'sendSigningReminders', 'sendCultureEventReminders', 'mlsSync',
   'licenseAlerts', 'payoutSync',
   // database automations
-  'notifyAgentsNewTraining', 'notifyDocumentActivity', 'notifyNewSocialMessage', 'notifySignatureUpdate',
+  'notifyAgentsNewTraining', 'notifyDocumentActivity', 'applyDefaultChecklists', 'notifyNewSocialMessage', 'notifySignatureUpdate',
   // unused by the app
   'cancelESignDocument', 'createMasterAdmin', 'createSubmission', 'decryptDocument', 'detectPDFFields',
   'encryptDocument', 'exportCommissionSummary', 'fixDisplayNames', 'generateAndSendOTP',

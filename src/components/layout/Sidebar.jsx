@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { MessageSquare, Phone, LayoutDashboard, Monitor, LogOut, Users, Settings as SettingsIcon, ShieldCheck, Building2, UserCircle, TrendingUp, UserPlus, Mail, Trophy, BookOpen, FileText, Heart, Lightbulb, Calendar, FolderOpen, Link2, Wand2, Target, ScrollText, Calculator, File, Gift, Star, ClipboardList, Handshake } from 'lucide-react';
+import { MessageSquare, Phone, LayoutDashboard, Monitor, LogOut, Users, Settings as SettingsIcon, ShieldCheck, Building2, UserCircle, TrendingUp, UserPlus, Mail, Trophy, BookOpen, FileText, Heart, Lightbulb, Calendar, FolderOpen, Link2, Wand2, Target, ScrollText, Calculator, File, Gift, Star, ClipboardList, Handshake, Wallet, Banknote, Percent, BarChart3, Activity as ActivityIcon, FileCheck2, ListChecks } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import NotificationBell from './NotificationBell';
 import ChatChannelsDropdown from './ChatChannelsDropdown';
 
 import { useQuery } from '@tanstack/react-query';
+import { isAdminRole, normalizeRole, can } from '../../../shared/permissions.generated.js';
 
 export default function Sidebar({ user, brokerageId, onChannelClick }) {
   const location = useLocation();
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = isAdminRole(user?.role);
   const [brokerageSettings, setBrokerageSettings] = useState(null);
   const [brokerage, setBrokerage] = useState(null);
 
@@ -141,8 +142,22 @@ export default function Sidebar({ user, brokerageId, onChannelClick }) {
     { to: '/Profile', icon: UserCircle, label: 'My Profile' },
   ];
 
+  // Back office: shown to anyone whose role or permissions allow it (e.g. a TC who approves documents).
+  const inBrokerage = !!brokerageId;
+  const backOffice = inBrokerage ? [
+    { to: '/MyCommissions', icon: Wallet, label: 'My Commissions', show: !isSuperAdmin },
+    { to: '/ApproveDocs', icon: FileCheck2, label: 'Approve Docs', show: isAdmin || can(user, 'docs.approve') },
+    { to: '/Payouts', icon: Banknote, label: 'Payouts', show: can(user, 'accounting.access') },
+    { to: '/CommissionPlans', icon: Percent, label: 'Commission Plans', show: isAdmin },
+    { to: '/ChecklistTemplates', icon: ListChecks, label: 'Checklist Templates', show: isAdmin },
+    { to: '/Reports', icon: BarChart3, label: 'Reports', show: can(user, 'reports.company') },
+    { to: '/Activity', icon: ActivityIcon, label: 'Activity', show: isAdmin || can(user, 'activity.account') },
+  ].filter((l) => l.show) : [];
+
   // If super admin has a brokerage_id, they're viewing inside a brokerage - show broker links
-  const links = isSuperAdmin && !brokerageId ? superAdminLinks : isAdmin || (isSuperAdmin && brokerageId) ? brokerLinks : agentLinks;
+  const baseLinks = isSuperAdmin && !brokerageId ? superAdminLinks : isAdmin || (isSuperAdmin && brokerageId) ? brokerLinks : agentLinks;
+  const at = baseLinks.findIndex((l) => l.to === '/Transactions');
+  const links = at < 0 ? [...baseLinks, ...backOffice] : [...baseLinks.slice(0, at + 1), ...backOffice, ...baseLinks.slice(at + 1)];
 
   return (
     <aside className="fixed left-0 top-0 h-screen w-64 bg-sidebar text-sidebar-foreground flex flex-col z-40">

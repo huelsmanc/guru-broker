@@ -9,10 +9,11 @@ import TrainingList from '@/components/compliance/TrainingList';
 import CreateTrainingDialog from '@/components/compliance/CreateTrainingDialog';
 import TrainingAnalytics from '@/components/compliance/TrainingAnalytics';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { isAdminRole, normalizeRole, can } from '../../shared/permissions.generated.js';
 
 export default function ComplianceTraining() {
   const { user, brokerageId } = useOutletContext();
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = isAdminRole(user?.role);
   const [showCreate, setShowCreate] = useState(false);
 
   const { data: trainings = [] } = useQuery({

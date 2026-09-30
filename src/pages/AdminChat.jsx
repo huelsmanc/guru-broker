@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { isAdminRole, normalizeRole, can } from '../../shared/permissions.generated.js';
 
 export default function AdminChat() {
   const { user, brokerageId } = useOutletContext();
@@ -14,7 +15,7 @@ export default function AdminChat() {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef(null);
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = isAdminRole(user?.role);
 
   const { data: messages = [] } = useQuery({
     queryKey: ['admin-messages'],

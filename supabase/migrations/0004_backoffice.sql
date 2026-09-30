@@ -25,13 +25,18 @@ begin
     nullif(rec ->> 'full_name', ''), nullif(rec ->> 'payee_name', ''), nullif(rec ->> 'agent_name', ''),
     nullif(rec ->> 'email', ''), nullif(rec ->> 'user_email', ''), rec ->> 'id');
 
-  insert into public.activity_event (brokerage_id, actor_email, table_name, op, record_id, summary, changed, created_by)
+  insert into public.activity_event (brokerage_id, actor_email, table_name, op, record_id, transaction_id, summary, changed, created_by)
   values (
     coalesce(rec ->> 'brokerage_id', prev ->> 'brokerage_id'),
     coalesce(nullif(public.auth_email(), ''), 'system'),
     tg_table_name,
     lower(tg_op),
     rec ->> 'id',
+    case
+      when tg_table_name = 'transaction' then rec ->> 'id'
+      when tg_table_name = 'checklist' and rec ->> 'subject_type' = 'transaction' then rec ->> 'subject_id'
+      else rec ->> 'transaction_id'
+    end,
     left(label, 200),
     changed,
     coalesce(nullif(public.auth_email(), ''), 'system')
@@ -44,7 +49,7 @@ do $$ declare t text; begin
     'transaction', 'offer', 'esign_document', 'esign_submission', 'esign_template',
     'commission_plan', 'commission_record', 'payout', 'checklist_template',
     'profiles', 'brokerage_settings', 'file_repository', 'client_review', 'compliance_training',
-    'generated_contract', 'cmas_report', 'agent_private', 'transaction_contact'
+    'generated_contract', 'cmas_report', 'agent_private', 'transaction_contact', 'checklist', 'team'
   ] loop
     execute format('drop trigger if exists activity_%1$s on public.%1$I', t);
     execute format('create trigger activity_%1$s after insert or update or delete on public.%1$I for each row execute function private.log_activity()', t);

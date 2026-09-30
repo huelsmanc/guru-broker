@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { isAdminRole, normalizeRole, can } from '../../../shared/permissions.generated.js';
 
 const CATEGORIES = [
   { id: 'teamwork', label: '🤝 Teamwork' },
@@ -90,7 +91,7 @@ export default function GiveRecognitionDialog({ open, onClose, brokerageId, user
                     .sort((a, b) => (getDisplayName(a) || '').localeCompare(getDisplayName(b) || ''))
                     .map((u) => (
                       <SelectItem key={u.email} value={u.email}>
-                        {getDisplayName(u)} {u.role === 'admin' ? '(Broker)' : ''}
+                        {getDisplayName(u)} {isAdminRole(u.role) ? '(Broker)' : ''}
                       </SelectItem>
                     ))
                 ) : (

@@ -90,7 +90,12 @@ export default async (req) => {
     // Who may work on a subject
     async function access(subjectType, subjectId, subjectEmail) {
       if (subjectType === 'transaction') {
-        const tx = await base44.entities.Transaction.get(subjectId).catch(() => null); // user's own access rules
+        let tx = await base44.entities.Transaction.get(subjectId).catch(() => null); // user's own access rules
+        if (!tx && can(me, 'docs.approve') && ['approve', 'reject', 'comment'].includes(body.action)) {
+          // Document reviewers work the approval queue without full deal access.
+          const t = await E.Transaction.get(subjectId).catch(() => null);
+          if (t && t.brokerage_id === me.brokerage_id) return { tx: t, owner: false, manage: false };
+        }
         if (!tx) throw Object.assign(new Error('Transaction not found'), { status: 404 });
         const isTc = String(tx.tc_email || '').toLowerCase() === myEmail;
         return { tx, owner: true, manage: admin || isTc || can(me, 'tx.checklist_manage') };

@@ -8,6 +8,7 @@ import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { isAdminRole, normalizeRole, can } from '../../../shared/permissions.generated.js';
 
 const CATEGORY_COLORS = {
   teamwork: { emoji: '🤝', bgGradient: 'from-blue-500/10 to-cyan-500/10', borderGradient: 'from-blue-500/20 to-cyan-500/20', accent: 'text-blue-600 dark:text-blue-400' },
@@ -27,7 +28,7 @@ export default function RecognitionCard({ recognition, isOwn, user, brokerageId,
   const queryClient = useQueryClient();
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = isAdminRole(user?.role);
   const getDisplayName = (email, fallback) => {
     const u = brokerageUsers.find(user => user.email === email);
     return u?.display_name || u?.full_name || fallback || 'Unknown';

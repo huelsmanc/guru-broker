@@ -9,11 +9,12 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { motion } from 'framer-motion';
 import { format } from 'date-fns';
+import { isAdminRole, normalizeRole, can } from '../../shared/permissions.generated.js';
 
 export default function AgentLeaderboard() {
   const { user, brokerageId } = useOutletContext();
   const queryClient = useQueryClient();
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = isAdminRole(user?.role);
   const [showDialog, setShowDialog] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [currentMonth, setCurrentMonth] = useState(new Date().toISOString().slice(0, 7));

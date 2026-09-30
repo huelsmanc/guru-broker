@@ -6,7 +6,13 @@ cd "$(dirname "$0")"
 rm -rf .build && mkdir -p .build/node_modules/@supabase/supabase-js
 cp fake-supabase/index.js .build/node_modules/@supabase/supabase-js/index.js
 echo '{"name":"@supabase/supabase-js","type":"module","main":"index.js"}' > .build/node_modules/@supabase/supabase-js/package.json
-for dep in pdf-lib jspdf pdfjs-dist; do ln -s "$(cd ../.. && pwd)/node_modules/$dep" .build/node_modules/$dep; done
+ln -s "$(cd ../.. && pwd)/node_modules/pdf-lib" .build/node_modules/pdf-lib
+# Legacy PDF helpers are not exercised here; stub them so the bundle loads.
+mkdir -p .build/node_modules/pdfjs-dist/build .build/node_modules/jspdf
+echo 'export default {};' > .build/node_modules/pdfjs-dist/build/pdf.js
+echo 'export class jsPDF {} export default jsPDF;' > .build/node_modules/jspdf/index.js
+echo '{"name":"jspdf","type":"module","main":"index.js"}' > .build/node_modules/jspdf/package.json
+echo '{"name":"pdfjs-dist","type":"module"}' > .build/node_modules/pdfjs-dist/package.json
 npx esbuild "../../api/fn/[name].js" --bundle --packages=external --platform=node --format=esm --outfile=.build/fn.mjs --log-level=error
 cp flow.test.mjs ai.test.mjs mls.test.mjs backoffice.test.mjs sample.pdf sig.png .build/
 node .build/flow.test.mjs

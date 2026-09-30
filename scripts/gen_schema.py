@@ -56,7 +56,7 @@ ENTITIES = {
     "Team": "brokerage_id name leader_email lead_pct",
     "Checklist": "brokerage_id subject_type subject_id subject_email template_id name items status",
     "TransactionContact": "brokerage_id transaction_id agent_email role name email phone company notes is_client",
-    "ActivityEvent": "brokerage_id actor_email table_name op record_id summary changed",
+    "ActivityEvent": "brokerage_id actor_email table_name op record_id transaction_id summary changed",
     "Offer": "brokerage_id agent_email agent_name property_address city state zip mls_number list_price offer_price earnest_money financing_type down_payment_percent loan_amount closing_date offer_expiration inspection_days financing_days appraisal_contingency seller_concessions included_items special_terms buyers sellers listing_agent_name listing_agent_email status offer_text document_url esign_document_id submission_id transaction_id accepted_at acceptance_date",
     "Onboarding": "agent_email agent_name brokerage_id items status",
     "Recognition": "brokerage_id category from_email from_name is_anonymous message reactions to_email to_name",
@@ -333,7 +333,8 @@ for ent, fields in sorted(ENTITIES.items()):
         pw(f"create policy {t}_access on public.{t} for select using (lower(user_email) = public.auth_email() or (brokerage_id = public.auth_brokerage_id() and (public.is_brokerage_admin() or public.has_perm('accounting.access'))) or public.is_super_admin());")
         pw(f"-- {t}: written only by server routes.")
     elif ent == "ActivityEvent":
-        pw(f"create policy {t}_access on public.{t} for select using ((brokerage_id = public.auth_brokerage_id() and (public.is_brokerage_admin() or public.has_perm('activity.account'))) or public.is_super_admin());")
+        pw(f"create policy {t}_access on public.{t} for select using ((brokerage_id = public.auth_brokerage_id() and (public.is_brokerage_admin() or public.has_perm('activity.account'))) or public.is_super_admin()"
+           " or (transaction_id is not null and public.has_perm('activity.transaction') and exists (select 1 from public.transaction x where x.id = activity_event.transaction_id)));")
         pw(f"-- {t}: written by the activity trigger and server routes only.")
     elif ent == "ESignSubmission":
         # Visible when the document is visible (document rules apply through the subquery).

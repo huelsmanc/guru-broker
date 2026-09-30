@@ -11,6 +11,7 @@ import TagButton from '@/components/chat/TagButton';
 import NewConversationDialog from '@/components/chat/NewConversationDialog';
 import ConversationList from '@/components/dashboard/ConversationList';
 import { motion } from 'framer-motion';
+import { isAdminRole, normalizeRole, can } from '../../shared/permissions.generated.js';
 
 export default function Chat() {
   const { user, brokerageId } = useOutletContext();
@@ -25,7 +26,7 @@ export default function Chat() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showSummary, setShowSummary] = useState(false);
   const [summaryLoading, setSummaryLoading] = useState(false);
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = isAdminRole(user?.role);
 
   const { data: brokerageSettings } = useQuery({
     queryKey: ['brokerage-settings', brokerageId],

@@ -14,6 +14,7 @@ import { format } from 'date-fns';
 import { motion } from 'framer-motion';
 import VideoConferenceModal from '@/components/calls/VideoConferenceModal';
 import VideoCallNotificationDialog from '@/components/calls/VideoCallNotificationDialog';
+import { isAdminRole, normalizeRole, can } from '../../shared/permissions.generated.js';
 
 const timeSlots = [
   '9:00 AM', '9:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM',
@@ -24,7 +25,7 @@ const timeSlots = [
 export default function ScheduleCalls() {
   const { user, brokerageId } = useOutletContext();
   const queryClient = useQueryClient();
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = isAdminRole(user?.role);
   const [showDialog, setShowDialog] = useState(false);
   const [showPhoneEditor, setShowPhoneEditor] = useState(false);
   const [showVideoCall, setShowVideoCall] = useState(false);

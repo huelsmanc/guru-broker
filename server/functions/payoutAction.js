@@ -38,6 +38,10 @@ export default async (req) => {
         if (!payloadConfigured()) { results.push({ id, ok: false, error: 'Payload is not connected' }); continue; }
         const [bank] = await entities.AgentPrivate.filter({ user_email: p.payee_email }, '-created_date', 1);
         if (!bank?.payload_payment_method_id) { results.push({ id, ok: false, error: `${p.payee_email} hasn't linked a bank account` }); continue; }
+        if (p.transaction_id) {
+          const tx = await entities.Transaction.get(p.transaction_id).catch(() => null);
+          if (tx && tx.commission_received_amount == null) { results.push({ id, ok: false, error: 'Mark the commission as received from title first (Finances -> Funds received)' }); continue; }
+        }
         const r = await claim(id, ['approved'], 'sending', { sent_at: now, method: 'payload' });
         if (!r) { results.push({ id, ok: false, error: `Is ${p.status}; approve it first` }); continue; }
         try {

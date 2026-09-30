@@ -10,12 +10,13 @@ import { Label } from '@/components/ui/label';
 import { Users, Trash2, ToggleLeft, ToggleRight, Plus, ShieldCheck, Crown, Briefcase, Pencil } from 'lucide-react';
 import { motion } from 'framer-motion';
 import OnboardingChecklist from '@/components/onboarding/OnboardingChecklist';
-import EditUserProfileDialog from '@/components/onboarding/EditUserProfileDialog';
+import UserAdminDialog from '@/components/users/UserAdminDialog';
+import { isAdminRole, normalizeRole, can } from '../../shared/permissions.generated.js';
 
 export default function BrokerageUsers() {
   const { user, brokerageId } = useOutletContext();
   const queryClient = useQueryClient();
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = isAdminRole(user?.role);
   const [showInvite, setShowInvite] = useState(false);
   const [inviteForm, setInviteForm] = useState({ email: '', full_name: '', role: 'user' });
   const [inviting, setInviting] = useState(false);
@@ -171,11 +172,11 @@ export default function BrokerageUsers() {
         </div>
         <div className="bg-card rounded-2xl border border-border p-5">
           <p className="text-sm text-muted-foreground">Admins</p>
-          <p className="text-3xl font-bold mt-1 text-primary">{allUsers.filter(u => u.role === 'admin').length}</p>
+          <p className="text-3xl font-bold mt-1 text-primary">{allUsers.filter(u => isAdminRole(u.role)).length}</p>
         </div>
         <div className="bg-card rounded-2xl border border-border p-5">
           <p className="text-sm text-muted-foreground">Agents</p>
-          <p className="text-3xl font-bold mt-1 text-accent">{allUsers.filter(u => u.role === 'user').length}</p>
+          <p className="text-3xl font-bold mt-1 text-accent">{allUsers.filter(u => normalizeRole(u.role) === 'agent').length}</p>
         </div>
       </div>
 
@@ -210,7 +211,7 @@ export default function BrokerageUsers() {
                       <Crown className="w-3 h-3" /> Account Owner
                     </Badge>
                   )}
-                  {u.role === 'user' && u.agent_status && (
+                  {normalizeRole(u.role) === 'agent' && u.agent_status && (
                     <Badge className={`text-xs capitalize ${getStatusBadgeColor(u.agent_status)}`}>
                       {u.agent_status}
                     </Badge>
@@ -240,8 +241,8 @@ export default function BrokerageUsers() {
               </div>
               {!isAccountOwner && (
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  <Badge variant={u.role === 'admin' ? 'default' : 'secondary'} className="text-xs capitalize">
-                    {u.role === 'admin' ? 'Admin' : 'Agent'}
+                  <Badge variant={isAdminRole(u.role) ? 'default' : 'secondary'} className="text-xs capitalize">
+                    {isAdminRole(u.role) ? 'Admin' : 'Agent'}
                   </Badge>
                   <Button
                     variant="ghost"
@@ -254,7 +255,7 @@ export default function BrokerageUsers() {
                   >
                     <Pencil className="w-4 h-4" /> Edit
                   </Button>
-                  {u.role === 'user' && (
+                  {normalizeRole(u.role) === 'agent' && (
                     <Button
                       variant="ghost"
                       size="sm"
@@ -358,12 +359,13 @@ export default function BrokerageUsers() {
       />
 
       {/* Edit User Profile Modal */}
-      <EditUserProfileDialog
-        open={showEditUser}
-        onClose={() => setShowEditUser(false)}
-        user={editingUser}
-        brokerageId={brokerageId}
-      />
+      {showEditUser && editingUser && (
+        <UserAdminDialog
+          person={editingUser}
+          me={user}
+          onClose={() => { setShowEditUser(false); setEditingUser(null); queryClient.invalidateQueries({ queryKey: ['brokerage-users', brokerageId] }); }}
+        />
+      )}
     </div>
   );
 }

@@ -9,13 +9,14 @@ import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, Cart
 import { FileText, CheckCircle, Clock, Send, TrendingUp, Activity } from 'lucide-react';
 import { format } from 'date-fns';
 import { motion } from 'framer-motion';
+import { isAdminRole, normalizeRole, can } from '../../shared/permissions.generated.js';
 
 export default function ESignAdmin() {
   const { user, brokerageId } = useOutletContext();
   const [selectedDay, setSelectedDay] = useState(7); // Last 7 days
 
   // Verify admin access
-  if (user?.role !== 'admin') {
+  if (!isAdminRole(user?.role)) {
     return (
       <div className="p-6 text-center">
         <p className="text-muted-foreground">Admin access required</p>

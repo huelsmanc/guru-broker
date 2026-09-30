@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Mail, FileText, Check } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { isAdminRole, normalizeRole, can } from '../../../shared/permissions.generated.js';
 
 export default function BatchDistributionDialog({ open, onClose, user, brokerageId }) {
   const queryClient = useQueryClient();
@@ -28,7 +29,7 @@ export default function BatchDistributionDialog({ open, onClose, user, brokerage
     queryKey: ['brokerage-users-batch', brokerageId],
     queryFn: async () => {
       const all = await base44.entities.User.list('-created_date', 500);
-      return all.filter(u => u.brokerage_id === brokerageId && u.role === 'user' && u.id !== user?.id);
+      return all.filter(u => u.brokerage_id === brokerageId && normalizeRole(u.role) === 'agent' && u.id !== user?.id);
     },
     enabled: open && !!brokerageId && !!user?.id,
   });

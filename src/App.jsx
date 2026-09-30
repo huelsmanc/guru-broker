@@ -53,7 +53,17 @@ const Transactions = lazy(() => import('@/pages/Transactions'));
 const ClientPortal = lazy(() => import('@/pages/ClientPortal'));
 const Login = lazy(() => import('@/pages/Login'));
 const Offers = lazy(() => import('@/pages/Offers'));
+const TransactionWorkspace = lazy(() => import('@/pages/TransactionWorkspace'));
+const ClientStatus = lazy(() => import('@/pages/ClientStatus'));
 const ResetPassword = lazy(() => import('@/pages/ResetPassword'));
+const MyCommissions = lazy(() => import('@/pages/MyCommissions'));
+const Payouts = lazy(() => import('@/pages/Payouts'));
+const CommissionPlans = lazy(() => import('@/pages/CommissionPlans'));
+const Reports = lazy(() => import('@/pages/Reports'));
+const Activity = lazy(() => import('@/pages/Activity'));
+const ApproveDocs = lazy(() => import('@/pages/ApproveDocs'));
+const ChecklistTemplates = lazy(() => import('@/pages/ChecklistTemplates'));
+
 
 // Loading fallback component
 const PageLoader = () => (
@@ -66,7 +76,7 @@ const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
   const location = useLocation();
 
-  const isPublicRoute = ['/sign', '/custom-sign', '/BulkSign', '/review', '/login', '/reset-password'].includes(location.pathname);
+  const isPublicRoute = ['/sign', '/custom-sign', '/BulkSign', '/review', '/login', '/reset-password', '/status'].includes(location.pathname);
 
   // Always render public routes immediately - no auth required
   if (isPublicRoute) {
@@ -79,6 +89,7 @@ const AuthenticatedApp = () => {
           <Route path="/review" element={<PublicReview />} />
           <Route path="/login" element={<Login />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/status" element={<ClientStatus />} />
         </Routes>
       </Suspense>
     );
@@ -143,6 +154,7 @@ const AuthenticatedApp = () => {
             <Route path="/SalesCoach" element={<SalesCoach />} />
             <Route path="/ContractGenerator" element={<ContractGenerator />} />
             <Route path="/Offers" element={<Offers />} />
+            <Route path="/Transactions/:id" element={<TransactionWorkspace />} />
             <Route path="/Onboarding" element={<Onboarding />} />
             <Route path="/CMABuilder" element={<CMABuilder />} />
             <Route path="/MyReports" element={<MyReports />} />
@@ -150,6 +162,13 @@ const AuthenticatedApp = () => {
             <Route path="/Reviews" element={<Reviews />} />
             <Route path="/Transactions" element={<Transactions />} />
             <Route path="/ClientPortal" element={<ClientPortal />} />
+            <Route path="/MyCommissions" element={<MyCommissions />} />
+            <Route path="/Payouts" element={<Payouts />} />
+            <Route path="/CommissionPlans" element={<CommissionPlans />} />
+            <Route path="/Reports" element={<Reports />} />
+            <Route path="/Activity" element={<Activity />} />
+            <Route path="/ApproveDocs" element={<ApproveDocs />} />
+            <Route path="/ChecklistTemplates" element={<ChecklistTemplates />} />
           </Route>
           <Route path="/JoinBrokerage" element={<JoinBrokerage />} />
           <Route path="*" element={<PageNotFound />} />

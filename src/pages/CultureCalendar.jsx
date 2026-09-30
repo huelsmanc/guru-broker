@@ -10,6 +10,7 @@ import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSam
 import { motion, AnimatePresence } from 'framer-motion';
 import CultureCalendarDialog from '@/components/calendar/CultureCalendarDialog';
 import CultureEventDetailModal from '@/components/calendar/CultureEventDetailModal';
+import { isAdminRole, normalizeRole, can } from '../../shared/permissions.generated.js';
 
 const EVENT_TYPE_CONFIG = {
   birthday: { emoji: '🎂', label: 'Birthday', color: 'bg-pink-100 text-pink-700 border-pink-200' },
@@ -21,7 +22,7 @@ const EVENT_TYPE_CONFIG = {
 export default function CultureCalendar() {
   const { user, brokerageId } = useOutletContext();
   const queryClient = useQueryClient();
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = isAdminRole(user?.role);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [showDialog, setShowDialog] = useState(false);
   const [editingEvent, setEditingEvent] = useState(null);

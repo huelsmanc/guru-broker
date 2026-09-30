@@ -14,6 +14,7 @@ import {
   Upload, Crown, ChevronRight, ArrowLeft, Save, CheckCircle, Settings, UserPlus
 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { isAdminRole, normalizeRole, can } from '../../shared/permissions.generated.js';
 
 export default function SuperAdmin() {
   const { user } = useOutletContext();
@@ -295,8 +296,8 @@ export default function SuperAdmin() {
                     {brokerageName && <p className="text-xs text-muted-foreground mt-0.5">🏢 {brokerageName}</p>}
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    <Badge variant={u.role === 'admin' ? 'default' : 'secondary'} className="text-xs capitalize">
-                      {u.role === 'admin' ? 'Broker/Admin' : u.role === 'user' ? 'Agent' : u.role || 'unknown'}
+                    <Badge variant={isAdminRole(u.role) ? 'default' : 'secondary'} className="text-xs capitalize">
+                      {isAdminRole(u.role) ? 'Broker/Admin' : normalizeRole(u.role) === 'agent' ? 'Agent' : u.role || 'unknown'}
                     </Badge>
                     <select
                       value={u.role || 'user'}

@@ -19,6 +19,7 @@ import ESignActivityLog from '@/components/esign/ESignActivityLog.jsx';
 import SigningRequestStatus from '@/components/esign/SigningRequestStatus.jsx';
 import ESignTemplateManager from '@/components/esign/ESignTemplateManager.jsx';
 import SignerManagementDashboard from '@/components/esign/SignerManagementDashboard.jsx';
+import { isAdminRole, normalizeRole, can } from '../../shared/permissions.generated.js';
 
 export default function ESignDocuments() {
   const { user, brokerageId } = useOutletContext();
@@ -31,7 +32,7 @@ export default function ESignDocuments() {
   const [viewingDocUrl, setViewingDocUrl] = useState(null);
   const [expandedLogs, setExpandedLogs] = useState({});
   const [activeTab, setActiveTab] = useState('documents');
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = isAdminRole(user?.role);
 
   const { data: documents = [], isLoading } = useQuery({
     queryKey: ['esign-documents', brokerageId],

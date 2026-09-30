@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button';
 import { Star, Smile, Trash2 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { isAdminRole, normalizeRole, can } from '../../shared/permissions.generated.js';
 
 const EMOJI_REACTIONS = ['👏', '🎉', '⭐', '❤️', '🚀', '💯'];
 
@@ -38,7 +39,7 @@ export default function Reviews() {
     refetchInterval: 30000,
   });
 
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = isAdminRole(user?.role);
 
   const updateReaction = useMutation({
     mutationFn: async ({ reviewId, emoji }) => {

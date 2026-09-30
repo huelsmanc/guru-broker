@@ -12,6 +12,8 @@ const AUTOMATIONS = {
   compliance_training: { INSERT: ['notifyAgentsNewTraining'], entity: 'ComplianceTraining' },
   activity_log: { INSERT: ['notifyDocumentActivity'], entity: 'ActivityLog' },
   esign_document: { UPDATE: ['notifySignatureUpdate'], entity: 'ESignDocument' },
+  transaction: { INSERT: ['applyDefaultChecklists'], entity: 'Transaction' },
+  profiles: { INSERT: ['applyDefaultChecklists'], UPDATE: ['applyDefaultChecklists'], entity: 'User' },
 };
 
 const TYPE = { INSERT: 'create', UPDATE: 'update', DELETE: 'delete' };

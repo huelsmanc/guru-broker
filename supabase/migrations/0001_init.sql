@@ -223,6 +223,7 @@ create table if not exists public.activity_event (
   record_id text,
   summary text,
   table_name text,
+  transaction_id text,
   extra jsonb not null default '{}'::jsonb,
   created_date timestamptz not null default now(),
   updated_date timestamptz not null default now(),
@@ -235,6 +236,7 @@ alter table public.activity_event add column if not exists op text;
 alter table public.activity_event add column if not exists record_id text;
 alter table public.activity_event add column if not exists summary text;
 alter table public.activity_event add column if not exists table_name text;
+alter table public.activity_event add column if not exists transaction_id text;
 drop trigger if exists activity_event_touch on public.activity_event;
 create trigger activity_event_touch before update on public.activity_event for each row execute function public.touch_updated_date();
 drop trigger if exists activity_event_fill on public.activity_event;
@@ -242,6 +244,7 @@ create trigger activity_event_fill before insert on public.activity_event for ea
 alter table public.activity_event enable row level security;
 create index if not exists activity_event_recent_idx on public.activity_event (brokerage_id, created_date desc);
 create index if not exists activity_event_brokerage_id_idx on public.activity_event (brokerage_id);
+create index if not exists activity_event_transaction_id_idx on public.activity_event (transaction_id);
 
 -- ActivityLog -----------------------------------------------------------
 create table if not exists public.activity_log (
@@ -1994,7 +1997,7 @@ create index if not exists user_badge_user_email_idx on public.user_badge (user_
 
 -- Security rules ------------------------------------------------------------
 drop policy if exists activity_event_access on public.activity_event;
-create policy activity_event_access on public.activity_event for select using ((brokerage_id = public.auth_brokerage_id() and (public.is_brokerage_admin() or public.has_perm('activity.account'))) or public.is_super_admin());
+create policy activity_event_access on public.activity_event for select using ((brokerage_id = public.auth_brokerage_id() and (public.is_brokerage_admin() or public.has_perm('activity.account'))) or public.is_super_admin() or (transaction_id is not null and public.has_perm('activity.transaction') and exists (select 1 from public.transaction x where x.id = activity_event.transaction_id)));
 -- activity_event: written by the activity trigger and server routes only.
 drop policy if exists activity_log_access on public.activity_log;
 create policy activity_log_access on public.activity_log for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());

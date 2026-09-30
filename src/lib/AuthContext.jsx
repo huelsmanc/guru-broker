@@ -3,7 +3,24 @@ import { base44, supabase } from '@/api/base44Client';
 
 const AuthContext = createContext();
 
-const PUBLIC_PATHS = ['/sign', '/custom-sign', '/BulkSign', '/review', '/login', '/reset-password'];
+const PUBLIC_PATHS = ['/sign', '/custom-sign', '/BulkSign', '/review', '/login', '/reset-password', '/status'];
+
+// Records a sign-in in the admin Activity feed (at most once every 8 hours per browser,
+// since Supabase also reports SIGNED_IN when a tab wakes up).
+function logSignIn() {
+  setTimeout(async () => {
+    try {
+      const { data } = await supabase.auth.getSession();
+      const id = data?.session?.user?.id;
+      if (!id) return;
+      const k = `gbh_signin_${id}`;
+      const last = Number(localStorage.getItem(k) || 0);
+      if (Date.now() - last < 8 * 3600 * 1000) return;
+      localStorage.setItem(k, String(Date.now()));
+      await base44.functions.invoke('trackEvent', { event: 'signed_in', summary: navigator.userAgent.slice(0, 120) });
+    } catch { /* never block sign-in */ }
+  }, 0);
+}
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -53,6 +70,7 @@ export const AuthProvider = ({ children }) => {
         setIsAuthenticated(false);
       } else if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
         checkUserAuth();
+        if (event === 'SIGNED_IN') logSignIn();
       }
     });
     return () => sub.subscription.unsubscribe();
