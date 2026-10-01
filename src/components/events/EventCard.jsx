@@ -1,4 +1,5 @@
 import React from 'react';
+import { localDay } from '@/lib/dates';
 import { MapPin, Clock, Users, CheckCircle, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -35,7 +36,7 @@ export default function EventCard({ event, stats, onRSVP, onAttendance, isAdmin,
         <div className="space-y-2 mb-4 text-sm text-muted-foreground">
           <div className="flex items-center gap-2">
             <Clock className="w-4 h-4" />
-            <span>{format(new Date(event.date), 'MMM d, yyyy')} at {event.time}</span>
+            <span>{format(localDay(event.date), 'MMM d, yyyy')} at {event.time}</span>
           </div>
           <div className="flex items-center gap-2">
             <MapPin className="w-4 h-4" />

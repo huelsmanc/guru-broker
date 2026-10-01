@@ -17,9 +17,11 @@ export default (async (req) => {
       if (!dateStr) return;
 
       // Parse the date and create a recurring entry
-      const date = new Date(dateStr);
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
+      // A calendar day: read the month and day straight from "YYYY-MM-DD" (no time zone shifts).
+      const m = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})/);
+      const date = m ? null : new Date(dateStr);
+      const month = m ? m[2] : String(date.getUTCMonth() + 1).padStart(2, '0');
+      const day = m ? m[3] : String(date.getUTCDate()).padStart(2, '0');
 
       // Get current year
       const currentYear = new Date().getFullYear();

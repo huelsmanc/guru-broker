@@ -1,4 +1,5 @@
 import React, { useMemo, useEffect, useState } from 'react';
+import { localDay } from '@/lib/dates';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
@@ -36,7 +37,7 @@ export default function SocialFeedWidget({ brokerageId, user }) {
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
     const allEvents = cultureEvents
-      .filter(e => new Date(e.date) >= sevenDaysAgo)
+      .filter(e => localDay(e.date) >= sevenDaysAgo)
       .map(e => ({
         id: e.id,
         type: 'event',
@@ -130,7 +131,7 @@ export default function SocialFeedWidget({ brokerageId, user }) {
                 <Sparkles className="w-4 h-4 text-accent flex-shrink-0" />
                 <p className="text-foreground leading-tight text-xs lg:text-sm truncate">
                   <span className="font-semibold">{currentItem?.data.person_name || currentItem?.data.title}</span>{' '}
-                  {currentItem?.data.event_type === 'work_anniversary' ? '🎉 Work Anniversary' : '🎂 Birthday'} • {format(new Date(currentItem?.data.date), 'MMM d')}
+                  {currentItem?.data.event_type === 'work_anniversary' ? '🎉 Work Anniversary' : '🎂 Birthday'} • {format(localDay(currentItem?.data.date), 'MMM d')}
                 </p>
               </>
             )}

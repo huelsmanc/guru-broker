@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { localDay } from '@/lib/dates';
 import { useOutletContext } from 'react-router-dom';
 import MobilePageHeader from '@/components/layout/MobilePageHeader';
 import { useQuery } from '@tanstack/react-query';
@@ -109,13 +110,13 @@ export default function Profile() {
   }).filter(Boolean);
 
   const upcomingEvents = userEventRSVPs
-    .filter(e => new Date(e.date) >= now)
-    .sort((a, b) => new Date(a.date) - new Date(b.date))
+    .filter(e => localDay(e.date) >= now)
+    .sort((a, b) => localDay(a.date) - localDay(b.date))
     .slice(0, 3);
 
   const pastEvents = userEventRSVPs
-    .filter(e => new Date(e.date) < now && e.rsvp?.status === 'attending')
-    .sort((a, b) => new Date(b.date) - new Date(a.date))
+    .filter(e => localDay(e.date) < now && e.rsvp?.status === 'attending')
+    .sort((a, b) => localDay(b.date) - localDay(a.date))
     .slice(0, 5);
 
   // Calculate days until birthday/anniversary
@@ -325,7 +326,7 @@ export default function Profile() {
               </div>
               <div className="flex-1">
                 <p className="font-semibold text-foreground">Birthday</p>
-                <p className="text-sm text-muted-foreground">{format(new Date(birthday), 'MMMM d')}</p>
+                <p className="text-sm text-muted-foreground">{format(localDay(birthday), 'MMMM d')}</p>
                 {birthdayInfo.daysUntil === 0 ? (
                   <Badge className="mt-2 bg-pink-500 text-white">🎉 Today!</Badge>
                 ) : (
@@ -377,7 +378,7 @@ export default function Profile() {
                     <p className="font-semibold text-foreground">{event.title}</p>
                     <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
                       <Clock className="w-3 h-3" />
-                      {format(new Date(event.date), 'MMM d, yyyy')}
+                      {format(localDay(event.date), 'MMM d, yyyy')}
                     </div>
                     {event.description && <p className="text-xs text-muted-foreground mt-1">{event.description}</p>}
                   </div>

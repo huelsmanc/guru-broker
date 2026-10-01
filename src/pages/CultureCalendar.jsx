@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Calendar, Plus, Trash2, ChevronLeft, ChevronRight, Pencil } from 'lucide-react';
+import { localDay, onYear, nextOccurrence, RECURRING } from '@/lib/dates';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
 import CultureCalendarDialog from '@/components/calendar/CultureCalendarDialog';
@@ -69,12 +70,13 @@ export default function CultureCalendar() {
   const entriesByDate = useMemo(() => {
     const grouped = {};
     entries.forEach(entry => {
-      const dateKey = format(new Date(entry.date), 'yyyy-MM-dd');
+      // Birthdays and anniversaries show every year, on the month being viewed.
+      const dateKey = format(RECURRING.has(entry.event_type) ? onYear(entry.date, currentMonth.getFullYear()) : localDay(entry.date), 'yyyy-MM-dd');
       if (!grouped[dateKey]) grouped[dateKey] = [];
       grouped[dateKey].push(entry);
     });
     return grouped;
-  }, [entries]);
+  }, [entries, currentMonth]);
 
   // Filter entries by search
   const filteredEntries = useMemo(() => {
@@ -87,12 +89,14 @@ export default function CultureCalendar() {
   }, [entries, searchQuery]);
 
   // Get upcoming events (next 7 days)
-  const today = new Date();
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
-  const upcomingEvents = entries.filter(entry => {
-    const entryDate = new Date(entry.date);
-    return entryDate >= today && entryDate <= nextWeek;
-  }).sort((a, b) => new Date(a.date) - new Date(b.date));
+  const when = (entry) => (RECURRING.has(entry.event_type) ? nextOccurrence(entry.date, today) : localDay(entry.date));
+  const upcomingEvents = entries
+    .map((entry) => ({ ...entry, date: format(when(entry), 'yyyy-MM-dd') }))
+    .filter((entry) => { const d = localDay(entry.date); return d >= today && d <= nextWeek; })
+    .sort((a, b) => localDay(a.date) - localDay(b.date));
 
   const weeks = [];
   let week = [];
@@ -168,7 +172,7 @@ export default function CultureCalendar() {
                     className="bg-card rounded-xl border border-border/50 hover:border-primary/30 p-4 transition-all duration-300 hover:shadow-md"
                   >
                     <p className="text-sm font-bold text-foreground mb-1">{config.emoji} {event.title}</p>
-                    <p className="text-xs text-muted-foreground">{format(new Date(event.date), 'MMM d')}</p>
+                    <p className="text-xs text-muted-foreground">{format(localDay(event.date), 'MMM d')}</p>
                     {event.person_name && <p className="text-xs text-muted-foreground mt-1">{event.person_name}</p>}
                   </motion.div>
                 );
@@ -305,7 +309,7 @@ export default function CultureCalendar() {
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 cursor-pointer" onClick={() => setSelectedEvent(entry)}>
                         <p className="font-semibold text-foreground">{config.emoji} {entry.title}</p>
-                        <p className="text-xs text-muted-foreground">{format(new Date(entry.date), 'MMM d, yyyy')}</p>
+                        <p className="text-xs text-muted-foreground">{format(localDay(entry.date), RECURRING.has(entry.event_type) ? 'MMM d' : 'MMM d, yyyy')}</p>
                         {entry.person_name && (
                           <p className="text-xs text-muted-foreground">{entry.person_name}</p>
                         )}

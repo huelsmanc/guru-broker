@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { localDay } from '@/lib/dates';
 import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -92,7 +93,7 @@ export default function CultureEventDetailModal({ open, onClose, event, brokerag
           <div className="space-y-3">
             <div>
               <p className="text-sm text-muted-foreground">Date</p>
-              <p className="font-semibold">{format(new Date(event.date), 'MMMM d, yyyy')}</p>
+              <p className="font-semibold">{format(localDay(event.date), 'MMMM d, yyyy')}</p>
             </div>
             {event.person_name && (
               <div>
