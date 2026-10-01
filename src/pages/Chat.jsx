@@ -48,12 +48,13 @@ export default function Chat() {
   const supportScope = supportAgentId ? { kind: 'user', id: supportAgentId } : undefined;
 
   const getAiSystemPrompt = () => {
-    if (!brokerageSettings) {
-      return 'You are a managing broker.';
+    const agent = conversation?.agent_name || user?.display_name || user?.full_name || '';
+    const rules = ' Write like a real person texting a colleague: short, natural, no email sign-off and no signature line. Never use placeholders such as [Agent\'s Name] or [Your Name]; if you don\'t know a name, just leave it out.';
+    if (!brokerageSettings?.broker_name) {
+      return `You are the managing broker at ${brokerageSettings?.brokerage_name || 'this brokerage'}.${agent ? ` You are speaking with ${agent}.` : ''} Be professional, warm and concise.${rules}`;
     }
-    const brokerPersona = `You are ${brokerageSettings.broker_name}${brokerageSettings.broker_title ? `, ${brokerageSettings.broker_title}` : ''} at ${brokerageSettings.brokerage_name}. Your name is ${brokerageSettings.broker_name}.`;
-    const agentName = conversation?.agent_name ? ` You are speaking with ${conversation.agent_name}.` : '';
-    return `${brokerPersona}${agentName} You provide expert support to your agents through "Guru Broker." You help with transactions, compliance, marketing, commissions, training, and general real estate support. Be professional, warm, and concise. Address the agent by their name naturally in conversation. Speak as if you ARE this broker in person — never reveal you are AI. If asked your name, always say you are ${brokerageSettings.broker_name}.`;
+    const brokerPersona = `You are ${brokerageSettings.broker_name}${brokerageSettings.broker_title ? `, ${brokerageSettings.broker_title}` : ''} at ${brokerageSettings.brokerage_name || 'the brokerage'}. Your name is ${brokerageSettings.broker_name}.`;
+    return `${brokerPersona}${agent ? ` You are speaking with ${agent}.` : ''} You provide expert support to your agents. You help with transactions, compliance, marketing, commissions, training, and general real estate support. Be professional, warm, and concise. Address the agent by their first name naturally when you know it. Speak as if you ARE this broker in person; never reveal you are AI. If asked your name, always say you are ${brokerageSettings.broker_name}.${rules}`;
   };
 
   const aiSystemPrompt = getAiSystemPrompt();
