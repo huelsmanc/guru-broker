@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, useSearchParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
+import SavedCMAReports from '@/pages/MyReports';
 import { base44, supabase } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -39,6 +41,14 @@ function shrinkPhoto(file, max = 1600) {
   });
 }
 const dataUrlToFile = async (dataUrl, name) => new File([await (await fetch(dataUrl)).blob()], name, { type: 'image/jpeg' });
+
+// A saved photo (public link) as a data URL for the PDF, or null.
+async function urlToData(url) {
+  try {
+    const blob = await (await fetch(url)).blob();
+    return await new Promise((r) => { const f = new FileReader(); f.onload = () => r(f.result); f.onerror = () => r(null); f.readAsDataURL(blob); });
+  } catch { return null; }
+}
 
 // A street photo of an address as a data URL (for the PDF), or null.
 async function streetPhotoData(address) {
@@ -107,6 +117,39 @@ export default function CMABuilder() {
   // Subject property photo: { url (saved copy), data (for the PDF) }
   const [subjectPhoto, setSubjectPhoto] = useState(null);
   const [photoBusy, setPhotoBusy] = useState(false);
+  const [savedId, setSavedId] = useState(null); // the saved copy of the report on screen
+  const [params, setParams] = useSearchParams();
+  const tab = params.get('tab') === 'saved' ? 'saved' : 'new';
+  const setTab = (t) => setParams(t === 'saved' ? { tab: 'saved' } : {}, { replace: true });
+  const queryClient = useQueryClient();
+
+  // Saves the report on screen (first time: a new saved report; after that: updates it).
+  const saveReport = async (report = cmaReport, photo = subjectPhoto) => {
+    if (!report) return null;
+    const me = await base44.auth.me();
+    const rec = {
+      address, bedrooms: parseInt(beds) || null, bathrooms: parseFloat(baths) || null, notes,
+      cma_report: { ...report, subjectPhotoUrl: photo?.url || null }, title: `CMA Report - ${address}`, status: 'completed',
+    };
+    let id = savedId;
+    if (id) await base44.entities.CMAsReport.update(id, rec);
+    else { id = (await base44.entities.CMAsReport.create({ ...rec, user_email: me.email, brokerage_id: brokerageId })).id; setSavedId(id); }
+    queryClient.invalidateQueries({ queryKey: ['cma-reports'] });
+    return id;
+  };
+
+  // Opens a saved report in the full view.
+  const openSaved = (r) => {
+    setAddress(r.address || ''); setBeds(r.bedrooms ?? ''); setBaths(r.bathrooms ?? ''); setNotes(r.notes || '');
+    setCmaReport(r.cma_report || null); setSavedId(r.id); setError('');
+    setSubjectPhoto(r.cma_report?.subjectPhotoUrl ? { url: r.cma_report.subjectPhotoUrl, data: null } : null);
+    setTab('new');
+    setTimeout(() => document.getElementById('cma-report')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
+  };
+
+  const startNew = () => {
+    setAddress(''); setBeds(''); setBaths(''); setNotes(''); setCmaReport(null); setSubjectPhoto(null); setSavedId(null); setError('');
+  };
   const photoInput = React.useRef(null);
 
   const pickPhoto = async (file) => {
@@ -117,6 +160,7 @@ export default function CMABuilder() {
       setSubjectPhoto({ data, url: null });
       const { file_url } = await base44.integrations.Core.UploadFile({ file: await dataUrlToFile(data, 'subject-property.jpg') });
       setSubjectPhoto({ data, url: file_url });
+      if (savedId && cmaReport) saveReport(cmaReport, { data, url: file_url }).catch(() => {});
     } catch (e) {
       setError(e.message || 'Could not add that photo.');
     } finally {
@@ -162,6 +206,19 @@ export default function CMABuilder() {
 
       setCmaReport(response.data);
       setLoading(false);
+      setSavedId(null);
+      // Saved right away, so it shows under Saved reports without downloading it first.
+      (async () => {
+        try {
+          const me = await base44.auth.me();
+          const created = await base44.entities.CMAsReport.create({
+            user_email: me.email, brokerage_id: brokerageId, address, bedrooms: parseInt(beds) || null, bathrooms: parseFloat(baths) || null, notes,
+            cma_report: { ...response.data, subjectPhotoUrl: subjectPhoto?.url || null }, title: `CMA Report - ${address}`, status: 'completed',
+          });
+          setSavedId(created.id);
+          queryClient.invalidateQueries({ queryKey: ['cma-reports'] });
+        } catch (e) { console.error('Could not save the CMA:', e); }
+      })();
       // Scroll to results
       setTimeout(() => {
         const reportEl = document.getElementById('cma-report');
@@ -174,76 +231,32 @@ export default function CMABuilder() {
     }
   };
 
+  // Builds the PDF on the server and downloads it.
+  const downloadPdf = async ({ address: addr, beds: bd, baths: ba, report, photo }) => {
+    const response = await base44.functions.invoke('generateCMAPDF', {
+      address: addr, beds: bd, baths: ba, cmaReport: report,
+      subjectPhoto: photo?.data || (photo?.url && (await urlToData(photo.url))) || (await streetPhotoData(addr)),
+    });
+    if (response?.data?.error) throw new Error(response.data.error);
+    if (!response?.data?.pdf) throw new Error('No PDF came back. Please try again.');
+    const bin = atob(response.data.pdf);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const url = window.URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = response.data.filename || 'CMA_Report.pdf';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+  };
+
   const handleDownloadPDF = async () => {
-    if (!cmaReport) {
-      setError('No CMA report to download');
-      return;
-    }
-
-    setLoading(true);
-    setError('');
-
+    if (!cmaReport) { setError('No CMA report to download'); return; }
+    setLoading(true); setError('');
     try {
-      // Save report to database first
-      try {
-        const me = await base44.auth.me();
-        await base44.entities.CMAsReport.create({
-          user_email: me.email,
-          brokerage_id: brokerageId,
-          address,
-          bedrooms: parseInt(beds),
-          bathrooms: parseInt(baths),
-          notes,
-          cma_report: { ...cmaReport, subjectPhotoUrl: subjectPhoto?.url || null },
-          title: `CMA Report - ${address}`,
-          status: 'completed'
-        });
-      } catch (err) {
-        console.error('Failed to save report:', err);
-      }
-
-      // Generate professional PDF
-      const response = await base44.functions.invoke('generateCMAPDF', {
-        address,
-        beds,
-        baths,
-        cmaReport,
-        subjectPhoto: subjectPhoto?.data || (await streetPhotoData(address)),
-      });
-
-      if (!response || !response.data) {
-        setError('No response from PDF generator');
-        setLoading(false);
-        return;
-      }
-
-      if (response.data.error) {
-        setError(response.data.error);
-        setLoading(false);
-        return;
-      }
-
-      if (response.data.pdf && response.data.filename) {
-        // Decode base64 and create blob
-        const binaryString = atob(response.data.pdf);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
-        const blob = new Blob([bytes], { type: 'application/pdf' });
-        
-        // Download
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = response.data.filename || 'CMA_Report.pdf';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-      } else {
-        setError('Invalid PDF response');
-      }
+      // Keep the saved copy up to date (photo added after generating, etc.)
+      await saveReport().catch((err) => console.error('Failed to save report:', err));
+      await downloadPdf({ address, beds, baths, report: cmaReport, photo: subjectPhoto });
     } catch (err) {
       console.error('PDF download error:', err);
       setError(err?.message || 'Failed to generate PDF. Please try again.');
@@ -251,6 +264,12 @@ export default function CMABuilder() {
       setLoading(false);
     }
   };
+
+  // Download straight from the Saved reports tab.
+  const downloadSaved = (r) => downloadPdf({
+    address: r.address, beds: r.bedrooms ?? '', baths: r.bathrooms ?? '', report: r.cma_report,
+    photo: r.cma_report?.subjectPhotoUrl ? { url: r.cma_report.subjectPhotoUrl } : null,
+  }).catch((e) => window.alert(e.message));
 
   return (
     <div className="p-6 lg:p-10 max-w-6xl mx-auto">
@@ -260,13 +279,26 @@ export default function CMABuilder() {
           <h1 className="text-3xl font-bold text-foreground">AI CMA Builder</h1>
         </div>
         <p className="text-muted-foreground">Generate comparative market analysis reports in seconds</p>
+        <div className="mt-5 inline-flex rounded-xl bg-muted p-1 gap-1">
+          {[['new', 'Build a CMA'], ['saved', 'Saved reports']].map(([k, l]) => (
+            <button key={k} type="button" onClick={() => setTab(k)}
+              className={`px-4 py-1.5 rounded-lg text-sm font-medium ${tab === k ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>{l}</button>
+          ))}
+        </div>
       </motion.div>
+
+      {tab === 'saved' ? (
+        <SavedCMAReports embedded onOpen={openSaved} onDownload={downloadSaved} />
+      ) : (
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Input Form */}
         <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="lg:col-span-1">
           <Card className="p-6 border-border/40 sticky top-6">
-            <h2 className="font-semibold text-foreground mb-4">Property Details</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-semibold text-foreground">Property Details</h2>
+              {cmaReport && <button type="button" onClick={startNew} className="text-xs text-primary hover:underline">Start a new CMA</button>}
+            </div>
 
             <div className="space-y-4">
               <div>
@@ -327,7 +359,7 @@ export default function CMABuilder() {
                     {photoBusy && <div className="absolute inset-0 bg-background/60 flex items-center justify-center"><Loader2 className="w-5 h-5 animate-spin" /></div>}
                     <div className="absolute bottom-2 right-2 flex gap-1.5">
                       <Button type="button" size="sm" variant="secondary" className="h-7 text-xs" onClick={() => photoInput.current?.click()}>Change</Button>
-                      <Button type="button" size="sm" variant="secondary" className="h-7 text-xs" onClick={() => setSubjectPhoto(null)}>Remove</Button>
+                      <Button type="button" size="sm" variant="secondary" className="h-7 text-xs" onClick={() => { setSubjectPhoto(null); if (savedId && cmaReport) saveReport(cmaReport, null).catch(() => {}); }}>Remove</Button>
                     </div>
                   </div>
                 ) : (
@@ -383,7 +415,7 @@ export default function CMABuilder() {
               {/* Header */}
               <Card className="overflow-hidden bg-gradient-to-br from-primary/5 to-accent/5 border-border/40">
                 <div className="relative w-full h-56 sm:h-72 bg-muted">
-                  <CompPhoto key={subjectPhoto?.data || address} comp={{ address, photoUrl: subjectPhoto?.data || null }} subjectAddress="" />
+                  <CompPhoto key={subjectPhoto?.data || subjectPhoto?.url || address} comp={{ address, photoUrl: subjectPhoto?.data || subjectPhoto?.url || null }} subjectAddress="" />
                 </div>
                 <div className="p-6">
                 <div className="flex items-start justify-between mb-4">
@@ -603,6 +635,7 @@ export default function CMABuilder() {
           )}
         </motion.div>
       </div>
+      )}
 
       <CMAEmailDialog
         open={showEmailDialog}

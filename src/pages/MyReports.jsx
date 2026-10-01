@@ -14,7 +14,8 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { isAdminRole, normalizeRole, can } from '../../shared/permissions.generated.js';
 
-export default function MyReports() {
+/** Saved CMA reports. `embedded` = shown as a tab inside CMA Builder; onOpen/onDownload hand a report back to it. */
+export default function MyReports({ embedded = false, onOpen, onDownload } = {}) {
   const { user, brokerageId } = useOutletContext();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
@@ -123,15 +124,15 @@ export default function MyReports() {
 
   if (isLoading) {
     return (
-      <div className="p-6 lg:p-10 max-w-6xl mx-auto flex items-center justify-center h-[80dvh]">
+      <div className={embedded ? 'py-16 flex items-center justify-center' : 'p-6 lg:p-10 max-w-6xl mx-auto flex items-center justify-center h-[80dvh]'}>
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     );
   }
 
   return (
-    <div className="p-6 lg:p-10 max-w-6xl mx-auto">
-      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
+    <div className={embedded ? '' : 'p-6 lg:p-10 max-w-6xl mx-auto'}>
+      {!embedded && <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
         <div className="flex items-center gap-3 mb-2">
           <FileText className="w-7 h-7 text-primary" />
           <h1 className="text-3xl font-bold text-foreground">{isAdmin ? 'CMA Reports' : 'My CMA Reports'}</h1>
@@ -139,7 +140,7 @@ export default function MyReports() {
         <p className="text-muted-foreground">
           {isAdmin ? 'View all CMA reports from your brokerage' : 'Manage and review your previously generated reports'}
         </p>
-      </motion.div>
+      </motion.div>}
 
       {/* Search */}
       <div className="mb-6 flex items-center gap-2 bg-muted/30 rounded-lg px-4 py-2 border border-border/40">
@@ -180,7 +181,7 @@ export default function MyReports() {
                     )}
                   </div>
                   <Badge variant="secondary" className="text-xs flex-shrink-0 ml-2">
-                    {report.bedrooms}B {report.bathrooms}B
+                    {report.bedrooms || '?'} bd · {report.bathrooms || '?'} ba
                   </Badge>
                 </div>
 
@@ -207,7 +208,7 @@ export default function MyReports() {
                   <div>
                     <div className="text-muted-foreground">DOM</div>
                     <div className="font-bold text-foreground">
-                      {report.cma_report?.marketAnalysis?.avgDaysOnMarket || 'N/A'}d
+                      {report.cma_report?.marketAnalysis?.avgDaysOnMarket != null ? `${Math.round(report.cma_report.marketAnalysis.avgDaysOnMarket)}d` : 'N/A'}
                     </div>
                   </div>
                 </div>
@@ -215,7 +216,7 @@ export default function MyReports() {
                 {/* Actions */}
                 <div className="flex gap-2">
                   <Button
-                    onClick={() => setSelectedReport(report)}
+                    onClick={() => (onOpen ? onOpen(report) : setSelectedReport(report))}
                     variant="outline"
                     size="sm"
                     className="flex-1 h-8 gap-1 rounded-lg text-xs"
@@ -224,7 +225,7 @@ export default function MyReports() {
                     View
                   </Button>
                   <Button
-                    onClick={() => handleDownloadPDF(report)}
+                    onClick={async () => { if (!onDownload) return handleDownloadPDF(report); setDownloadingId(report.id); try { await onDownload(report); } finally { setDownloadingId(null); } }}
                     disabled={downloadingId === report.id}
                     variant="outline"
                     size="sm"

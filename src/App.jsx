@@ -46,7 +46,6 @@ const NetSheetCalculator = lazy(() => import('@/pages/NetSheetCalculator'));
 const SalesCoach = lazy(() => import('@/pages/SalesCoach'));
 const Onboarding = lazy(() => import('@/pages/Onboarding'));
 const CMABuilder = lazy(() => import('@/pages/CMABuilder'));
-const MyReports = lazy(() => import('@/pages/MyReports'));
 const ClientAppreciation = lazy(() => import('@/pages/ClientAppreciation'));
 const PublicReview = lazy(() => import('@/pages/PublicReview'));
 const Reviews = lazy(() => import('@/pages/Reviews'));
@@ -165,7 +164,7 @@ const AuthenticatedApp = () => {
             <Route path="/Transactions/:id" element={<TransactionWorkspace />} />
             <Route path="/Onboarding" element={<Onboarding />} />
             <Route path="/CMABuilder" element={<CMABuilder />} />
-            <Route path="/MyReports" element={<MyReports />} />
+            <Route path="/MyReports" element={<Navigate to="/CMABuilder?tab=saved" replace />} />
             <Route path="/ClientAppreciation" element={<ClientAppreciation />} />
             <Route path="/Reviews" element={<Reviews />} />
             <Route path="/Transactions" element={<Transactions />} />
