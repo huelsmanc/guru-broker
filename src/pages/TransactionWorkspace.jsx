@@ -61,8 +61,9 @@ export default function TransactionWorkspace() {
   ];
 
   return (
-    <div className="flex flex-col lg:flex-row min-h-[calc(100vh-4rem)]">
-      <aside className="lg:w-60 bg-slate-900 text-slate-100 lg:min-h-full flex-shrink-0">
+    <div className="flex flex-col lg:flex-row lg:min-h-screen">
+      {/* The deal's dark rail runs the full height and stays put while the page scrolls. */}
+      <aside className="lg:w-60 bg-slate-900 text-slate-100 flex-shrink-0 lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto">
         <div className="p-4 border-b border-white/10">
           <Link to="/Transactions" className="text-xs text-emerald-300 flex items-center gap-1 mb-3 hover:underline"><ArrowLeft className="w-3 h-3" /> All transactions</Link>
           <p className="font-semibold leading-snug">{tx.property_address}</p>
