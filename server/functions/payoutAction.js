@@ -2,11 +2,14 @@
 //   approve   -> pending_approval -> approved
 //   send      -> approved -> sending -> sent (Payload direct deposit)
 //   mark_paid -> approved -> paid (paid another way: check, wire)
-//   cancel    -> pending_approval/approved -> void
+//   cancel    -> pending_approval/approved/failed -> void
+//   void_sent -> sent -> void: asks Payload to stop the direct deposit first; refused if it already went out
+//   void_record { memo } -> sent/paid -> void without moving money back (for corrections, after the money
+//                was reversed some other way, or a test). Kept with who did it and why.
 // Money only moves on 'send', one payout at a time, and never twice.
 import { createClientFromRequest, adminClient } from '../lib/base44.js';
 import { isAdminRole, can } from '../lib/team.js';
-import { sendCredit, payloadConfigured } from '../lib/payload.js';
+import { sendCredit, payloadConfigured, voidCredit } from '../lib/payload.js';
 
 async function claim(id, from, to, patch = {}) {
   const { data } = await adminClient().from('payout').update({ status: to, ...patch }).eq('id', id).in('status', from).select('*');
@@ -30,6 +33,20 @@ export default async (req) => {
         results.push({ id, ok: !!r, error: r ? null : `Is ${p.status}` });
       } else if (action === 'cancel') {
         const r = await claim(id, ['pending_approval', 'approved', 'failed'], 'void');
+        results.push({ id, ok: !!r, error: r ? null : `Is ${p.status}` });
+      } else if (action === 'void_sent') {
+        if (p.status !== 'sent') { results.push({ id, ok: false, error: `Is ${p.status}` }); continue; }
+        if (p.payload_transaction_id) {
+          try { await voidCredit(p.payload_transaction_id); } catch (err) {
+            results.push({ id, ok: false, error: `Payload couldn't stop ${p.payee_name || p.payee_email}'s deposit (it may have already gone out): ${err.message}`, record_only_possible: true }); continue;
+          }
+        }
+        const r = await claim(id, ['sent'], 'void', { payload_status: p.payload_transaction_id ? 'voided' : p.payload_status, extra: { ...(p.extra || {}), voided_by: me.email, voided_at: now, void_how: 'payload' } });
+        results.push({ id, ok: !!r, error: r ? null : 'It changed while voiding; refresh' });
+      } else if (action === 'void_record') {
+        const why = String(memo || '').trim();
+        if (!why) { results.push({ id, ok: false, error: 'Say why it is being voided' }); continue; }
+        const r = await claim(id, ['sent', 'paid', 'sending'], 'void', { extra: { ...(p.extra || {}), voided_by: me.email, voided_at: now, void_how: 'record_only', void_note: why.slice(0, 300), was: p.status } });
         results.push({ id, ok: !!r, error: r ? null : `Is ${p.status}` });
       } else if (action === 'mark_paid') {
         const r = await claim(id, ['approved', 'failed'], 'paid', { paid_at: now, method: 'manual', extra: { ...(p.extra || {}), paid_note: memo || null, paid_by: me.email } });

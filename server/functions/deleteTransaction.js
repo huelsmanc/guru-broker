@@ -22,7 +22,7 @@ export default async (req) => {
 
     const { data: payouts = [] } = await db.from('payout').select('id, status').eq('transaction_id', tx.id);
     if ((payouts || []).some((p) => MONEY_OUT.includes(p.status))) {
-      return Response.json({ error: 'Payouts for this deal were already sent, so it can\'t be deleted. Cancel it instead, or void the payouts first.' }, { status: 409 });
+      return Response.json({ error: 'Payouts for this deal were already sent or paid, so it can\'t be deleted yet. Void them on the Payouts page first (Sent or Paid tab), or cancel the deal instead.' }, { status: 409 });
     }
     const { data: records = [] } = await db.from('commission_record').select('id, status').eq('transaction_id', tx.id);
     if ((records || []).some((r) => r.status === 'paid')) {

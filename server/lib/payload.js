@@ -74,6 +74,11 @@ export function sendCredit({ amount, paymentMethodId, name, email, description }
   });
 }
 
+/** Stops a direct deposit that Payload hasn't processed yet. Fails once the money has gone out. */
+export function voidCredit(id) {
+  return call('PUT', `/transactions/${encodeURIComponent(id)}`, { status: 'voided' });
+}
+
 export function getTransaction(id) {
   return call('GET', `/transactions/${encodeURIComponent(id)}`);
 }

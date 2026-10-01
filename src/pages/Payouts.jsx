@@ -9,7 +9,7 @@ import { useLiveTable } from '@/hooks/useLiveTable';
 import { can } from '../../shared/permissions.generated.js';
 import { Section, Empty, Pill, money } from '@/components/workspace/ui';
 
-const TABS = [['pending_approval', 'Waiting approval'], ['approved', 'Approved, ready to pay'], ['sent', 'Sent'], ['failed', 'Failed'], ['paid', 'Paid']];
+const TABS = [['pending_approval', 'Waiting approval'], ['approved', 'Approved, ready to pay'], ['sent', 'Sent'], ['failed', 'Failed'], ['paid', 'Paid'], ['void', 'Voided']];
 
 function download(filename, text) {
   const url = URL.createObjectURL(new Blob([text], { type: 'text/csv' }));
@@ -44,11 +44,17 @@ export default function Payouts() {
     if (action === 'send' && !window.confirm(`Send ${ids.length} direct deposit${ids.length > 1 ? 's' : ''} through Payload?`)) return;
     if (action === 'mark_paid') { memo = window.prompt('How was it paid? (check #, wire, etc.)', 'Check'); if (memo == null) return; }
     if (action === 'cancel' && !window.confirm('Void these payouts?')) return;
+    if (action === 'void_sent' && !window.confirm('Void these direct deposits? Payload will try to stop them. This only works if the money hasn\'t gone out yet.')) return;
+    if (action === 'void_record') {
+      memo = window.prompt('Void these payouts on the books only. This does NOT pull money back: reverse or collect it yourself first (bank, Payload, or the agent).\n\nWhy are you voiding them?', '');
+      if (memo == null) return;
+      if (!memo.trim()) return window.alert('Add a short reason so the books show why.');
+    }
     setBusy(action);
     try {
       const { results } = (await base44.functions.invoke('payoutAction', { payoutIds: ids, action, memo })).data;
       const bad = results.filter((r) => !r.ok);
-      if (bad.length) window.alert(`${results.length - bad.length} done. ${bad.length} not done:\n${bad.map((b) => `- ${b.error}`).join('\n')}`);
+      if (bad.length) window.alert(`${results.length - bad.length} done. ${bad.length} not done:\n${bad.map((b) => `- ${b.error}`).join('\n')}${bad.some((b) => b.record_only_possible) ? '\n\nIf the money was already returned another way, use "Void on books only".' : ''}`);
       setPicked(new Set());
       queryClient.invalidateQueries({ queryKey: key });
     } catch (err) { window.alert(err.message); } finally { setBusy(null); }
@@ -84,6 +90,8 @@ export default function Payouts() {
           {['approved', 'failed'].includes(tab) && <Button size="sm" className="gap-1" onClick={() => act('send')} disabled={!!busy}><Send className="w-4 h-4" /> Send direct deposit</Button>}
           {['approved', 'failed'].includes(tab) && <Button size="sm" variant="outline" className="gap-1" onClick={() => act('mark_paid')} disabled={!!busy}><BadgeCheck className="w-4 h-4" /> Mark paid</Button>}
           {['pending_approval', 'approved', 'failed'].includes(tab) && <Button size="sm" variant="ghost" className="gap-1 text-red-600" onClick={() => act('cancel')} disabled={!!busy}><Ban className="w-4 h-4" /> Void</Button>}
+          {tab === 'sent' && <Button size="sm" variant="ghost" className="gap-1 text-red-600" onClick={() => act('void_sent')} disabled={!!busy}><Ban className="w-4 h-4" /> Stop and void</Button>}
+          {['sent', 'paid'].includes(tab) && <Button size="sm" variant="ghost" className="gap-1 text-red-600" onClick={() => act('void_record')} disabled={!!busy}><Ban className="w-4 h-4" /> Void on books only</Button>}
           {busy && <Loader2 className="w-4 h-4 animate-spin" />}
         </div>
       )}
@@ -103,7 +111,7 @@ export default function Payouts() {
                 <td className="p-3 capitalize">{p.kind}{p.level ? ` L${p.level}` : ''}</td>
                 <td className="p-3 text-right font-medium">{money(p.amount)}</td>
                 <td className="p-3 text-xs">{p.payee_email && linked.has(p.payee_email) ? <span className="text-emerald-700">linked</span> : <span className="text-muted-foreground">not linked</span>}</td>
-                <td className="p-3"><Pill status={p.status}>{p.status.replace('_', ' ')}</Pill>{p.failure_reason && <p className="text-xs text-red-600 mt-1 max-w-[220px]">{p.failure_reason}</p>}{p.approved_by && <p className="text-xs text-muted-foreground mt-1">approved by {p.approved_by}</p>}</td>
+                <td className="p-3"><Pill status={p.status}>{p.status.replace('_', ' ')}</Pill>{p.failure_reason && <p className="text-xs text-red-600 mt-1 max-w-[220px]">{p.failure_reason}</p>}{p.approved_by && <p className="text-xs text-muted-foreground mt-1">approved by {p.approved_by}</p>}{p.status === 'void' && p.voided_by && <p className="text-xs text-muted-foreground mt-1 max-w-[220px]">voided by {p.voided_by}{p.void_how === 'record_only' ? ` (books only, was ${p.was})` : ''}{p.void_note ? `: ${p.void_note}` : ''}</p>}</td>
               </tr>
             ))}</tbody>
           </table>
