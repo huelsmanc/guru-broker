@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Upload, Loader2, Sparkles, AlertTriangle, FileText, ArrowRight, Plus, X } from 'lucide-react';
 import { DEADLINES } from '../../../shared/dealTimeline.js';
 import { saveToContactBook } from '@/lib/contacts';
+import AddressAutocomplete from '@/components/AddressAutocomplete';
 
 const DEAL_TYPES = [['buyer', 'Buyer side'], ['listing', 'Listing side'], ['dual', 'Both sides (dual)'], ['rental_tenant', 'Rental (tenant)'], ['rental_listing', 'Rental (landlord)'], ['referral', 'Referral']];
 
@@ -149,7 +150,7 @@ export default function NewDealFromContract({ open, onClose, user, brokerageId, 
             )}
 
             <div className="grid sm:grid-cols-6 gap-3">
-              <div className="sm:col-span-6"><Label>Property</Label><Input className="mt-1" value={f.property_address} onChange={set('property_address')} placeholder="12 Elm St, Hartford, CT 06103" /></div>
+              <div className="sm:col-span-6"><Label>Property</Label><AddressAutocomplete className="mt-1" value={f.property_address || ''} onChange={(v) => set('property_address')({ target: { value: v } })} placeholder="12 Elm St, Hartford, CT 06103" /></div>
               <div className="sm:col-span-2"><Label>Price</Label><Input className="mt-1" inputMode="numeric" value={f.sale_price} onChange={set('sale_price')} /></div>
               <div className="sm:col-span-2"><Label>Earnest money</Label><Input className="mt-1" inputMode="numeric" value={f.earnest_money} onChange={set('earnest_money')} /></div>
               <div className="sm:col-span-2">

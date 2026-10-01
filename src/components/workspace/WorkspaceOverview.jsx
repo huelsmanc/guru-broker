@@ -15,6 +15,7 @@ import DocIntake from './DocIntake';
 import InspectionRequest from './InspectionRequest';
 import CloseDeal from './CloseDeal';
 import { changeField, setDeadlineDone, postUpdate } from '@/lib/dealActions';
+import AddressAutocomplete from '@/components/AddressAutocomplete';
 
 const STATUSES = [['active', 'Active'], ['pending', 'Pending'], ['clear_to_close', 'Clear to close'], ['closed', 'Closed'], ['cancelled', 'Cancelled']];
 const HEALTH = { good: ['On track', 'bg-emerald-100 text-emerald-800'], watch: ['Needs a look', 'bg-amber-100 text-amber-800'], risk: ['At risk', 'bg-red-100 text-red-800'] };
@@ -414,7 +415,7 @@ function DealDetails({ tx, user, refresh, canEdit, admin }) {
   return (
     <div className="space-y-4">
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <div className="sm:col-span-2"><Label>Property</Label><Input className="mt-1" value={form.property_address || ''} onChange={set('property_address')} disabled={!canEdit} /></div>
+        <div className="sm:col-span-2"><Label>Property</Label>{canEdit ? <AddressAutocomplete className="mt-1" value={form.property_address || ''} onChange={(v) => set('property_address')({ target: { value: v } })} /> : <Input className="mt-1" value={form.property_address || ''} disabled />}</div>
         <div><Label>Sale price</Label><Input className="mt-1" inputMode="numeric" value={form.sale_price ?? ''} onChange={set('sale_price')} disabled={!canEdit} /></div>
         <div>
           <Label>Status</Label>

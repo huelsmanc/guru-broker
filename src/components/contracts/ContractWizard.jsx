@@ -4,7 +4,7 @@ import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Loader2, Sparkles, FileText, ClipboardList, Upload, CheckCircle2, RefreshCw, ArrowRight, AlertCircle, Send, Library } from 'lucide-react';
+import { Loader2, Sparkles, FileText, ClipboardList, Upload, CheckCircle2, RefreshCw, ArrowRight, AlertCircle, Send, Library, TrendingUp } from 'lucide-react';
 import { pdfPageTexts } from '@/lib/pdfText';
 import { collectFacts, offerFromAnswers } from '../../../shared/contractIntake.js';
 import { isPrefilled, fieldSignerIndex } from '../../../shared/esignGeometry.js';
@@ -13,6 +13,7 @@ import { autoDetectFields } from '@/components/esign/autoDetectFields';
 import { isAdminRole } from '../../../shared/permissions.generated.js';
 import { useContractForms, typeLabel } from './FormsLibrary';
 import { ROLE_PRESETS } from '@/components/repository/FormFieldsDialog';
+import CoachResult from '@/components/offers/CoachResult';
 
 const sel = 'w-full rounded-md border border-input bg-background px-3 py-2 text-sm';
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -39,6 +40,7 @@ export default function ContractWizard({ user, brokerageId, brokerageName, onClo
   const [fields, setFields] = useState(initialDoc?.fields || []);
   const [offer, setOffer] = useState(initialOffer);
   const [busy, setBusy] = useState(false);
+  const [coach, setCoach] = useState(null); // AI pricing coach: null | 'loading' | result
 
   const { data: deals = [] } = useQuery({ queryKey: ['wiz-deals', user?.email], queryFn: () => base44.entities.Transaction.filter({}, '-updated_date', 200).catch(() => []), enabled: ['doc', 'source'].includes(step) });
   const { data: offers = [] } = useQuery({ queryKey: ['wiz-offers', user?.email], queryFn: () => base44.entities.Offer.filter(admin ? {} : { agent_email: user.email }, '-created_date', 100).catch(() => []), enabled: !offerMode && ['doc', 'source'].includes(step) });
@@ -88,6 +90,20 @@ export default function ContractWizard({ user, brokerageId, brokerageName, onClo
   }, [intake]);
   const answered = (intake?.questions || []).filter((q) => String(answers[q.key] ?? '').trim()).length;
   const known = useMemo(() => ({ ...facts, ...collectFacts({ offer: offerFromAnswers(intake?.questions, answers) }) }), [facts, intake, answers]);
+
+  // Pricing coach (offers): recent sales near the address -> suggested price and terms.
+  const priceQ = (intake?.questions || []).find((q) => q.source === 'purchase_price');
+  const runCoach = async () => {
+    setCoach('loading'); setError('');
+    try {
+      const terms = offerFromAnswers(intake?.questions, answers);
+      const res = await base44.functions.invoke('aiOfferStrategy', {
+        ...terms, property_address: terms.property_address || known.property_address, city: terms.city || known.city, state: terms.state || known.state, zip: terms.zip || known.zip,
+        mls_number: terms.mls_number || known.mls_number, list_price: terms.list_price, offer_price: terms.offer_price, notes: '',
+      });
+      setCoach(res.data);
+    } catch (e) { setCoach(null); setError(e?.data?.error || e.message); }
+  };
 
   const fill = async () => {
     setError(''); setStep('filling');
@@ -192,6 +208,18 @@ export default function ContractWizard({ user, brokerageId, brokerageName, onClo
               <span className="text-xs rounded-full bg-muted px-2.5 py-1">{answered} of {intake.questions.length} answered</span>
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto py-4 space-y-6 pr-1">
+              {offerMode && (
+                <div className="rounded-xl border border-violet-200 bg-violet-50/60 p-3 space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm"><TrendingUp className="w-4 h-4 inline text-violet-700 -mt-0.5" /> <span className="font-medium">Not sure what to offer?</span> <span className="text-muted-foreground">The AI looks at recent sales near the address and suggests a price and terms.</span></p>
+                    <Button size="sm" variant="outline" className="gap-1.5" disabled={coach === 'loading' || !(known.property_address || known.mls_number)} onClick={runCoach}>
+                      {coach === 'loading' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />} {coach && coach !== 'loading' ? 'Ask again' : 'Price it with AI'}
+                    </Button>
+                  </div>
+                  {coach && coach !== 'loading' && <CoachResult data={coach} onUsePrice={(p) => priceQ && setAnswers((a) => ({ ...a, [priceQ.key]: `$${Number(p).toLocaleString('en-US')}` }))} />}
+                  {!(known.property_address || known.mls_number) && <p className="text-xs text-muted-foreground">Fill in the property address below first.</p>}
+                </div>
+              )}
               {groups.map(([g, qs]) => (
                 <div key={g}>
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">{g}</p>

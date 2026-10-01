@@ -9,6 +9,7 @@ import { Calculator, Copy, Check, Loader2, RotateCcw, Download } from 'lucide-re
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { jsPDF } from 'jspdf';
+import AddressAutocomplete from '@/components/AddressAutocomplete';
 
 const stateOptions = [
   'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
@@ -212,10 +213,10 @@ Be realistic and specific to ${form.state}. Include notes on typical ranges and 
 
             <div>
               <Label className="text-sm">Property Address (Optional)</Label>
-              <Input
+              <AddressAutocomplete
                 value={form.address}
-                onChange={e => setForm({ ...form, address: e.target.value })}
-                placeholder="123 Main St, City, State"
+                onChange={(v) => setForm((f) => ({ ...f, address: v }))}
+                placeholder="Start typing the address"
                 className="mt-1.5"
               />
               <p className="text-xs text-muted-foreground mt-1">Include for AI to search public records for accurate data</p>

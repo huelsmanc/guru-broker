@@ -22,6 +22,7 @@ import NewDealFromContract from '@/components/transactions/NewDealFromContract';
 import ContactPicker from '@/components/contacts/ContactPicker';
 import { saveToContactBook } from '@/lib/contacts';
 import { isAdminRole, normalizeRole, can } from '../../shared/permissions.generated.js';
+import AddressAutocomplete from '@/components/AddressAutocomplete';
 
 
 const MILESTONES = [
@@ -733,7 +734,7 @@ export default function Transactions() {
             <ScanContractButton scope={{ kind: 'user', id: user?.id }} onResult={applyScan} />
             <div>
               <Label>Property Address *</Label>
-              <Input value={form.property_address} onChange={e => setForm(f => ({ ...f, property_address: e.target.value }))} placeholder="123 Main St, City, State" className="mt-1.5" />
+              <AddressAutocomplete value={form.property_address} onChange={(v) => setForm(f => ({ ...f, property_address: v }))} placeholder="Start typing the address" className="mt-1.5" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -862,7 +863,7 @@ export default function Transactions() {
             <div className="space-y-4 py-2">
               <div>
                 <Label>Property Address *</Label>
-                <Input value={editingTx.property_address} onChange={e => setEditingTx(t => ({ ...t, property_address: e.target.value }))} className="mt-1.5" />
+                <AddressAutocomplete value={editingTx.property_address || ''} onChange={(v) => setEditingTx(t => ({ ...t, property_address: v }))} className="mt-1.5" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>

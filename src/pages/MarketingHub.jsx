@@ -24,7 +24,7 @@ export default function MarketingHub() {
   const Page = TOOLS.find(([k]) => k === tool)[3];
   return (
     <div>
-      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur border-b">
+      <div className="sticky top-16 md:top-0 z-20 bg-background/95 backdrop-blur border-b">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-10 pt-4 flex items-end gap-1 overflow-x-auto">
           <p className="font-bold text-lg mr-4 pb-2 hidden sm:block">Marketing</p>
           {TOOLS.map(([k, l, Icon]) => (

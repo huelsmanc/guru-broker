@@ -301,7 +301,8 @@ export default function SalesCoach() {
   const { user } = useOutletContext();
   const [tab, setTab] = useState('roleplay');
   return (
-    <div className="flex flex-col h-[100dvh]">
+    // Fits between the phone header (4rem) and bottom tab bar (5rem), so the call buttons stay visible.
+    <div className="flex flex-col h-[calc(100dvh-9rem)] md:h-[calc(100dvh-5rem)] lg:h-[100dvh]">
       <div className="flex-shrink-0 border-b bg-card px-4 py-2 flex items-center gap-1">
         {[['roleplay', 'Voice role-play'], ['chat', 'Ask the coach']].map(([k, l]) => (
           <button key={k} type="button" onClick={() => setTab(k)}

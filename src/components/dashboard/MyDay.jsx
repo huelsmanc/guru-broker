@@ -58,20 +58,8 @@ export default function MyDay() {
 
       <div className="grid lg:grid-cols-2 gap-4">
         <div className="rounded-2xl border bg-card">
-          <p className="px-4 pt-4 pb-2 font-semibold flex items-center gap-2"><FileWarning className="w-4 h-4" /> Your to-dos {data.todo_count > data.todo.length && <span className="text-xs text-muted-foreground font-normal">({data.todo_count})</span>}</p>
-          {!data.todo.length ? <p className="px-4 pb-4 text-sm text-muted-foreground">Nothing assigned to you. 🎉</p> : (
-            <ul className="divide-y">
-              {data.todo.map((t) => (
-                <li key={`${t.checklist_id}:${t.item_id}`}><Link to={t.link} className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/50">
-                  {t.needs_document ? <Upload className={cn('w-4 h-4 flex-shrink-0', t.status === 'rejected' ? 'text-red-600' : 'text-muted-foreground')} /> : <CheckSquare className="w-4 h-4 flex-shrink-0 text-muted-foreground" />}
-                  <span className="flex-1 min-w-0"><span className="block text-sm truncate">{t.title}</span><span className="block text-xs text-muted-foreground truncate">{t.where}</span></span>
-                  {t.status === 'rejected' && <span className="text-[11px] rounded bg-red-100 text-red-700 px-1.5 py-0.5">sent back</span>}
-                  {t.due && <span className={cn('text-xs', t.due < new Date().toISOString().slice(0, 10) ? 'text-red-600 font-semibold' : 'text-muted-foreground')}>{day(t.due)}</span>}
-                  <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                </Link></li>
-              ))}
-            </ul>
-          )}
+          <p className="px-4 pt-4 pb-2 font-semibold flex items-center gap-2"><FileWarning className="w-4 h-4" /> Your to-dos {data.todo_count > 0 && <span className="text-xs text-muted-foreground font-normal">({data.todo_count})</span>}</p>
+          {!data.todo.length ? <p className="px-4 pb-4 text-sm text-muted-foreground">Nothing assigned to you. 🎉</p> : <TodoList todo={data.todo} total={data.todo_count} />}
         </div>
         <div className="rounded-2xl border bg-card">
           <p className="px-4 pt-4 pb-2 font-semibold flex items-center gap-2"><CalendarClock className="w-4 h-4" /> Coming up</p>
@@ -95,5 +83,46 @@ export default function MyDay() {
         </div>
       </div>
     </section>
+  );
+}
+
+// The most urgent to-dos first (sent back, overdue, due today...), grouped by deal; the rest on request.
+function TodoList({ todo, total }) {
+  const [all, setAll] = React.useState(false);
+  const shown = all ? todo : todo.slice(0, 8);
+  const groups = [];
+  for (const t of shown) {
+    const key = t.where || 'Other';
+    let g = groups.find((x) => x.key === key);
+    if (!g) groups.push((g = { key, items: [], link: t.link.split('?')[0] }));
+    g.items.push(t);
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  return (
+    <div className="pb-2">
+      {groups.map((g) => (
+        <div key={g.key} className="border-t first:border-t-0">
+          <Link to={g.link} className="flex items-center justify-between px-4 pt-3 pb-1 text-xs font-semibold text-muted-foreground uppercase tracking-wide hover:text-foreground">
+            <span className="truncate">{g.key}</span><span className="normal-case font-normal">{g.items.length}</span>
+          </Link>
+          <ul>
+            {g.items.map((t) => (
+              <li key={`${t.checklist_id}:${t.item_id}`}><Link to={t.link} className="flex items-center gap-3 px-4 py-2 hover:bg-muted/50">
+                {t.needs_document ? <Upload className={cn('w-4 h-4 flex-shrink-0', t.status === 'rejected' ? 'text-red-600' : 'text-muted-foreground')} /> : <CheckSquare className="w-4 h-4 flex-shrink-0 text-muted-foreground" />}
+                <span className="flex-1 min-w-0 text-sm truncate">{t.title}</span>
+                {t.status === 'rejected' && <span className="text-[11px] rounded bg-red-100 text-red-700 px-1.5 py-0.5">sent back</span>}
+                {t.due && <span className={cn('text-xs whitespace-nowrap', t.due < today ? 'text-red-600 font-semibold' : 'text-muted-foreground')}>{day(t.due)}</span>}
+                <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+              </Link></li>
+            ))}
+          </ul>
+        </div>
+      ))}
+      {todo.length > 8 && (
+        <button type="button" onClick={() => setAll((v) => !v)} className="w-full text-sm text-primary hover:underline px-4 pt-2 text-left">
+          {all ? 'Show fewer' : `Show all ${total > todo.length ? `${todo.length} of ${total}` : todo.length}`}
+        </button>
+      )}
+    </div>
   );
 }

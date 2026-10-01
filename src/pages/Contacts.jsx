@@ -11,6 +11,7 @@ import UnifiedESignCreator from '@/components/esign/UnifiedESignCreator.jsx';
 import { Users, Plus, Search, Mail, Phone, MessageSquare, Trash2, Upload, RefreshCw, Loader2, FileSignature, ClipboardList, Lock, Pencil } from 'lucide-react';
 import { CONTACT_TYPES, myContacts, saveToContactBook, roleFor } from '@/lib/contacts';
 import { isAdminRole } from '../../shared/permissions.generated.js';
+import AddressAutocomplete from '@/components/AddressAutocomplete';
 
 const lc = (v) => String(v || '').trim().toLowerCase();
 
@@ -231,7 +232,7 @@ export function ContactForm({ contact, onClose, onSave }) {
             </select>
           </div>
           <div><Label>Company</Label><Input className="mt-1" value={c.company || ''} onChange={set('company')} /></div>
-          <div className="col-span-2"><Label>Address</Label><Input className="mt-1" value={c.address || ''} onChange={set('address')} /></div>
+          <div className="col-span-2"><Label>Address</Label><AddressAutocomplete className="mt-1" value={c.address || ''} onChange={(v) => set('address')({ target: { value: v } })} placeholder="Start typing an address" /></div>
           <div><Label>Birthday</Label><Input className="mt-1" type="date" value={c.birthday || ''} onChange={set('birthday')} /></div>
           <div><Label>Tags (comma separated)</Label><Input className="mt-1" value={c.tagsText} onChange={set('tagsText')} placeholder="sphere, 2026 buyer" /></div>
           <div className="col-span-2"><Label>Notes</Label><textarea className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" rows={3} value={c.notes || ''} onChange={set('notes')} /></div>

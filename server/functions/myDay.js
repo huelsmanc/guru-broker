@@ -72,7 +72,7 @@ export default async (req) => {
 
     const out = {
       name: me.display_name || me.full_name, deals: txs.length, closing_this_month: txs.filter((t) => t.closing_date && t.closing_date.slice(0, 7) === today.slice(0, 7)).length,
-      deadlines: deadlines.slice(0, 12), todo: todo.slice(0, 12), todo_count: todo.length, pending_net: Math.round(pending * 100) / 100, cap, offers,
+      deadlines: deadlines.slice(0, 12), todo: todo.slice(0, 80), todo_count: todo.length, pending_net: Math.round(pending * 100) / 100, cap, offers,
     };
 
     if (admin || can(me, 'docs.approve') || can(me, 'accounting.access')) {
