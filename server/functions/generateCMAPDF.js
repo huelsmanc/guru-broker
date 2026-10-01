@@ -5,7 +5,7 @@ import { jsPDF } from 'jspdf';
 export default (async (req) => {
   try {
     const base44 = createClientFromRequest(req);
-    const { address, beds, baths, cmaReport } = await req.json();
+    const { address, beds, baths, cmaReport, subjectPhoto } = await req.json();
 
     if (!address || !cmaReport) {
       return Response.json({ error: 'Missing required fields' }, { status: 400 });
@@ -69,7 +69,24 @@ export default (async (req) => {
     // Subject property
     addText(address, 16, darkText, true);
     addText(`${beds} Bed • ${baths} Bath`, 11, lightText);
-    yPosition += 8;
+    yPosition += 4;
+
+    // Subject property photo (uploaded by the agent, or the street photo), sent as a JPEG/PNG data URL.
+    const photo = typeof subjectPhoto === 'string' && subjectPhoto.length < 4_000_000 ? subjectPhoto.match(/^data:image\/(jpeg|jpg|png);base64,/i) : null;
+    if (photo) {
+      try {
+        const props = pdf.getImageProperties(subjectPhoto);
+        let w = contentWidth;
+        let h = (props.height / props.width) * w;
+        const maxH = 95;
+        if (h > maxH) { w = (maxH / h) * w; h = maxH; }
+        pdf.addImage(subjectPhoto, photo[1].toLowerCase() === 'png' ? 'PNG' : 'JPEG', margin + (contentWidth - w) / 2, yPosition, w, h);
+        yPosition += h + 6;
+      } catch (e) {
+        console.error('CMA PDF photo skipped:', e.message);
+      }
+    }
+    yPosition += 4;
     
     addDivider();
     yPosition += 3;

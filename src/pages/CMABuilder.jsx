@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Home, TrendingUp, AlertCircle, Download, MapPin, DollarSign, Calendar, Zap, Map, List, Mail } from 'lucide-react';
+import { Loader2, Home, TrendingUp, AlertCircle, Download, MapPin, DollarSign, Calendar, Zap, Map, List, Mail, Camera } from 'lucide-react';
 import { motion } from 'framer-motion';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
@@ -21,6 +21,37 @@ const streetPhoto = (addr, subject) => {
   if (a && tail && !a.includes(',')) a = `${a}, ${tail}`;
   return a ? `/api/fn/streetView?address=${encodeURIComponent(a)}` : null;
 };
+
+// Shrinks a photo to a JPEG data URL (max 1600px) so uploads and the PDF stay small.
+function shrinkPhoto(file, max = 1600) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(img.src);
+      resolve(c.toDataURL('image/jpeg', 0.85));
+    };
+    img.onerror = () => reject(new Error("That file isn't a photo we can read. Try a JPG or PNG."));
+    img.src = URL.createObjectURL(file);
+  });
+}
+const dataUrlToFile = async (dataUrl, name) => new File([await (await fetch(dataUrl)).blob()], name, { type: 'image/jpeg' });
+
+// A street photo of an address as a data URL (for the PDF), or null.
+async function streetPhotoData(address) {
+  try {
+    const url = streetPhoto(address, '');
+    if (!url) return null;
+    const { data } = await supabase.auth.getSession();
+    const res = await fetch(url, { headers: data.session ? { Authorization: `Bearer ${data.session.access_token}` } : {} });
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return await new Promise((r) => { const f = new FileReader(); f.onload = () => r(f.result); f.onerror = () => r(null); f.readAsDataURL(blob); });
+  } catch { return null; }
+}
 
 // The comp's photo: its MLS photo, else a street-level photo, else a placeholder (with the reason
 // when the street photo service itself isn't working, so setup problems are visible).
@@ -73,6 +104,26 @@ export default function CMABuilder() {
   const [error, setError] = useState('');
   const [viewMode, setViewMode] = useState('list'); // 'list' or 'map'
   const [showEmailDialog, setShowEmailDialog] = useState(false);
+  // Subject property photo: { url (saved copy), data (for the PDF) }
+  const [subjectPhoto, setSubjectPhoto] = useState(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const photoInput = React.useRef(null);
+
+  const pickPhoto = async (file) => {
+    if (!file) return;
+    setPhotoBusy(true); setError('');
+    try {
+      const data = await shrinkPhoto(file);
+      setSubjectPhoto({ data, url: null });
+      const { file_url } = await base44.integrations.Core.UploadFile({ file: await dataUrlToFile(data, 'subject-property.jpg') });
+      setSubjectPhoto({ data, url: file_url });
+    } catch (e) {
+      setError(e.message || 'Could not add that photo.');
+    } finally {
+      setPhotoBusy(false);
+      if (photoInput.current) photoInput.current.value = '';
+    }
+  };
 
   const handleGenerateCMA = async () => {
     if (!address.trim()) {
@@ -143,7 +194,7 @@ export default function CMABuilder() {
           bedrooms: parseInt(beds),
           bathrooms: parseInt(baths),
           notes,
-          cma_report: cmaReport,
+          cma_report: { ...cmaReport, subjectPhotoUrl: subjectPhoto?.url || null },
           title: `CMA Report - ${address}`,
           status: 'completed'
         });
@@ -156,7 +207,8 @@ export default function CMABuilder() {
         address,
         beds,
         baths,
-        cmaReport
+        cmaReport,
+        subjectPhoto: subjectPhoto?.data || (await streetPhotoData(address)),
       });
 
       if (!response || !response.data) {
@@ -266,6 +318,29 @@ export default function CMABuilder() {
                 />
               </div>
 
+              <div>
+                <Label className="text-sm">Property photo (optional)</Label>
+                <input ref={photoInput} type="file" accept="image/*" className="hidden" onChange={(e) => pickPhoto(e.target.files?.[0])} />
+                {subjectPhoto ? (
+                  <div className="mt-1.5 relative rounded-xl overflow-hidden border">
+                    <img src={subjectPhoto.data} alt="Subject property" className="w-full h-36 object-cover" />
+                    {photoBusy && <div className="absolute inset-0 bg-background/60 flex items-center justify-center"><Loader2 className="w-5 h-5 animate-spin" /></div>}
+                    <div className="absolute bottom-2 right-2 flex gap-1.5">
+                      <Button type="button" size="sm" variant="secondary" className="h-7 text-xs" onClick={() => photoInput.current?.click()}>Change</Button>
+                      <Button type="button" size="sm" variant="secondary" className="h-7 text-xs" onClick={() => setSubjectPhoto(null)}>Remove</Button>
+                    </div>
+                  </div>
+                ) : (
+                  <button type="button" onClick={() => photoInput.current?.click()} disabled={photoBusy}
+                    onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); pickPhoto(e.dataTransfer.files?.[0]); }}
+                    className="mt-1.5 w-full rounded-xl border-2 border-dashed border-border hover:border-primary py-5 flex flex-col items-center gap-1 text-muted-foreground">
+                    {photoBusy ? <Loader2 className="w-5 h-5 animate-spin" /> : <Camera className="w-5 h-5" />}
+                    <span className="text-xs">Upload or drop a photo of the home</span>
+                    <span className="text-[11px] text-muted-foreground/70">Without one, the report uses the street photo</span>
+                  </button>
+                )}
+              </div>
+
               {error && (
                 <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3 flex gap-2">
                   <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0 mt-0.5" />
@@ -306,7 +381,11 @@ export default function CMABuilder() {
           ) : cmaReport ? (
             <div id="cma-report" className="space-y-6">
               {/* Header */}
-              <Card className="p-6 bg-gradient-to-br from-primary/5 to-accent/5 border-border/40">
+              <Card className="overflow-hidden bg-gradient-to-br from-primary/5 to-accent/5 border-border/40">
+                <div className="relative w-full h-56 sm:h-72 bg-muted">
+                  <CompPhoto key={subjectPhoto?.data || address} comp={{ address, photoUrl: subjectPhoto?.data || null }} subjectAddress="" />
+                </div>
+                <div className="p-6">
                 <div className="flex items-start justify-between mb-4">
                   <div>
                     <h2 className="text-2xl font-bold text-foreground">{address}</h2>
@@ -323,6 +402,7 @@ export default function CMABuilder() {
                 ) : cmaReport.source === 'web' ? (
                   <p className="mt-2 text-xs text-amber-700">No MLS sales synced for this area yet, so these comps came from a web search. Verify them before sharing.</p>
                 ) : null}
+                </div>
               </Card>
 
               {/* Market Analysis - Enhanced Visual */}
