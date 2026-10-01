@@ -1493,6 +1493,42 @@ create trigger idea_pad_note_fill before insert on public.idea_pad_note for each
 alter table public.idea_pad_note enable row level security;
 create index if not exists idea_pad_note_user_email_idx on public.idea_pad_note (user_email);
 
+-- MarketingDesign -------------------------------------------------------
+create table if not exists public.marketing_design (
+  id text primary key default replace(gen_random_uuid()::text, '-', ''),
+  brokerage_id text,
+  data jsonb,
+  format text,
+  kind text,
+  listing_id text,
+  owner_email text,
+  template text,
+  thumbnail_url text,
+  title text,
+  transaction_id text,
+  extra jsonb not null default '{}'::jsonb,
+  created_date timestamptz not null default now(),
+  updated_date timestamptz not null default now(),
+  created_by text
+);
+alter table public.marketing_design add column if not exists brokerage_id text;
+alter table public.marketing_design add column if not exists data jsonb;
+alter table public.marketing_design add column if not exists format text;
+alter table public.marketing_design add column if not exists kind text;
+alter table public.marketing_design add column if not exists listing_id text;
+alter table public.marketing_design add column if not exists owner_email text;
+alter table public.marketing_design add column if not exists template text;
+alter table public.marketing_design add column if not exists thumbnail_url text;
+alter table public.marketing_design add column if not exists title text;
+alter table public.marketing_design add column if not exists transaction_id text;
+drop trigger if exists marketing_design_touch on public.marketing_design;
+create trigger marketing_design_touch before update on public.marketing_design for each row execute function public.touch_updated_date();
+drop trigger if exists marketing_design_fill on public.marketing_design;
+create trigger marketing_design_fill before insert on public.marketing_design for each row execute function public.fill_owner();
+alter table public.marketing_design enable row level security;
+create index if not exists marketing_design_brokerage_id_idx on public.marketing_design (brokerage_id);
+create index if not exists marketing_design_transaction_id_idx on public.marketing_design (transaction_id);
+
 -- Message ---------------------------------------------------------------
 create table if not exists public.message (
   id text primary key default replace(gen_random_uuid()::text, '-', ''),
@@ -2215,6 +2251,8 @@ drop policy if exists idea_access on public.idea;
 create policy idea_access on public.idea for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 drop policy if exists idea_pad_note_access on public.idea_pad_note;
 create policy idea_pad_note_access on public.idea_pad_note for all using (lower(user_email) = public.auth_email()) with check (lower(user_email) = public.auth_email());
+drop policy if exists marketing_design_access on public.marketing_design;
+create policy marketing_design_access on public.marketing_design for all using (lower(owner_email) = public.auth_email() or (brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() and (lower(owner_email) = public.auth_email() or public.is_brokerage_admin()));
 drop policy if exists message_access on public.message;
 create policy message_access on public.message for all using (exists (select 1 from public.conversation c where c.id = message.conversation_id) or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() and exists (select 1 from public.conversation c where c.id = message.conversation_id));
 drop policy if exists notification_access on public.notification;

@@ -67,6 +67,7 @@ ENTITIES = {
     "Transaction": "co_agents referral deductions commission_calc closed_date checklist_template_id thank_you_sent_at agent_email agent_name agent_net agent_split_percentage brokerage_fee brokerage_fee_flat brokerage_fee_percentage brokerage_fee_type brokerage_id buyer_name buyers checklist closing_date commission_amount commission_flat commission_notes commission_percentage commission_sale_price commission_type completed_dates documents esign_docs property_address sale_price seller_name sellers status tc_email tc_name transaction_fee transaction_fee_flat transaction_fee_percentage transaction_fee_type updates inspection_date appraisal_date financing_contingency_date inspection_contingency_date loan_approval_date title_deadline_date",
     "UserBadge": "brokerage_id user_email badge_type",
     "Call": "brokerage_id room_name room_url kind title created_by_email created_by_name invitees conversation_kind conversation_key status started_at ended_at",
+    "MarketingDesign": "brokerage_id owner_email title kind format template data thumbnail_url transaction_id listing_id",
     "ChatReadState": "brokerage_id user_email kind conv_key last_read_at",
 }
 
@@ -74,7 +75,7 @@ ENTITIES = {
 USER_FIELDS = "email full_name display_name role brokerage_id suspended headshot agent_status duties license_number license_state license_expiration eo_expiration mls_ids phone start_date cap_start_date commission_plan_id team_lead_email sponsor_email first_name last_name personal_company birthday address city state zip alternate_name tc_email licenses annual_cap team_id permissions alerts_sent"
 
 JSON_FIELDS = set("""co_agents referral deductions commission_calc config calc items changed mls_ids answers buyers checklist completed_dates details documents encryption_metadata esign_docs fields items
-members invitees mentions messages options reactions read_by sellers signatories signature_fields signers tags tech_links updates
+data members invitees mentions messages options reactions read_by sellers signatories signature_fields signers tags tech_links updates
 versions cma_report""".split())
 BOOL_FIELDS = set("is_private is_client is_default active appraisal_contingency read pinned encrypted suspended submitted checked_in is_active is_anonymous is_featured signed passed require_sequential_signing".split())
 INT_FIELDS = set("level inspection_days financing_days bathrooms bedrooms downloads_count downvotes upvotes guests_count order passing_score rating signer_index version file_size score".split())
@@ -294,6 +295,8 @@ for ent, fields in sorted(ENTITIES.items()):
         pw(f"create policy {t}_insert on public.{t} for insert with check (lower(sender_email) = public.auth_email() and brokerage_id = public.auth_brokerage_id());")
         pw(f"create policy {t}_update on public.{t} for update using (lower(sender_email) = public.auth_email()) with check (lower(sender_email) = public.auth_email());")
         pw(f"create policy {t}_delete on public.{t} for delete using (lower(sender_email) = public.auth_email());")
+    elif ent == "MarketingDesign":
+        pw(f"create policy {t}_access on public.{t} for all using (lower(owner_email) = public.auth_email() or (brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() and (lower(owner_email) = public.auth_email() or public.is_brokerage_admin()));")
     elif ent == "Conversation":
         # Support chat: the agent who opened it and the brokerage's admins.
         pw(f"create policy {t}_access on public.{t} for all using (lower(agent_email) = public.auth_email() or (brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());")

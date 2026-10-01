@@ -107,6 +107,14 @@ export default function WorkspaceOverview({ tx, user, refresh, canEdit, admin })
         </Section>
       )}
 
+      <Section title="Marketing" subtitle="Turn this deal into a post, flyer or email.">
+        <div className="flex flex-wrap gap-2">
+          {(tx.status === 'closed' ? [['just_sold', 'Just sold post']] : [['under_contract', 'Under contract post'], ['open_house', 'Open house flyer'], ['just_listed', 'Just listed flyer']]).map(([k, l]) => (
+            <a key={k} href={`/Marketing?tx=${tx.id}&kind=${k}`} className="rounded-full border px-3 py-1.5 text-sm hover:bg-muted">{l}</a>
+          ))}
+        </div>
+      </Section>
+
       <Section title="File check"><FileCheck tx={tx} canEdit={canEdit} onUpdate={refresh} /></Section>
       <Section title="E-signatures"><TransactionESign tx={tx} isAdmin={canEdit} user={user} onUpdate={refresh} /></Section>
     </div>

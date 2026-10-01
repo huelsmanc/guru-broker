@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { MessageSquare, Phone, LayoutDashboard, Monitor, LogOut, Users, Settings as SettingsIcon, ShieldCheck, Building2, UserCircle, TrendingUp, UserPlus, Mail, Trophy, BookOpen, FileText, Heart, Lightbulb, Calendar, FolderOpen, Link2, Wand2, Target, ScrollText, Calculator, File, Gift, Star, ClipboardList, Handshake, Wallet, Banknote, Percent, BarChart3, Activity as ActivityIcon, FileCheck2, ListChecks } from 'lucide-react';
+import { MessageSquare, Phone, LayoutDashboard, Monitor, LogOut, Users, Settings as SettingsIcon, ShieldCheck, Building2, UserCircle, TrendingUp, UserPlus, Mail, Trophy, BookOpen, FileText, Heart, Lightbulb, Calendar, FolderOpen, Link2, Wand2, Target, ScrollText, Calculator, File, Gift, Star, ClipboardList, Handshake, Wallet, Banknote, Percent, BarChart3, Activity as ActivityIcon, FileCheck2, ListChecks, Megaphone } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import NotificationBell from './NotificationBell';
 import ChatChannelsDropdown from './ChatChannelsDropdown';
@@ -93,6 +93,7 @@ export default function Sidebar({ user, brokerageId, onChannelClick }) {
     { to: '/ComplianceTraining', icon: BookOpen, label: 'Compliance Training' },
     { to: '/ESignDocuments', icon: FileText, label: 'E-Sign Documents' },
     { to: '/TechLinks', icon: Link2, label: 'Tech Links' },
+    { to: '/Marketing', icon: Megaphone, label: 'Marketing' },
     { to: '/ListingGenerator', icon: Wand2, label: 'Listing Generator' },
     { to: '/NetSheetCalculator', icon: Calculator, label: 'Net Sheet Calculator' },
     { to: '/SalesCoach', icon: Target, label: 'AI Sales Coach' },
@@ -122,6 +123,7 @@ export default function Sidebar({ user, brokerageId, onChannelClick }) {
     { to: '/ScheduleCalls', icon: Phone, label: 'Calls' },
     { to: '/AdminChat', icon: ShieldCheck, label: 'Broker Chat' },
     { to: '/TechLinks', icon: Link2, label: 'Tech Links' },
+    { to: '/Marketing', icon: Megaphone, label: 'Marketing' },
     { to: '/ListingGenerator', icon: Wand2, label: 'Listing Generator' },
     { to: '/NetSheetCalculator', icon: Calculator, label: 'Net Sheet Calculator' },
     { to: '/SalesCoach', icon: Target, label: 'AI Sales Coach' },

@@ -904,6 +904,28 @@ export const SCHEMA = {
       "messages"
     ]
   },
+  "MarketingDesign": {
+    "table": "marketing_design",
+    "columns": [
+      "brokerage_id",
+      "data",
+      "format",
+      "kind",
+      "listing_id",
+      "owner_email",
+      "template",
+      "thumbnail_url",
+      "title",
+      "transaction_id",
+      "id",
+      "created_date",
+      "updated_date",
+      "created_by"
+    ],
+    "typed": [
+      "data"
+    ]
+  },
   "Message": {
     "table": "message",
     "columns": [

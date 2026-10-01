@@ -57,6 +57,7 @@ const TransactionWorkspace = lazy(() => import('@/pages/TransactionWorkspace'));
 const ClientStatus = lazy(() => import('@/pages/ClientStatus'));
 const ResetPassword = lazy(() => import('@/pages/ResetPassword'));
 const MyCommissions = lazy(() => import('@/pages/MyCommissions'));
+const Marketing = lazy(() => import('@/pages/Marketing'));
 const Payouts = lazy(() => import('@/pages/Payouts'));
 const CommissionPlans = lazy(() => import('@/pages/CommissionPlans'));
 const Reports = lazy(() => import('@/pages/Reports'));
@@ -163,6 +164,7 @@ const AuthenticatedApp = () => {
             <Route path="/Transactions" element={<Transactions />} />
             <Route path="/ClientPortal" element={<ClientPortal />} />
             <Route path="/MyCommissions" element={<MyCommissions />} />
+            <Route path="/Marketing" element={<Marketing />} />
             <Route path="/Payouts" element={<Payouts />} />
             <Route path="/CommissionPlans" element={<CommissionPlans />} />
             <Route path="/Reports" element={<Reports />} />
