@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { AlertCircle, Loader2, CheckCircle, FileText, Lock, PenTool, Check, X, ChevronDown, Clock, Sparkles, ShieldCheck, Paperclip, Users, ArrowRight, HandHelping } from 'lucide-react';
+import { AlertCircle, Loader2, CheckCircle, FileText, Lock, PenTool, Check, X, ChevronDown, Clock, Sparkles, ShieldCheck, Paperclip, Users, ArrowRight, HandHelping, Calendar, Type, CaseSensitive } from 'lucide-react';
 import PDFPageRenderer from '@/components/esign/PDFPageRenderer';
 import SignatureCaptureModal from '@/components/esign/SignatureCaptureModal';
 import { supabase } from '@/api/base44Client';
 import { fieldStyle, fieldSignerIndex, isPrefilled, textPx, isTickType, fieldVisible } from '../../shared/esignGeometry.js';
+import { fieldLook, textCss, strikePx, STYLED_TYPES } from '../../shared/esignStyle.js';
 
 // The page signers reach from their email link: /sign?token=...
 // Uses the same document layout as the field editor, so every box lines up.
@@ -271,16 +272,21 @@ export default function PublicSigner() {
               const isImage = val && (field.type === 'signature' || field.type === 'initial');
               const isCurrent = current === field.id;
               if (field.type === 'strike') {
-                return <div key={field.id} className="absolute z-10 pointer-events-none" style={style}><span className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-[2px] bg-gray-900" /></div>;
+                return <div key={field.id} className="absolute z-10 pointer-events-none" style={style}><span className="absolute left-0 right-0 top-1/2 -translate-y-1/2 rounded-full" style={{ background: fieldLook(field).color, height: strikePx(field, layout.width) }} /></div>;
               }
               const optional = field.type === 'checkbox' ? field.required !== true : field.required === false;
-              const ring = isCurrent ? '0 0 0 3px rgba(37,99,235,0.45)' : undefined;
+              const ring = isCurrent ? '0 0 0 3px rgba(37,99,235,0.35), 0 6px 16px rgba(37,99,235,0.18)' : '0 1px 2px rgba(15,23,42,0.06)';
+              const signType = field.type === 'signature' || field.type === 'initial';
+              // Empty boxes: signature spots in warm gold, everything else in blue, with a solid tab on the left.
+              const accent = signType ? '#d97706' : '#2563eb';
+              const side = `1.5px solid ${accent}99`;
+              const emptyLook = { borderTop: side, borderRight: side, borderBottom: side, borderLeft: `3px solid ${accent}`, background: signType ? 'linear-gradient(180deg, #fffbeb, #fef3c7)' : 'linear-gradient(180deg, #eff6ff, #dbeafe)' };
               if (isTickType(field.type)) {
                 return (
                   <button type="button" key={field.id} ref={(el) => (fieldEls.current[field.id] = el)} onClick={() => mine && fill(field)}
                     title={field.label || undefined}
                     className={`absolute z-10 flex items-center justify-center ${field.type === 'radio' ? 'rounded-full' : 'rounded-[3px]'}`}
-                    style={{ ...style, border: '2px solid #2563eb', background: val ? '#fff' : 'rgba(219,234,254,0.85)', boxShadow: ring }}>
+                    style={{ ...style, border: `1.5px solid ${val ? '#334155' : '#2563eb'}`, background: val ? '#fff' : 'linear-gradient(180deg, #eff6ff, #dbeafe)', boxShadow: ring }}>
                     {val === 'X' && (field.type === 'radio' ? <span className="w-1/2 h-1/2 rounded-full bg-gray-900" /> : <Check className="w-full h-full text-gray-900" strokeWidth={3} />)}
                   </button>
                 );
@@ -289,8 +295,8 @@ export default function PublicSigner() {
                 return (
                   <select key={field.id} ref={(el) => (fieldEls.current[field.id] = el)} value={val || ''}
                     onChange={(e) => setValue(field.id, e.target.value)} onFocus={() => setCurrent(field.id)}
-                    className="absolute z-10 rounded-[3px] text-gray-900 bg-blue-50/90"
-                    style={{ ...style, fontSize: textPx(layout.width), border: val ? '1px solid #cbd5e1' : '2px dashed #2563eb', boxShadow: ring, padding: '0 2px' }}>
+                    className="absolute z-10 rounded-[4px]"
+                    style={{ ...style, ...textCss(field, layout.width), ...(val ? { borderTop: '1px solid #cbd5e1', borderRight: '1px solid #cbd5e1', borderBottom: '1px solid #cbd5e1', borderLeft: '1px solid #cbd5e1', background: '#fff' } : emptyLook), boxShadow: ring, padding: '0 2px' }}>
                     <option value="">{field.label || 'Choose…'}{optional ? ' (optional)' : ''}</option>
                     {(field.options || []).filter(Boolean).map((o) => <option key={o} value={o}>{o}</option>)}
                   </select>
@@ -300,12 +306,11 @@ export default function PublicSigner() {
                 <div
                   key={field.id}
                   ref={(el) => (fieldEls.current[field.id] = el)}
-                  className={`absolute z-10 rounded-[3px] flex items-center overflow-hidden ${mine ? 'cursor-pointer' : ''}`}
+                  className={`absolute z-10 rounded-[4px] flex items-center overflow-hidden transition-shadow ${mine ? 'cursor-pointer hover:brightness-[0.98]' : ''}`}
                   style={{
                     ...style,
-                    border: val ? '1px solid transparent' : '2px dashed #2563eb',
-                    background: val ? (mine ? 'rgba(254,249,195,0.55)' : 'transparent') : 'rgba(219,234,254,0.85)',
-                    boxShadow: ring,
+                    ...(val ? { borderTop: '1px solid transparent', borderRight: '1px solid transparent', borderBottom: '1px solid transparent', borderLeft: '1px solid transparent', background: mine ? 'rgba(254,249,195,0.45)' : 'transparent' } : emptyLook),
+                    boxShadow: val && !isCurrent ? 'none' : ring,
                   }}
                   onClick={() => mine && (val && !['date', 'attachment'].includes(field.type) ? setActive(field) : fill(field))}
                 >
@@ -316,11 +321,15 @@ export default function PublicSigner() {
                   ) : field.type === 'attachment' && val ? (
                     <span className="w-full text-[11px] text-blue-800 truncate px-1 flex items-center gap-1"><Paperclip className="w-3 h-3" /> Attached. Tap to replace</span>
                   ) : val ? (
-                    <span className="self-start w-full text-gray-900 whitespace-pre-wrap break-words" style={{ fontSize: textPx(layout.width), lineHeight: 1.2, padding: '1px 3px' }}>{val}</span>
+                    <span className={`${STYLED_TYPES.has(field.type) && String(val).includes('\n') ? 'self-start' : ''} w-full whitespace-pre-wrap break-words`}
+                      style={STYLED_TYPES.has(field.type) ? { ...textCss(field, layout.width), padding: '1px 4px' } : { fontSize: textPx(layout.width), lineHeight: 1.2, padding: '1px 4px', color: '#111827' }}>{val}</span>
                   ) : (
-                    <span className="w-full text-center text-[11px] font-semibold text-blue-700 truncate px-1">
-                      {field.type === 'attachment' ? `📎 ${field.label || 'Attach a file'}` : field.label || LABELS[field.type] || 'Sign here'}
-                      {optional ? ' (optional)' : ''}
+                    <span className="w-full flex items-center justify-center gap-1 px-1.5 min-w-0" style={{ color: signType ? '#b45309' : '#1d4ed8' }}>
+                      {field.type === 'attachment' ? <Paperclip className="w-3.5 h-3.5 flex-shrink-0" /> : field.type === 'signature' ? <PenTool className="w-3.5 h-3.5 flex-shrink-0" /> : field.type === 'initial' ? <CaseSensitive className="w-3.5 h-3.5 flex-shrink-0" /> : field.type === 'date' ? <Calendar className="w-3.5 h-3.5 flex-shrink-0" /> : <Type className="w-3.5 h-3.5 flex-shrink-0" />}
+                      <span className={`text-[11px] font-semibold truncate ${signType ? 'italic' : ''}`}>
+                        {field.type === 'attachment' ? (field.label || 'Attach a file') : field.label || LABELS[field.type] || 'Sign here'}
+                        {optional ? ' (optional)' : ''}
+                      </span>
                     </span>
                   )}
                 </div>

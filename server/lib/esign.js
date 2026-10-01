@@ -14,6 +14,7 @@ import { adminClient, appUrl } from './base44.js';
 import { SendEmail } from './integrations.js';
 import { fieldToPdfBox, fieldSignerIndex, isPrefilled, TEXT_PT, fieldVisible, isTickType } from '../../shared/esignGeometry.js';
 import { readFileBytes, pathFromUrl, parsePath } from './files.js';
+import { fieldLook, rgb01, STYLED_TYPES } from '../../shared/esignStyle.js';
 import qrcodegen from './vendor/qrcodegen.js';
 
 export const LINK_DAYS = 30;
@@ -480,6 +481,9 @@ export async function buildSignedPdf({ originalBytes, doc, sub, signatureData, e
   }
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const italic = await pdf.embedFont(StandardFonts.HelveticaOblique);
+  const boldItalic = await pdf.embedFont(StandardFonts.HelveticaBoldOblique);
+  const fontFor = (look) => (look.bold && look.italic ? boldItalic : look.bold ? bold : look.italic ? italic : font);
   const attachments = [];
   const docPages = pdf.getPages();
   const sizes = docPages.map((p) => {
@@ -503,7 +507,8 @@ export async function buildSignedPdf({ originalBytes, doc, sub, signatureData, e
       const b = fieldToPdfBox(field, sizes);
       const o = sizes[b.pageIndex];
       const midY = o.y + b.y + b.height / 2;
-      docPages[b.pageIndex].drawLine({ start: { x: o.x + b.x, y: midY }, end: { x: o.x + b.x + b.width, y: midY }, thickness: 1.2, color: rgb(0.07, 0.09, 0.15) });
+      const look = fieldLook(field);
+      docPages[b.pageIndex].drawLine({ start: { x: o.x + b.x, y: midY }, end: { x: o.x + b.x + b.width, y: midY }, thickness: look.thickness * (o.width / 612), color: rgb(...rgb01(look.color)) });
       continue;
     }
     const value = isPrefilled(field) ? field.value : values[field.id];
@@ -539,13 +544,27 @@ export async function buildSignedPdf({ originalBytes, doc, sub, signatureData, e
       const w = img.width * scale;
       const h = img.height * scale;
       page.drawImage(img, { x: x + (box.width - w) / 2, y: y + (box.height - h) / 2, width: w, height: h });
-    } else if (field.type === 'text' && (String(value).includes('\n') || font.widthOfTextAtSize(ASCII(value), Math.min(TEXT_PT * (sizes[box.pageIndex].width / 612), box.height * 0.7)) > box.width - 4)) {
-      // Longer text wraps onto more lines, from the top of the box (the editor grows the box to fit).
-      let size = Math.min(TEXT_PT * (sizes[box.pageIndex].width / 612), 14);
+    } else if (STYLED_TYPES.has(field.type)) {
+      // Typed text, in the box's own look (bold/italic/size/color/alignment), as shown on screen.
+      const look = fieldLook(field);
+      const f = fontFor(look);
+      const color = rgb(...rgb01(look.color));
+      const scale = sizes[box.pageIndex].width / 612;
       const clean = String(value).split(/\r?\n/).map(ASCII).join('\n');
-      let lines = wrapText(font, clean, size, box.width - 6);
-      while (size > 5 && lines.length * size * 1.2 > box.height + size * 0.3) { size -= 0.5; lines = wrapText(font, clean, size, box.width - 6); }
-      lines.forEach((ln, i) => page.drawText(ln, { x: x + 3, y: y + box.height - size * (1 + i * 1.2) - 1, size, font, color: rgb(0.07, 0.09, 0.15) }));
+      let size = Math.min(look.size * scale, 30);
+      const pad = 3 * scale;
+      let lines = wrapText(f, clean, size, box.width - pad * 2);
+      // Shrink to fit if needed (the editor grows boxes, but a signer's text may run long).
+      while (size > 5 && (lines.length * size * 1.2 > box.height + size * 0.3 || lines.some((ln) => f.widthOfTextAtSize(ln, size) > box.width - pad * 2))) {
+        size -= 0.5; lines = wrapText(f, clean, size, box.width - pad * 2);
+      }
+      const lineX = (ln) => (look.align === 'center' ? x + (box.width - f.widthOfTextAtSize(ln, size)) / 2 : look.align === 'right' ? x + box.width - pad - f.widthOfTextAtSize(ln, size) : x + pad);
+      if (lines.length === 1 && box.height < size * 2.2) {
+        // One line in a short box: centered vertically, like the screen.
+        page.drawText(lines[0], { x: lineX(lines[0]), y: y + (box.height - size) / 2 + size * 0.2, size, font: f, color });
+      } else {
+        lines.forEach((ln, i) => page.drawText(ln, { x: lineX(ln), y: y + box.height - size * (1 + i * 1.2) - 1, size, font: f, color }));
+      }
     } else {
       const text = ASCII(value);
       const size = fitText(font, text, box.width - 4, box.height);

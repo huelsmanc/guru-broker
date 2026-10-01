@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Loader2, AlertCircle, Trash2, PenTool, Calendar, Type, CaseSensitive, Sparkles, Strikethrough, CheckSquare, CircleDot, ListChecks, Paperclip, Copy, Home, Check } from 'lucide-react';
 import PDFPageRenderer from './PDFPageRenderer';
 import { fieldStyle, heightPct, fieldSignerIndex, textPx } from '../../../shared/esignGeometry.js';
+import { fieldLook, textCss, strikePx, STYLED_TYPES } from '../../../shared/esignStyle.js';
+import FieldStyleBar from './FieldStyleBar';
 
 export const FIELD_TYPES = [
   { id: 'signature', label: 'Signature', icon: PenTool, w: 0.30, h: 0.055 },
@@ -89,28 +91,36 @@ export function fillFromDeal(fields, deal) {
   });
 }
 
-// A small preview of each field type inside its box.
-function FieldPreview({ field, color, label }) {
-  if (field.type === 'checkbox') return <span className="w-full h-full flex items-center justify-center pointer-events-none"><Check className={`w-3/4 h-3/4 ${field.value === 'X' ? '' : 'opacity-30'}`} style={{ color: field.value === 'X' ? '#111827' : color }} /></span>;
-  if (field.type === 'radio') return <span className="w-3/4 h-3/4 rounded-full border-2 pointer-events-none" style={{ borderColor: color }} />;
-  const text = field.type === 'dropdown' ? `▾ ${(field.options || []).filter(Boolean)[0] || 'Dropdown'}`
-    : field.type === 'attachment' ? `📎 ${field.label || 'Attach a file'}`
-    : label;
-  return <span className="text-[11px] font-semibold truncate px-1 pointer-events-none" style={{ color }}>{text}</span>;
+// A small preview of each field type inside its box: an icon and a label in the signer's color.
+// Date and dropdown boxes show sample text in the box's own style, so style changes are visible.
+function FieldPreview({ field, color, label, layout }) {
+  if (field.type === 'checkbox') return <span className="w-full h-full flex items-center justify-center pointer-events-none"><Check className={`w-3/4 h-3/4 ${field.value === 'X' ? '' : 'opacity-40'}`} strokeWidth={3} style={{ color: field.value === 'X' ? '#111827' : color }} /></span>;
+  if (field.type === 'radio') return <span className="w-3/5 h-3/5 rounded-full border-2 pointer-events-none" style={{ borderColor: color, background: field.value === 'X' ? color : 'transparent' }} />;
+  if ((field.type === 'date' || field.type === 'dropdown') && layout) {
+    const sample = field.type === 'date' ? 'MM/DD/YYYY' : `${(field.options || []).filter(Boolean)[0] || 'Choose'} ▾`;
+    return <span className="w-full truncate pointer-events-none" style={{ ...textCss(field, layout.width), padding: '0 4px', opacity: 0.85 }}>{sample}</span>;
+  }
+  const Icon = FIELD_TYPES.find((t) => t.id === field.type)?.icon;
+  const text = field.type === 'attachment' ? (field.label || 'Attach a file') : field.type === 'signature' ? (label === 'Signature' ? 'Sign here' : label) : label;
+  return (
+    <span className="flex items-center gap-1 min-w-0 px-1.5 pointer-events-none" style={{ color }}>
+      {Icon && <Icon className="w-3.5 h-3.5 flex-shrink-0" strokeWidth={2.2} />}
+      <span className={`text-[11px] font-semibold tracking-tight truncate ${field.type === 'signature' || field.type === 'initial' ? 'italic' : ''}`}>{text}</span>
+    </span>
+  );
 }
 
 // Text typed into a field, shown at the size it will print. Grows the box downward when the
 // text needs more lines, so nothing is cut off.
 function FieldText({ field, layout, color, editing, onChange, onGrow, onDone }) {
   const ref = useRef(null);
-  const fs = textPx(layout.width);
   useLayoutEffect(() => {
     const el = ref.current; if (!el) return;
     const box = el.parentElement.getBoundingClientRect();
     const need = el.scrollHeight + 2;
     if (need > box.height + 1) onGrow((need / layout.height) * 100);
-  }, [field.value, field.width, layout.width, editing]);
-  const style = { fontSize: fs, lineHeight: 1.2, padding: '1px 3px', color: '#111827' };
+  }, [field.value, field.width, field.style, layout.width, editing]);
+  const style = { ...textCss(field, layout.width), padding: '1px 4px' };
   if (editing) {
     return (
       <textarea ref={ref} autoFocus value={field.value || ''} onChange={(e) => onChange(e.target.value)} onBlur={onDone}
@@ -121,8 +131,16 @@ function FieldText({ field, layout, color, editing, onChange, onGrow, onDone }) 
   }
   return field.value?.trim()
     ? <div ref={ref} className="absolute inset-x-0 top-0 whitespace-pre-wrap break-words pointer-events-none" style={style}>{field.value}</div>
-    : <span className="text-[11px] font-semibold truncate px-1 pointer-events-none" style={{ color }}>{field.sender_fill ? '✎ ' : ''}{field.label || 'Text'}</span>;
+    : (
+      <span className="flex items-center gap-1 min-w-0 px-1.5 pointer-events-none w-full" style={{ color, justifyContent: { left: 'flex-start', center: 'center', right: 'flex-end' }[fieldLook(field).align] }}>
+        <Type className="w-3.5 h-3.5 flex-shrink-0" strokeWidth={2.2} />
+        <span className="truncate" style={{ fontSize: 11, fontWeight: fieldLook(field).bold ? 800 : 600, fontStyle: fieldLook(field).italic ? 'italic' : 'normal' }}>{field.sender_fill ? 'Agent fills: ' : ''}{field.label || 'Text'}</span>
+      </span>
+    );
 }
+
+// All four sides set separately (React warns when border and borderLeft are mixed between renders).
+const edges = (all, left) => ({ borderTop: all, borderRight: all, borderBottom: all, borderLeft: left || all });
 
 export const SIGNER_COLORS = ['#2563eb', '#16a34a', '#9333ea', '#ea580c', '#db2777', '#0891b2'];
 
@@ -179,6 +197,10 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChan
 
   const selected = fields.find((f) => f.id === selectedId) || null;
 
+  // New boxes start with the last style used (per kind), so a page of boxes looks consistent.
+  const lastStyle = useRef({ text: null, strike: null });
+  const rememberStyle = useCallback((type, style) => { lastStyle.current[type === 'strike' ? 'strike' : 'text'] = style; }, []);
+
   // Place a new field centred where the user clicked or tapped.
   const handlePlace = (e) => {
     if (!placing || !layout) return;
@@ -201,6 +223,8 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChan
       signer_index: activeSigner,
     };
     if (placing === 'dropdown') field.options = ['Option 1', 'Option 2'];
+    if (STYLED_TYPES.has(placing) && lastStyle.current.text) field.style = { ...lastStyle.current.text };
+    if (placing === 'strike' && lastStyle.current.strike) field.style = { ...lastStyle.current.strike };
     if (placing === 'attachment') field.label = 'Attach a file';
     if (placing === 'radio') {
       // Tap several times to add choices to the same group.
@@ -407,11 +431,18 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChan
               return (
                 <div
                   key={field.id}
-                  className="absolute z-20 rounded-[3px] flex items-center justify-center overflow-visible"
+                  className={`absolute z-20 flex items-center overflow-visible transition-shadow ${['checkbox', 'radio'].includes(field.type) ? 'justify-center' : 'justify-start'} ${field.type === 'radio' ? 'rounded-full' : 'rounded-[4px]'}`}
                   style={{
                     ...fieldStyle(field, layout.ratio),
-                    border: field.type === 'strike' ? (isSel ? `1px dashed ${color}` : '1px solid transparent') : `2px ${isSel ? 'solid' : 'dashed'} ${color}`,
-                    background: field.type === 'strike' ? 'transparent' : field.type === 'text' && field.value?.trim() ? 'rgba(255,255,255,0.85)' : `${color}1f`,
+                    ...(field.type === 'strike'
+                      ? { ...edges(isSel ? `1px dashed ${color}` : '1px solid transparent'), background: 'transparent' }
+                      : field.type === 'text' && field.value?.trim()
+                        ? { ...edges(`1px solid ${isSel ? color : `${color}55`}`), background: 'rgba(255,255,255,0.92)' }
+                        : {
+                          ...edges(`1.5px solid ${isSel ? color : `${color}8c`}`, ['checkbox', 'radio'].includes(field.type) ? null : `3px solid ${color}`),
+                          background: `linear-gradient(180deg, ${color}14, ${color}24)`,
+                        }),
+                    boxShadow: isSel ? `0 0 0 3px ${color}33, 0 4px 12px rgba(15,23,42,0.12)` : field.type === 'strike' ? 'none' : '0 1px 2px rgba(15,23,42,0.06)',
                     touchAction: 'none',
                     cursor: editingId === field.id ? 'text' : 'move',
                   }}
@@ -423,16 +454,22 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChan
                   onPointerCancel={endDrag}
                 >
                   {field.type === 'strike' ? (
-                    <span className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-[2px] pointer-events-none" style={{ background: '#111827' }} />
+                    <span className="absolute left-0 right-0 top-1/2 -translate-y-1/2 pointer-events-none rounded-full" style={{ background: fieldLook(field).color, height: strikePx(field, layout.width) }} />
                   ) : field.type === 'text' ? (
                     <FieldText field={field} layout={layout} color={color} editing={editingId === field.id}
                       onChange={(v) => updateField(field.id, { value: v })}
                       onGrow={(h) => updateField(field.id, { hPct: Math.min(h, 100 - field.y) })}
                       onDone={() => setEditingId(null)} />
                   ) : (
-                    <FieldPreview field={field} color={color} label={field.label || def?.label || field.type} />
+                    <FieldPreview field={field} color={color} label={field.label || def?.label || field.type} layout={layout} />
                   )}
                   {field.show_if && <span className="absolute -top-2 -left-2 text-[9px] px-1 rounded bg-amber-400 text-white pointer-events-none" title="Only shows when another box is filled">if</span>}
+                  {isSel && !dragRef.current && (STYLED_TYPES.has(field.type) || field.type === 'strike') && (
+                    <div className={`absolute z-40 ${field.y < 3 ? 'top-full mt-2' : 'bottom-full mb-2'} ${field.x > 55 ? 'right-0' : 'left-0'}`} style={{ whiteSpace: 'nowrap' }}
+                      onPointerDown={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
+                      <FieldStyleBar field={field} onChange={(style) => { updateField(field.id, { style }); rememberStyle(field.type, style); }} />
+                    </div>
+                  )}
                   {isSel && (
                     <>
                       <button
@@ -523,6 +560,18 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChan
           <div className="rounded-lg border border-border/60 p-3 space-y-3">
             <p className="text-sm font-medium">Selected: {FIELD_TYPES.find((t) => t.id === selected.type)?.label}</p>
             {selected.type === 'strike' && <p className="text-xs text-muted-foreground">A line through the text under it, printed on the signed copy. Drag to move; drag the corner to make it longer.</p>}
+            {(STYLED_TYPES.has(selected.type) || selected.type === 'strike') && (
+              <div className="space-y-1.5">
+                <p className="text-xs text-muted-foreground">{selected.type === 'strike' ? 'Line color and thickness' : 'Text style (prints exactly like this)'}</p>
+                <div className="overflow-x-auto"><FieldStyleBar field={selected} className="shadow-none" onChange={(style) => { updateField(selected.id, { style }); rememberStyle(selected.type, style); }} /></div>
+                {fields.filter((f) => f.id !== selected.id && (selected.type === 'strike' ? f.type === 'strike' : STYLED_TYPES.has(f.type))).length > 0 && (
+                  <button type="button" className="text-xs text-primary hover:underline"
+                    onClick={() => setFields((prev) => prev.map((f) => ((selected.type === 'strike' ? f.type === 'strike' : STYLED_TYPES.has(f.type)) ? { ...f, style: { ...(selected.style || {}) } } : f)))}>
+                    Use this style for every {selected.type === 'strike' ? 'strike-out' : 'text, date and dropdown box'}
+                  </button>
+                )}
+              </div>
+            )}
             {signers.length > 0 && selected.type !== 'strike' && (
               <label className="block text-xs text-muted-foreground">
                 Signer
