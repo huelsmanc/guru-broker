@@ -168,7 +168,7 @@ export function Conversation({ kind, convKey, group, chat, onBack, embedded }) {
     queryFn: async () => (await supabase.rpc('chat_readers', { p_kind: 'group', p_key: convKey })).data || [],
   });
   useEffect(() => { if (kind === 'group') refetch(); }, [room.seenTick, kind, refetch]);
-  const myLast = [...conv.messages].reverse().find((m) => lc(m.sender_email) === chat.me && !m._pending && !m._failed);
+  const myLast = [...conv.messages].reverse().find((m) => lc(m.sender_email) === chat.me && !m._failed);
   let seenBy = null;
   if (myLast && kind === 'dm') seenBy = myLast.read ? 'Seen' : 'Sent';
   if (myLast && kind === 'group') {

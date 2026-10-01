@@ -77,8 +77,10 @@ export function useConversation(kind, key, { onSent } = {}) {
       if (type === 'DELETE') { setMessages((cur) => cur.filter((m) => m.id !== row?.id)); return; }
       if (!belongs(kind, key, me, row)) return;
       setMessages((cur) => {
-        const i = cur.findIndex((m) => m.id === row.id || (row.nonce && m.nonce === row.nonce));
-        if (i >= 0) { const n = [...cur]; n[i] = { ...row }; return n; }
+        const nonce = row.nonce || row.extra?.nonce;
+        const i = cur.findIndex((m) => m.id === row.id || (nonce && m.nonce === nonce));
+        // Keep the draft's nonce so the bubble on screen is updated in place, not redrawn.
+        if (i >= 0) { const n = [...cur]; n[i] = { ...row, nonce: cur[i].nonce || nonce }; return n; }
         if (type !== 'INSERT') return cur;
         return [...cur, row].sort(byTime);
       });
@@ -105,7 +107,7 @@ export function useConversation(kind, key, { onSent } = {}) {
       const saved = await base44.entities[ENTITY[kind]].create(base);
       setMessages((cur) => {
         const exists = cur.some((m) => m.id === saved.id);
-        return exists ? cur.filter((m) => m.id !== temp.id) : cur.map((m) => (m.id === temp.id ? saved : m));
+        return exists ? cur.filter((m) => m.id !== temp.id) : cur.map((m) => (m.id === temp.id ? { ...saved, nonce } : m));
       });
       onSent?.(saved);
       return saved;

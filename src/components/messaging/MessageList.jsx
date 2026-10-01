@@ -167,7 +167,11 @@ export default function MessageList({ conv, kind, chat, variant = 'slack', canMo
   const [confirmDel, setConfirmDel] = useState(null);
   const [loadingOlder, setLoadingOlder] = useState(false);
 
-  const toBottom = (smooth) => { const el = box.current; if (el) el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto' }); setNewBelow(0); };
+  const toBottom = (smooth) => {
+    const el = box.current;
+    if (el) { if (smooth) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' }); else el.scrollTop = el.scrollHeight; }
+    atBottom.current = true; setNewBelow(0);
+  };
 
   // Keep position when older messages load; follow new ones only if already at the bottom.
   useLayoutEffect(() => {
@@ -176,7 +180,8 @@ export default function MessageList({ conv, kind, chat, variant = 'slack', canMo
     if (restoring.current != null) { el.scrollTop = el.scrollHeight - restoring.current; restoring.current = null; prevLen.current = messages.length; return; }
     const added = messages.length - prevLen.current;
     const last = messages[messages.length - 1];
-    if (prevLen.current === 0 || (added > 0 && (atBottom.current || lc(last?.sender_email) === me))) toBottom(prevLen.current !== 0);
+    // Jump (no animation) so a sent message lands instantly, and the view never ends up mid-scroll.
+    if (prevLen.current === 0 || (added > 0 && (atBottom.current || lc(last?.sender_email) === me))) toBottom(false);
     else if (added > 0) setNewBelow((n) => n + added);
     prevLen.current = messages.length;
   }, [messages, me]);
@@ -220,13 +225,13 @@ export default function MessageList({ conv, kind, chat, variant = 'slack', canMo
       if (!prev || new Date(prev.created_date).toDateString() !== d.toDateString()) out.push({ type: 'day', key: `day-${d.toDateString()}`, label: dayLabel(d) });
       if (!unreadMarked && firstUnreadAt && m.created_date > firstUnreadAt && lc(m.sender_email) !== me) { out.push({ type: 'new', key: 'new-line' }); unreadMarked = true; }
       const compact = prev && lc(prev.sender_email) === lc(m.sender_email) && d - new Date(prev.created_date) < GROUP_MS && new Date(prev.created_date).toDateString() === d.toDateString() && !String(prev.content).startsWith('[call]');
-      out.push({ type: 'msg', key: m.id, m, compact });
+      out.push({ type: 'msg', key: m.nonce || m.id, m, compact }); // nonce keeps the row steady when the sent copy replaces the draft
       prev = m;
     }
     return out;
   }, [messages, firstUnreadAt, me]);
 
-  const lastMine = [...messages].reverse().find((m) => lc(m.sender_email) === me && !m._pending && !m._failed);
+  const lastMine = [...messages].reverse().find((m) => lc(m.sender_email) === me && !m._failed);
 
   return (
     <div className="relative flex-1 min-h-0">
@@ -247,8 +252,7 @@ export default function MessageList({ conv, kind, chat, variant = 'slack', canMo
                 const time = format(new Date(m.created_date), 'h:mm a');
                 const showTools = hover === m.id && !editing && !m._pending && !m._failed;
                 const tools = showTools && <Toolbar msg={m} own={own} canModerate={canModerate} kind={kind} onReact={react} onEdit={setEditing} onDelete={setConfirmDel} onPin={setPinned} onThread={onThread} align={variant === 'bubble' && own ? 'right' : 'left'} />;
-                const status = m._pending ? <span className="text-[11px] text-muted-foreground">Sending…</span>
-                  : m._failed ? <button className="text-[11px] text-red-600 flex items-center gap-1" onClick={() => retry(m)}><AlertCircle className="w-3 h-3" /> Not sent. Tap to retry</button> : null;
+                const status = m._failed ? <button className="text-[11px] text-red-600 flex items-center gap-1" onClick={() => retry(m)}><AlertCircle className="w-3 h-3" /> Not sent. Tap to retry</button> : null;
                 const replies = threadCounts[m.id];
 
                 if (variant === 'bubble') {
@@ -259,7 +263,7 @@ export default function MessageList({ conv, kind, chat, variant = 'slack', canMo
                       <div className={cn('flex flex-col min-w-0 max-w-[80%] sm:max-w-[65%]', own && 'items-end')}>
                         {!own && !r.compact && kind === 'group' && <span className="text-[11px] text-muted-foreground ml-1 mb-0.5">{person.name}</span>}
                         {editing?.id === m.id ? <EditBox msg={m} onCancel={() => setEditing(null)} onSave={(v) => { edit(m.id, v); setEditing(null); }} /> : (
-                          <div title={time} className={cn('rounded-2xl px-3.5 py-2 text-sm leading-relaxed', own ? 'bg-primary text-primary-foreground rounded-br-md' : 'bg-muted text-foreground rounded-bl-md', m._pending && 'opacity-70', String(m.content).startsWith('[file]') && 'bg-transparent p-0')}>
+                          <div title={time} className={cn('rounded-2xl px-3.5 py-2 text-sm leading-relaxed', own ? 'bg-primary text-primary-foreground rounded-br-md' : 'bg-muted text-foreground rounded-bl-md', String(m.content).startsWith('[file]') && 'bg-transparent p-0')}>
                             <MessageBody msg={m} personOf={chat.personOf} renderCall={renderCall} bubble own={own} />
                           </div>
                         )}
@@ -282,7 +286,7 @@ export default function MessageList({ conv, kind, chat, variant = 'slack', canMo
                     <div className="flex-1 min-w-0">
                       {!r.compact && <div className="flex items-baseline gap-2"><span className="text-sm font-semibold">{person.name}</span><span className="text-[11px] text-muted-foreground">{time}</span>{m.pinned && <span className="text-[11px] text-amber-600 flex items-center gap-0.5"><Pin className="w-3 h-3" /> pinned</span>}</div>}
                       {editing?.id === m.id ? <EditBox msg={m} onCancel={() => setEditing(null)} onSave={(v) => { edit(m.id, v); setEditing(null); }} /> : (
-                        <div className={cn('text-sm leading-relaxed text-foreground', m._pending && 'opacity-60')}>
+                        <div className="text-sm leading-relaxed text-foreground">
                           <MessageBody msg={m} personOf={chat.personOf} renderCall={renderCall} />
                           {m.edited_at && <span className="text-[11px] text-muted-foreground"> (edited)</span>}
                         </div>

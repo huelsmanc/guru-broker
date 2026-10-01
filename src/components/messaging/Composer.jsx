@@ -151,7 +151,7 @@ export default function Composer({ onSend, people = [], allowChannel, placeholde
             placeholder={placeholder} className="flex-1 min-w-0 resize-none bg-transparent px-1 py-1.5 text-base sm:text-sm outline-none max-h-[180px] placeholder:text-muted-foreground/70" />
           <button type="button" className="p-2 rounded-full hover:bg-muted text-muted-foreground" title="Emoji" onClick={() => setEmoji((x) => !x)}><Smile className="w-4 h-4" /></button>
           {text.trim() ? (
-            <button type="button" onClick={submit} disabled={disabled} className="p-2 rounded-full bg-primary text-primary-foreground hover:bg-primary/90" title="Send (Enter)"><Send className="w-4 h-4" /></button>
+            <button type="button" onClick={submit} onPointerDown={(e) => e.preventDefault()} onMouseDown={(e) => e.preventDefault()} disabled={disabled} className="p-2 rounded-full bg-primary text-primary-foreground hover:bg-primary/90" title="Send (Enter)"><Send className="w-4 h-4" /></button>
           ) : (
             <button type="button" onClick={startRec} disabled={disabled} className="p-2 rounded-full hover:bg-muted text-muted-foreground" title="Record a voice message"><Mic className="w-4 h-4" /></button>
           )}
