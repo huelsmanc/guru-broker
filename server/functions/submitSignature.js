@@ -5,9 +5,9 @@ import { recordSignature, finalize } from '../lib/esign.js';
 
 export default async (req) => {
   try {
-    const { submissionToken, signedFields, userAgent } = await req.json().catch(() => ({}));
+    const { submissionToken, signedFields, userAgent, proof } = await req.json().catch(() => ({}));
     const entities = createClientFromRequest(req).asServiceRole.entities;
-    const { sub, doc, completed } = await recordSignature({ entities, token: submissionToken, signedFields, req, userAgent });
+    const { sub, doc, completed } = await recordSignature({ entities, token: submissionToken, signedFields, req, userAgent, proof });
 
     if (completed) {
       try {

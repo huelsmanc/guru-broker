@@ -2,6 +2,8 @@
 //   action: 'resend'  -> re-email a signer (optionally a new email address), resets the 30-day clock
 //   action: 'void'    -> cancel the request; links stop working
 //   action: 'rebuild' -> regenerate the signed PDF for a completed request
+//   action: 'nudge'   -> a friendly reminder email to whoever's turn it is (once an hour per signer)
+//   action: 'settings'-> change automatic reminders ({ remindDays: 0-14, 0 = off })
 import { createClientFromRequest } from '../lib/base44.js';
 import { emailSigner, finalize, audit, LINK_DAYS, whoseTurn } from '../lib/esign.js';
 
@@ -10,7 +12,7 @@ export default async (req) => {
     const base44 = createClientFromRequest(req);
     const me = await base44.auth.me().catch(() => null);
     if (!me) return Response.json({ error: 'Not authenticated' }, { status: 401 });
-    const { action, submissionId, signerEmail, newEmail } = await req.json();
+    const { action, submissionId, signerEmail, newEmail, remindDays } = await req.json();
     const entities = base44.asServiceRole.entities;
     const [sub] = await entities.ESignSubmission.filter({ id: submissionId }, '-created_date', 1);
     if (!sub) return Response.json({ error: 'Signing request not found' }, { status: 404 });
@@ -40,6 +42,32 @@ export default async (req) => {
       });
       await emailSigner({ sub, doc, signer });
       await audit(entities, { document_id: sub.document_id, action: 'resent', signer_email: signer.email, details: `Resent by ${me.email}` });
+      return Response.json({ status: 'success' });
+    }
+
+    if (action === 'nudge') {
+      if (['completed', 'voided'].includes(sub.status)) return Response.json({ error: `This request is ${sub.status}` }, { status: 409 });
+      const turn = whoseTurn(sub);
+      const targets = signerEmail ? turn.filter((s) => s.email.toLowerCase() === String(signerEmail).toLowerCase()) : turn;
+      if (!targets.length) return Response.json({ error: "It isn't that signer's turn yet" }, { status: 409 });
+      const now = Date.now();
+      const sent = [];
+      for (const s of targets) {
+        if (s.last_nudged_at && now - new Date(s.last_nudged_at).getTime() < 3600e3) continue;
+        await emailSigner({ sub, doc, signer: s, reminder: true });
+        s.last_nudged_at = s.last_reminded_at = new Date().toISOString();
+        sent.push(s.email);
+        await audit(entities, { document_id: sub.document_id, action: 'reminder_sent', signer_email: s.email, details: `Nudged by ${me.email}` });
+      }
+      if (!sent.length) return Response.json({ error: 'Already reminded in the last hour' }, { status: 429 });
+      await entities.ESignSubmission.update(sub.id, { signers: sub.signers });
+      return Response.json({ status: 'success', sent });
+    }
+
+    if (action === 'settings') {
+      const n = Number(remindDays);
+      if (!Number.isFinite(n) || n < 0 || n > 14) return Response.json({ error: 'Reminders: 0 to 14 days' }, { status: 400 });
+      await entities.ESignSubmission.update(sub.id, { remind_days: Math.round(n) });
       return Response.json({ status: 'success' });
     }
 

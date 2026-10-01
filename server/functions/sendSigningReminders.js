@@ -1,4 +1,4 @@
-// Daily job: reminds signers who haven't signed after 2 days, at most every 2 days,
+// Daily job: reminds signers who haven't signed, every `remind_days` (default 2; 0 = off),
 // and only when it's their turn. Rewritten during the migration; the old version
 // emailed a link format the signing page never supported.
 import { createClientFromRequest } from '../lib/base44.js';
@@ -16,9 +16,11 @@ export default async (req) => {
     let sent = 0;
     for (const sub of open) {
       if (isExpired(sub)) continue;
+      const every = sub.remind_days == null ? 2 : Number(sub.remind_days);
+      if (!(every > 0)) continue;
       const due = whoseTurn(sub).filter((s) => {
         const since = new Date(s.last_reminded_at || s.notified_at || sub.submitted_at || sub.created_date).getTime();
-        return Date.now() - since >= 2 * DAY;
+        return Date.now() - since >= every * DAY - 3600e3; // an hour of slack so a daily job doesn't skip a day
       });
       if (!due.length) continue;
       const [doc] = await entities.ESignDocument.filter({ id: sub.document_id }, '-created_date', 1);

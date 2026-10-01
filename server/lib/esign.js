@@ -12,8 +12,9 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { adminClient, appUrl } from './base44.js';
 import { SendEmail } from './integrations.js';
-import { fieldToPdfBox, fieldSignerIndex, isPrefilled, TEXT_PT } from '../../shared/esignGeometry.js';
-import { readFileBytes } from './files.js';
+import { fieldToPdfBox, fieldSignerIndex, isPrefilled, TEXT_PT, fieldVisible, isTickType } from '../../shared/esignGeometry.js';
+import { readFileBytes, pathFromUrl, parsePath } from './files.js';
+import qrcodegen from './vendor/qrcodegen.js';
 
 export const LINK_DAYS = 30;
 const MAX_IMAGE_BYTES = 400_000; // per signature image
@@ -114,6 +115,26 @@ export async function newSignerCode() {
   return { token, token_hash: await hashToken(token), token_enc: await sealToken(token) };
 }
 
+// ---------------------------------------------------------------------------
+// One-time email codes (when the sender asks signers to confirm who they are)
+
+async function proofKey() {
+  const secret = process.env.SIGNING_TOKEN_SECRET || process.env.HOOK_SECRET;
+  if (!secret) throw new Error('SIGNING_TOKEN_SECRET is not set');
+  return crypto.subtle.importKey('raw', new TextEncoder().encode(`esign-proof:${secret}`), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+}
+/** What the signer's browser keeps after entering the right code. */
+export async function makeProof(signer) {
+  const mac = await crypto.subtle.sign('HMAC', await proofKey(), new TextEncoder().encode(`${signerKey(signer)}:${signer.verified_at}`));
+  return Buffer.from(mac).toString('base64url');
+}
+/** True when no code is needed, or the browser's proof is right. */
+export async function codeOk(sub, signer, proof) {
+  if (sub.verify !== 'email') return true;
+  if (!signer.verified_at || !proof || typeof proof !== 'string') return false;
+  return proof === (await makeProof(signer));
+}
+
 export async function matchSigner(sub, token) {
   const h = await hashToken(token);
   return sub.signers.findIndex((s) => s.token_hash === h || (s.token && s.token === token));
@@ -163,7 +184,7 @@ export async function emailSigner({ sub, doc, signer, reminder = false }) {
  * Creates a signing request for a document and emails the signers.
  * signers: [{ name, email }] in signing order.
  */
-export async function startSigning({ entities, doc, signers, sequenceType, transactionId, sender, message, req }) {
+export async function startSigning({ entities, doc, signers, sequenceType, transactionId, sender, message, req, options = {} }) {
   const valid = (signers || []).filter((s) => s && typeof s.email === 'string' && /\S+@\S+\.\S+/.test(s.email));
   const clean = [];
   for (const [i, s] of valid.entries()) {
@@ -205,6 +226,11 @@ export async function startSigning({ entities, doc, signers, sequenceType, trans
     expires_at: new Date(now.getTime() + LINK_DAYS * 864e5).toISOString(),
     access_key: randomKey(),
     message: message ? String(message).slice(0, 2000) : null,
+    // Options: a one-time code by email before opening, and how often to remind.
+    verify: options.verify === 'email' ? 'email' : null,
+    remind_days: Number.isFinite(Number(options.remindDays)) ? Math.max(0, Math.min(14, Number(options.remindDays))) : 2,
+    // Where files signers attach are kept (the deal, or the sender's own folder).
+    attach_scope: (transactionId || doc.transaction_id) ? { kind: 'tx', id: transactionId || doc.transaction_id } : (sender?.id ? { kind: 'user', id: sender.id } : null),
   });
 
   // Fields refer to signers by their position in doc.signers, so never reorder that list.
@@ -242,7 +268,7 @@ export async function startSigning({ entities, doc, signers, sequenceType, trans
  * Validates and records one signer's values. Returns { sub, completed }.
  * Throws with .status on anything invalid.
  */
-export async function recordSignature({ entities, token, signedFields, req, userAgent }) {
+export async function recordSignature({ entities, token, signedFields, req, userAgent, proof }) {
   const fail = (msg, status = 400) => { throw Object.assign(new Error(msg), { status }); };
   const sub = await findByToken(entities, token);
   if (!sub) fail('This signing link is not valid. Ask the sender for a new one.', 404);
@@ -253,6 +279,7 @@ export async function recordSignature({ entities, token, signedFields, req, user
   const idx = await matchSigner(sub, token);
   const signer = sub.signers[idx];
   if (signer.signed) fail('You have already signed this document.', 409);
+  if (!(await codeOk(sub, signer, proof))) fail('Please enter the code we emailed you first.', 401);
   if (!whoseTurn(sub).some((s) => signerKey(s) === signerKey(signer))) fail("It's not your turn to sign yet.", 409);
 
   const [doc] = await entities.ESignDocument.filter({ id: sub.document_id }, '-created_date', 1);
@@ -262,16 +289,35 @@ export async function recordSignature({ entities, token, signedFields, req, user
   const docSignerIdx = signerIndexInDoc(doc, sub, signer);
   const mine = (doc.fields || []).filter((f) => fieldSignerIndex(f) === docSignerIdx && !isPrefilled(f));
   const byId = new Map((Array.isArray(signedFields) ? signedFields : []).map((f) => [String(f.field_id), f.value]));
+  // Values as the signer sees them (for "only show when..." fields).
+  const seen = {};
+  for (const f of doc.fields || []) seen[f.id] = isPrefilled(f) ? f.value : byId.get(String(f.id));
+  const attachFolder = sub.attach_scope || null;
 
   const values = [];
   const check = (field, value) => {
+    if (!fieldVisible(field, seen)) return; // hidden by its condition: ignored
+    if (isTickType(field.type) && value !== 'X') value = '';
     if (value == null || value === '') {
-      if (field.required !== false) fail('Please complete every required field before submitting.');
+      if (field.type === 'radio') {
+        // A choose-one group is complete when any option in it is picked.
+        const group = mine.filter((g) => g.type === 'radio' && (g.group || 'group') === (field.group || 'group') && fieldVisible(g, seen));
+        if (group.some((g) => g.required !== false) && !group.some((g) => byId.get(String(g.id)) === 'X')) fail('Please choose an option in every group.');
+        return;
+      }
+      if (field.required === true || (field.required !== false && field.type !== 'checkbox')) fail('Please complete every required field before submitting.');
       return;
     }
     if (field.type === 'signature' || field.type === 'initial') {
       if (typeof value !== 'string' || !/^data:image\/(png|jpeg);base64,/.test(value)) fail('A signature could not be read. Please sign again.');
       if (value.length * 0.75 > MAX_IMAGE_BYTES) fail('A signature image is too large. Please sign again.');
+    } else if (field.type === 'dropdown') {
+      if (!(field.options || []).includes(value)) fail('Please choose one of the listed options.');
+    } else if (field.type === 'attachment') {
+      // Only files uploaded through this signing link, into this request's folder.
+      const info = parsePath(pathFromUrl(value));
+      const ok = info && attachFolder && info.kind === attachFolder.kind && info.id === attachFolder.id && info.brokerageId === (sub.brokerage_id || doc.brokerage_id) && /\/esign-/.test(pathFromUrl(value));
+      if (!ok) fail('An attached file could not be found. Please attach it again.');
     } else if (typeof value !== 'string' || value.length > MAX_TEXT) {
       fail('A text field is too long.');
     }
@@ -306,7 +352,18 @@ export async function recordSignature({ entities, token, signedFields, req, user
     completed_at: completed ? signedAt : null,
   });
 
-  await audit(entities, { document_id: doc.id, action: 'signed', signer_email: signer.email, details: `Signed ${values.length} field(s)`, ip_address: ip, user_agent: ua });
+  await audit(entities, { document_id: doc.id, action: 'signed', signer_email: signer.email, details: `Signed ${values.length} field(s)${signer.in_person_by ? ` in person (hosted by ${signer.in_person_by})` : ''}`, ip_address: ip, user_agent: ua });
+  if (sub.created_by_email && !completed) {
+    try {
+      const { notifyPeople } = await import('./team.js');
+      const left = signers.filter((s) => !s.signed).length;
+      await notifyPeople(entities, {
+        brokerageId: sub.brokerage_id || doc.brokerage_id, people: [{ email: sub.created_by_email, full_name: sub.created_by_name }],
+        title: `${signer.name || signer.email} signed "${doc.title}"`, message: `${left} signer${left === 1 ? '' : 's'} to go.`,
+        link: '/ESignDocuments', referenceId: sub.id, referenceType: 'ESign', email: false, pushKind: 'esign',
+      });
+    } catch (err) { console.error('signed notification failed:', err.message); }
+  }
 
   // Keep the document's own signer list in step for the dashboards.
   const signedByEmail = new Map(signers.map((s) => [s.email.toLowerCase(), s]));
@@ -372,6 +429,12 @@ async function embedImage(pdf, dataUrl) {
   return meta === 'image/jpeg' ? pdf.embedJpg(bytes) : pdf.embedPng(bytes);
 }
 
+/** File name from an attachment link (/api/file?p=.../<stamp>-<rand>-name.pdf). */
+export function attachmentName(url) {
+  const p = pathFromUrl(url) || String(url || '');
+  return (p.split('/').pop() || 'file').replace(/^esign-[a-z0-9]+-[a-z0-9]+-/i, '').replace(/^[a-z0-9]+-[a-z0-9]+-/i, '');
+}
+
 function wrapText(font, text, size, maxWidth) {
   const out = [];
   for (const para of String(text).split(/\r?\n/)) {
@@ -403,7 +466,7 @@ function fitText(font, text, maxWidth, maxHeight) {
  * Builds the signed PDF. Returns { bytes, originalHash, finalHash }.
  * Exported separately so it can be tested without a database.
  */
-export async function buildSignedPdf({ originalBytes, doc, sub, signatureData, events = [] }) {
+export async function buildSignedPdf({ originalBytes, doc, sub, signatureData, events = [], verifyUrl }) {
   const originalHash = await sha256Hex(originalBytes);
   let pdf;
   if (isPdfBytes(originalBytes)) {
@@ -417,6 +480,7 @@ export async function buildSignedPdf({ originalBytes, doc, sub, signatureData, e
   }
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const attachments = [];
   const docPages = pdf.getPages();
   const sizes = docPages.map((p) => {
     const box = p.getCropBox?.() || { width: p.getWidth(), height: p.getHeight(), x: 0, y: 0 };
@@ -449,6 +513,25 @@ export async function buildSignedPdf({ originalBytes, doc, sub, signatureData, e
     const origin = sizes[box.pageIndex];
     const x = origin.x + box.x;
     const y = origin.y + box.y;
+    if (isTickType(field.type)) {
+      // A tick mark, sized to the box.
+      if (value !== 'X') continue;
+      const s = Math.max(5, Math.min(box.height, box.width) * 0.8);
+      const cx = x + (box.width - s) / 2;
+      const cy = y + (box.height - s) / 2;
+      const ink = { thickness: Math.max(1, s / 7), color: rgb(0.07, 0.09, 0.15) };
+      page.drawLine({ start: { x: cx + s * 0.08, y: cy + s * 0.5 }, end: { x: cx + s * 0.38, y: cy + s * 0.15 }, ...ink });
+      page.drawLine({ start: { x: cx + s * 0.38, y: cy + s * 0.15 }, end: { x: cx + s * 0.95, y: cy + s * 0.9 }, ...ink });
+      continue;
+    }
+    if (field.type === 'attachment') {
+      const name = attachmentName(value);
+      attachments.push({ name, field });
+      const text = ASCII(`Attached: ${name}`);
+      const size = fitText(font, text, box.width - 4, box.height);
+      page.drawText(text, { x: x + 2, y: y + (box.height - size) / 2 + size * 0.2, size, font, color: rgb(0.1, 0.2, 0.55) });
+      continue;
+    }
     if ((field.type === 'signature' || field.type === 'initial') && String(value).startsWith('data:image')) {
       const img = await embedImage(pdf, value);
       if (!img) continue;
@@ -485,7 +568,18 @@ export async function buildSignedPdf({ originalBytes, doc, sub, signatureData, e
   line(`Sent by: ${sub.created_by_name || ''} <${sub.created_by_email || ''}>`);
   line(`Sent: ${fmt(sub.submitted_at)}    Completed: ${fmt(sub.completed_at || new Date().toISOString())}`);
   line(`Signing order: ${sub.sequence_type === 'sequential' ? 'In order' : 'Any order'}`);
-  line(`Original document SHA-256: ${originalHash}`, { size: 8, gap: 24 });
+  line(`Original document SHA-256: ${originalHash}`, { size: 8, gap: verifyUrl ? 14 : 24 });
+  if (verifyUrl) {
+    // Scan to check this copy against the record kept by the app.
+    const qr = qrcodegen.QrCode.encodeText(verifyUrl, qrcodegen.QrCode.Ecc.MEDIUM);
+    const size = 78; const cell = size / (qr.size + 8); const qx = 612 - 50 - size; const qy = 740 - size + 10;
+    cert.drawRectangle({ x: qx, y: qy, width: size, height: size, color: rgb(1, 1, 1) });
+    for (let r = 0; r < qr.size; r++) for (let c = 0; c < qr.size; c++) {
+      if (qr.getModule(c, r)) cert.drawRectangle({ x: qx + (c + 4) * cell, y: qy + size - (r + 5) * cell, width: cell + 0.05, height: cell + 0.05, color: rgb(0, 0, 0) });
+    }
+    line(`Verify this document: ${verifyUrl}`, { size: 8, gap: 12 });
+    line('This file is digitally sealed. Any change after signing shows as invalid in Adobe Reader.', { size: 8, gap: 22 });
+  }
 
   line('Signers', { size: 13, bold: true, gap: 20 });
   for (const s of sub.signers || []) {
@@ -493,6 +587,8 @@ export async function buildSignedPdf({ originalBytes, doc, sub, signatureData, e
     line(`${s.name || ''} <${s.email}>`, { bold: true });
     line(`Signed: ${fmt(s.signed_at)}    IP address: ${s.ip_address || sd?.ip_address || 'unknown'}`, { x: 62 });
     line(`Device: ${(s.user_agent || sd?.user_agent || 'unknown').slice(0, 95)}`, { x: 62, size: 8 });
+    if (s.verified_at && !s.in_person_by) line('Identity: entered a one-time code sent to this email', { x: 62, size: 8 });
+    if (s.in_person_by) line(`Signed in person, hosted by ${s.in_person_by}`, { x: 62, size: 8 });
     const def = defaultSigs.find((d) => d.signer.signer_email === s.email);
     if (def) {
       const img = await embedImage(pdf, def.value);
@@ -503,6 +599,12 @@ export async function buildSignedPdf({ originalBytes, doc, sub, signatureData, e
         cy -= 50;
       }
     }
+    cy -= 6;
+  }
+
+  if (attachments.length) {
+    line('Files attached by signers', { size: 13, bold: true, gap: 20 });
+    for (const a of attachments) line(`- ${a.name}`, { size: 9, gap: 13 });
     cy -= 6;
   }
 
@@ -548,7 +650,15 @@ export async function finalize({ entities, sub, doc }) {
   const signatureData = await entities.SignatureData.filter({ submission_id: sub.id }, 'created_date', 100);
   const events = await entities.ESignAuditLog.filter({ document_id: doc.id }, 'created_date', 200).catch(() => []);
   const originalBytes = await fetchBytes(doc.original_document_url || doc.document_url);
-  const { bytes, originalHash, finalHash, docPageCount } = await buildSignedPdf({ originalBytes, doc, sub, signatureData, events });
+  const verifyUrl = `${appUrl()}/verify?id=${encodeURIComponent(sub.id)}`;
+  const built = await buildSignedPdf({ originalBytes, doc, sub, signatureData, events, verifyUrl });
+  const { originalHash, docPageCount } = built;
+  // Seal it: any later change shows as invalid in Adobe and fails the check on /verify.
+  let bytes = built.bytes;
+  let sealed = false;
+  try { const { sealPdf } = await import('./seal.js'); bytes = await sealPdf(bytes, { reason: `Signed electronically: ${doc.title || 'Document'}` }); sealed = true; }
+  catch (err) { console.error('Seal failed (PDF delivered unsealed):', err.message); }
+  const finalHash = await sha256Hex(bytes);
 
   const path = `signed/${sub.id}.pdf`;
   const { error } = await adminClient().storage.from('private-files')
@@ -564,6 +674,7 @@ export async function finalize({ entities, sub, doc }) {
     final_sha256: finalHash,
     doc_pages: docPageCount,
     access_key: accessKey,
+    sealed,
   });
   await entities.ESignDocument.update(doc.id, {
     status: 'completed',
@@ -604,6 +715,62 @@ export async function finalize({ entities, sub, doc }) {
       console.error('Could not attach to checklist:', err.message);
     }
   }
+
+  // Sent from a deal but not from a checklist item: put it on the open item with the same name.
+  let filedTo = null;
+  if (!doc.checklist_item_id && sub.transaction_id) {
+    try {
+      const lists = await entities.Checklist.filter({ subject_type: 'transaction', subject_id: sub.transaction_id }, '-created_date', 20);
+      const norm = (t) => String(t || '').toLowerCase().replace(/\(.*?\)/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+      const title = norm(doc.title);
+      const hits = [];
+      for (const cl of lists) for (const it of cl.items || []) {
+        if (!it.requires_document || it.document_url || ['approved', 'exempt'].includes(it.status)) continue;
+        const t = norm(it.title);
+        if (t && title && (t === title || (t.length > 5 && title.includes(t)) || (title.length > 5 && t.includes(title)))) hits.push({ cl, it });
+      }
+      if (hits.length === 1) {
+        const { cl, it } = hits[0];
+        const at = new Date().toISOString();
+        await entities.Checklist.update(cl.id, { items: cl.items.map((i) => (i.id !== it.id ? i : { ...i, document_url: link, document_name: `${doc.title} (signed)`, uploaded_by: 'e-sign', uploaded_at: at, status: 'uploaded', history: [...(i.history || []), { at, by: 'e-sign', what: 'signed copy attached' }] })) });
+        filedTo = it.title;
+      }
+    } catch (err) { console.error('Checklist match failed:', err.message); }
+  }
+
+  // Files signers attached go on the deal too.
+  const attached = [];
+  for (const sd of signatureData) for (const f of sd.fields || []) {
+    const field = (doc.fields || []).find((x) => x.id === f.field_id);
+    if (field?.type === 'attachment' && f.value) attached.push({ name: `${attachmentName(f.value)} (from ${sd.signer_name || sd.signer_email})`, url: f.value });
+  }
+  if (sub.transaction_id && attached.length) {
+    try {
+      const tx = await entities.Transaction.get(sub.transaction_id);
+      const docs = Array.isArray(tx.documents) ? tx.documents : [];
+      for (const a of attached) if (!docs.some((d) => d.url === a.url)) docs.push({ ...a, uploaded_at: new Date().toISOString(), uploaded_by: 'E-Sign' });
+      await entities.Transaction.update(tx.id, { documents: docs });
+    } catch (err) { console.error('Could not attach signer files:', err.message); }
+  }
+
+  // Tell the sender (and the deal's TC) in the app.
+  try {
+    const { notifyPeople } = await import('./team.js');
+    const people = [];
+    if (sub.created_by_email) people.push({ email: sub.created_by_email, full_name: sub.created_by_name });
+    if (sub.transaction_id) {
+      const tx = await entities.Transaction.get(sub.transaction_id).catch(() => null);
+      if (tx?.tc_email) people.push({ email: tx.tc_email });
+      if (tx?.agent_email) people.push({ email: tx.agent_email });
+    }
+    await notifyPeople(entities, {
+      brokerageId: sub.brokerage_id || doc.brokerage_id, people,
+      title: `Fully signed: "${doc.title}"`,
+      message: `${filedTo ? `Filed to the "${filedTo}" checklist item. ` : ''}${attached.length ? `${attached.length} attached file${attached.length === 1 ? '' : 's'} added to the deal.` : 'The signed copy is on the deal.'}`,
+      link: sub.transaction_id ? `/Transactions/${sub.transaction_id}?tab=documents` : '/ESignDocuments',
+      referenceId: sub.id, referenceType: 'ESign', email: false, pushKind: 'esign',
+    });
+  } catch (err) { console.error('completion notification failed:', err.message); }
 
   // Email everyone the signed PDF.
   const filename = `${ASCII(doc.title || 'Document').replace(/[^A-Za-z0-9 ._-]/g, '').trim() || 'Document'} - signed.pdf`;

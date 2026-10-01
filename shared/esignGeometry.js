@@ -81,3 +81,21 @@ export function isPrefilled(field) {
 /** Typed text is drawn at 10pt on a 612pt-wide page; scale that to any width. */
 export const TEXT_PT = 10;
 export const textPx = (pageWidth) => (pageWidth * TEXT_PT) / 612;
+
+/** Checkbox-style fields store "X" when ticked. */
+export const isTickType = (type) => type === 'checkbox' || type === 'radio';
+
+/**
+ * Whether a field is shown, given the values entered so far ({ fieldId: value }).
+ * A field with show_if only appears (and is only required) when that box is ticked,
+ * or, for a choose-one group, when that option is picked.
+ */
+export function fieldVisible(field, values = {}) {
+  const cond = field?.show_if;
+  if (!cond) return true;
+  const id = typeof cond === 'string' ? cond : cond.field_id;
+  if (!id) return true;
+  const v = values[id];
+  if (typeof v !== 'string' || v === '') return false;
+  return cond.equals ? v === cond.equals : true;
+}

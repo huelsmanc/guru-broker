@@ -9,7 +9,7 @@ export default async (req) => {
     const me = await base44.auth.me().catch(() => null);
     if (!me) return Response.json({ error: 'Not authenticated' }, { status: 401 });
 
-    const { documentId, signers, sequenceType, transactionId, message } = await req.json();
+    const { documentId, signers, sequenceType, transactionId, message, options } = await req.json();
     if (!documentId) return Response.json({ error: 'documentId required' }, { status: 400 });
 
     const entities = base44.asServiceRole.entities;
@@ -19,7 +19,7 @@ export default async (req) => {
       return Response.json({ error: 'Not allowed' }, { status: 403 });
     }
 
-    const sub = await startSigning({ entities, doc, signers, sequenceType, transactionId, sender: me, message, req });
+    const sub = await startSigning({ entities, doc, signers, sequenceType, transactionId, sender: me, message, req, options: options || {} });
     return Response.json({ status: 'success', submission_id: sub.id });
   } catch (error) {
     console.error('createESignSubmission:', error);

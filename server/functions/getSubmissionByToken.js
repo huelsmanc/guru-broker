@@ -1,12 +1,12 @@
 // Loads what a signer needs for /sign?token=... Only this signer's details are returned;
 // other signers' links and personal data are never sent to the browser.
 import { createClientFromRequest } from '../lib/base44.js';
-import { findByToken, isExpired, whoseTurn, signerIndexInDoc, audit, clientIp, matchSigner, signerKey } from '../lib/esign.js';
+import { findByToken, isExpired, whoseTurn, signerIndexInDoc, audit, clientIp, matchSigner, signerKey, codeOk } from '../lib/esign.js';
 import { signedUrlFor } from '../lib/files.js';
 
 export default async (req) => {
   try {
-    const { token } = await req.json().catch(() => ({}));
+    const { token, proof } = await req.json().catch(() => ({}));
     const entities = createClientFromRequest(req).asServiceRole.entities;
     const sub = await findByToken(entities, token);
     if (!sub) return Response.json({ error: 'This signing link is not valid. Ask the sender for a new one.' }, { status: 404 });
@@ -25,6 +25,11 @@ export default async (req) => {
       return Response.json({ waiting: true, signer: { name: signer.name, email: signer.email }, document: { title: doc.title }, senderName: sub.created_by_name });
     }
 
+    // Asked to confirm who they are: nothing but the title until the emailed code is entered.
+    if (!signer.signed && !(await codeOk(sub, signer, proof))) {
+      return Response.json({ needsCode: true, signer: { name: signer.name, email: signer.email.replace(/^(.)(.*)(@.*)$/, (m, a, b, c) => `${a}${'*'.repeat(Math.min(b.length, 6))}${c}`) }, document: { title: doc.title }, senderName: sub.created_by_name });
+    }
+
     if (!signer.viewed_at && !signer.signed) {
       signer.viewed_at = new Date().toISOString();
       await entities.ESignSubmission.update(sub.id, { signers: sub.signers });
@@ -38,7 +43,13 @@ export default async (req) => {
       alreadySigned: !!signer.signed,
       waiting: false,
       senderName: sub.created_by_name,
+      senderEmail: sub.created_by_email || null,
       message: sub.message || null,
+      submissionId: sub.id, // for the "viewing now" signal the sender sees
+      // Everyone on the request, so the signer sees where they are in the order.
+      order: sub.sequence_type === 'sequential' ? 'in_order' : 'any_order',
+      people: (sub.signers || []).map((s) => ({ name: s.name, signed: !!s.signed, me: signerKey(s) === signerKey(signer) })),
+      hasSummary: !!doc.ai_summary,
       document: {
         id: doc.id,
         title: doc.title,
