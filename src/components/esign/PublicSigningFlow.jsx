@@ -40,7 +40,7 @@ export default function PublicSigningFlow({ open, onClose, onSubmit, document, s
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-lg max-h-[85dvh] overflow-y-auto">
         {/* Consent Step */}
         {step === 'consent' && (
           <>

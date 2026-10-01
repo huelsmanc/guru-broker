@@ -338,7 +338,7 @@ function ContactDetail({ contact: c, user, brokerageId, onClose, onEdit, onDelet
         </DialogContent>
       </Dialog>
       <Dialog open={signing} onOpenChange={(o) => !o && setSigning(false)}>
-        <DialogContent className="w-[95vw] max-w-[95vw] h-[95vh] max-h-[95vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] max-w-[95vw] h-[95dvh] max-h-[95dvh] overflow-y-auto">
           <DialogHeader><DialogTitle>Send to {c.name} for signature</DialogTitle></DialogHeader>
           <UnifiedESignCreator initialSigners={[{ id: `c-${c.id}`, name: c.name, email: lc(c.email) }]}
             onCancel={() => setSigning(false)} onComplete={() => { setSigning(false); setMsg('Sent for signature.'); }} />

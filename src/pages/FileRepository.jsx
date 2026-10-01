@@ -206,7 +206,7 @@ export default function FileRepository() {
 
       {fieldsFor && <FormFieldsDialog file={fieldsFor} template={templateFor(fieldsFor)} brokerageId={brokerageId} user={user} onClose={() => setFieldsFor(null)} />}
       <Dialog open={!!signFile} onOpenChange={(o) => !o && setSignFile(null)}>
-        <DialogContent className="w-[95vw] max-w-[95vw] h-[95vh] max-h-[95vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] max-w-[95vw] h-[95dvh] max-h-[95dvh] overflow-y-auto">
           <DialogHeader><DialogTitle>Fill &amp; eSign: {signFile?.file_name}</DialogTitle></DialogHeader>
           {signFile && <UnifiedESignCreator initialTitle={signFile.file_name.replace(/\.[^.]+$/, '')} initialDocumentUrl={signFile.file_url}
             onCancel={() => setSignFile(null)} onComplete={() => setSignFile(null)} />}

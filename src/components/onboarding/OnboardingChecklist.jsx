@@ -43,7 +43,7 @@ export default function OnboardingChecklist({ open, onClose, onboarding, brokera
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-2xl max-h-[80dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Onboarding Checklist - {onboarding.agent_name}</DialogTitle>
           <p className="text-xs text-muted-foreground mt-2">{completedCount} of {onboarding.items.length} completed</p>

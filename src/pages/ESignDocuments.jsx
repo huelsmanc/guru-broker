@@ -271,7 +271,7 @@ export default function ESignDocuments() {
 
       {/* Create document dialog */}
       <Dialog open={showEditor} onOpenChange={setShowEditor}>
-        <DialogContent className="w-[95vw] max-w-[95vw] h-[95vh] max-h-[95vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] max-w-[95vw] h-[95dvh] max-h-[95dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Create & Send E-Sign Document</DialogTitle>
           </DialogHeader>
@@ -284,7 +284,7 @@ export default function ESignDocuments() {
       {/* Field Editor dialog */}
       {selectedDoc && (
         <Dialog open={showFieldEditor} onOpenChange={setShowFieldEditor}>
-          <DialogContent className="w-[95vw] max-w-[95vw] h-[95vh] max-h-[95vh] overflow-y-auto">
+          <DialogContent className="w-[95vw] max-w-[95vw] h-[95dvh] max-h-[95dvh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Place Signature Fields</DialogTitle>
             </DialogHeader>
@@ -303,7 +303,7 @@ export default function ESignDocuments() {
       {/* Send for signature dialog */}
       {selectedDoc && (
         <Dialog open={showSubmit} onOpenChange={handleCloseSubmit}>
-          <DialogContent className="w-[95vw] max-w-[95vw] h-[95vh] max-h-[95vh] overflow-y-auto">
+          <DialogContent className="w-[95vw] max-w-[95vw] h-[95dvh] max-h-[95dvh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Send for Signature</DialogTitle>
             </DialogHeader>
@@ -319,7 +319,7 @@ export default function ESignDocuments() {
             <DialogHeader>
               <DialogTitle>Manage Signers: {selectedDoc.title}</DialogTitle>
             </DialogHeader>
-            <div className="max-h-[70vh] overflow-y-auto">
+            <div className="max-h-[70dvh] overflow-y-auto">
               <SignerManagementDashboard
                 document={selectedDoc}
                 submissions={[]}

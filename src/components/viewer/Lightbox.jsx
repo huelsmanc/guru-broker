@@ -22,8 +22,8 @@ export default function Lightbox({ open, onOpenChange, fileUrl, fileName, fileTy
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden p-0 bg-black/95 border-black">
-        <div className="relative w-full h-[80vh] flex items-center justify-center">
+      <DialogContent className="max-w-4xl max-h-[90dvh] overflow-hidden p-0 bg-black/95 border-black">
+        <div className="relative w-full h-[80dvh] flex items-center justify-center">
           {/* Close button */}
           <button
             onClick={() => onOpenChange(false)}

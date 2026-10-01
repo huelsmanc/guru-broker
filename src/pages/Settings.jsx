@@ -93,7 +93,7 @@ export default function Settings() {
 
   if (!isAdmin) {
     return (
-      <div className="flex items-center justify-center h-[80vh]">
+      <div className="flex items-center justify-center h-[80dvh]">
         <p className="text-muted-foreground">Only admins can access settings.</p>
       </div>
     );

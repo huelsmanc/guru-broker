@@ -254,7 +254,7 @@ function ThankYouPreview({ tx, data, onClose, onSent }) {
   const [busy, setBusy] = useState(false);
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[92dvh] overflow-y-auto">
         <DialogHeader><DialogTitle>CEO thank-you</DialogTitle></DialogHeader>
         <p className="text-sm">To: {data.recipients.length ? data.recipients.map((r) => `${r.name} <${r.email}>`).join(', ') : <span className="text-red-600">No client contacts with an email. Add them under Users & contacts and tick "Client".</span>}</p>
         <p className="text-sm">Subject: {data.subject}</p>

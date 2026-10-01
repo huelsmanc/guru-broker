@@ -349,7 +349,7 @@ FORMATTING:
 
       {/* E-Sign Modal */}
       <Dialog open={showESignModal} onOpenChange={setShowESignModal}>
-        <DialogContent className="w-[95vw] max-w-[95vw] h-[95vh] max-h-[95vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] max-w-[95vw] h-[95dvh] max-h-[95dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Send for signature</DialogTitle>
           </DialogHeader>

@@ -123,7 +123,7 @@ export default function MyReports() {
 
   if (isLoading) {
     return (
-      <div className="p-6 lg:p-10 max-w-6xl mx-auto flex items-center justify-center h-[80vh]">
+      <div className="p-6 lg:p-10 max-w-6xl mx-auto flex items-center justify-center h-[80dvh]">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     );
@@ -255,7 +255,7 @@ export default function MyReports() {
       {/* View Detail Dialog */}
       {selectedReport && (
         <Dialog open={!!selectedReport} onOpenChange={() => setSelectedReport(null)}>
-          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogContent className="max-w-2xl max-h-[80dvh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{selectedReport.address}</DialogTitle>
             </DialogHeader>

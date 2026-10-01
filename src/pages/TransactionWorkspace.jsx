@@ -38,7 +38,7 @@ export default function TransactionWorkspace() {
   // Live: someone else (TC, broker) changing the deal shows up right away.
   useLiveTable('Transaction', (e) => e.id === id && refresh());
 
-  if (isLoading) return <div className="h-[70vh] flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
+  if (isLoading) return <div className="h-[70dvh] flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
   if (error || !tx) return <div className="p-10 text-center text-muted-foreground">This transaction doesn't exist or you don't have access to it.</div>;
 
   const email = user?.email?.toLowerCase();

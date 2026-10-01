@@ -394,7 +394,7 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChan
             <button type="button" className="text-blue-700 underline text-xs" onClick={stopPlacing}>{placing === 'radio' ? 'Done' : 'Cancel'}</button>
           </div>
         )}
-        <div className="border border-border/50 rounded-lg overflow-auto bg-slate-100 max-h-[60vh] lg:max-h-[72vh]">
+        <div className="border border-border/50 rounded-lg overflow-auto bg-slate-100 max-h-[60dvh] lg:max-h-[72dvh]">
           <PDFPageRenderer url={doc.document_url} containerRef={containerRef} onLayout={setLayout}>
             <div
               className={`absolute inset-0 z-10 ${placing ? 'cursor-crosshair' : ''}`}

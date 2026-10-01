@@ -140,7 +140,7 @@ export default function BrokerageUsers() {
 
   if (!isAdmin) {
     return (
-      <div className="flex items-center justify-center h-[80vh]">
+      <div className="flex items-center justify-center h-[80dvh]">
         <div className="text-center">
           <ShieldCheck className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
           <p className="text-muted-foreground">Admin access required.</p>

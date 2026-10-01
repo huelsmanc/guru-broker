@@ -505,7 +505,7 @@ function ExplainModal({ token, proof, onClose }) {
   }, [token, proof]);
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 sm:p-4" onClick={onClose}>
-      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-lg max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-lg max-h-[85dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="p-5 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white">
           <h3 className="font-bold text-gray-900 flex items-center gap-2"><Sparkles className="w-5 h-5 text-purple-600" /> In plain English</h3>
           <button onClick={onClose} aria-label="Close"><X className="w-5 h-5 text-gray-400" /></button>

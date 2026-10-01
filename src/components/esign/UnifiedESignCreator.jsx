@@ -564,7 +564,7 @@ export default function UnifiedESignCreator({
       )}
 
       {/* Navigation Buttons */}
-      <div className="sticky bottom-0 -mx-4 sm:mx-0 px-4 sm:px-0 pb-1 bg-background flex flex-wrap items-center justify-between gap-2 sm:gap-3 pt-3 sm:pt-4 border-t border-border/40 z-20">
+      <div className="sticky bottom-0 -mx-1 px-1 pb-1 bg-background flex flex-wrap items-center justify-between gap-2 sm:gap-3 pt-3 sm:pt-4 border-t border-border/40 z-20">
         <Button
           variant="outline"
           onClick={() => {

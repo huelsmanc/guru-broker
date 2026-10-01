@@ -26,7 +26,7 @@ export default function CatchUp({ kind, convKey, since, className }) {
             : data?.error ? <p className="text-red-600">{data.error}</p>
               : !s ? <p className="text-muted-foreground">You're all caught up. Nothing much new since you last read this.</p>
                 : (
-                  <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+                  <div className="space-y-3 max-h-[60dvh] overflow-y-auto">
                     <p>{s.tldr}</p>
                     {s.for_me?.length > 0 && <div><p className="text-xs font-semibold uppercase text-amber-700 mb-1">Needs you</p><ul className="list-disc pl-5 space-y-0.5">{s.for_me.map((x) => <li key={x}>{x}</li>)}</ul></div>}
                     {s.decisions?.length > 0 && <div><p className="text-xs font-semibold uppercase text-muted-foreground mb-1">Decided</p><ul className="list-disc pl-5 space-y-0.5">{s.decisions.map((x) => <li key={x}>{x}</li>)}</ul></div>}

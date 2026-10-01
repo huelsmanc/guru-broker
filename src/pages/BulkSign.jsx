@@ -466,7 +466,7 @@ export default function BulkSign() {
           <DialogHeader>
             <DialogTitle>Electronic Signature Consent & Disclosure</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-4 text-sm max-h-[60vh] overflow-y-auto">
+          <div className="space-y-4 py-4 text-sm max-h-[60dvh] overflow-y-auto">
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
               <p className="font-semibold text-blue-900 mb-2">Important Legal Notice</p>
               <p className="text-blue-800 text-xs">

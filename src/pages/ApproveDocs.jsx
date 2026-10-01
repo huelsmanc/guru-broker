@@ -51,7 +51,7 @@ export default function ApproveDocs() {
       <p className="text-sm text-muted-foreground mb-6">{queue.length} waiting, oldest first. Approving or sending back notifies the agent.</p>
       {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : !queue.length ? <Empty>All caught up.</Empty> : (
         <div className="grid lg:grid-cols-[340px_1fr] gap-6">
-          <ul className="rounded-xl border bg-card divide-y max-h-[75vh] overflow-auto">
+          <ul className="rounded-xl border bg-card divide-y max-h-[75dvh] overflow-auto">
             {queue.map((q) => {
               const id = `${q.cl.id}:${q.item.id}`;
               return (
@@ -77,7 +77,7 @@ export default function ApproveDocs() {
                   <a href={cur.item.document_url} target="_blank" rel="noreferrer" className="text-sm text-primary flex items-center gap-1 mb-2"><FileText className="w-4 h-4" />{cur.item.document_name || 'Document'}</a>
                   {/\.(png|jpe?g|webp|gif)(\?|$)/i.test(cur.item.document_url)
                     ? <img src={cur.item.document_url} alt="" className="w-full rounded border" />
-                    : <iframe title="document" src={cur.item.document_url} className="w-full h-[60vh] rounded border" />}
+                    : <iframe title="document" src={cur.item.document_url} className="w-full h-[60dvh] rounded border" />}
                 </>
               ) : <p className="text-sm text-muted-foreground">No document attached (task item).</p>}
               {(cur.item.comments || []).length > 0 && (

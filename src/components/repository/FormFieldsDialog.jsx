@@ -93,7 +93,7 @@ export function FieldsSetupDialog({ title, documentUrl, fileName, brokerageId, i
   const usable = isPdfUrl(documentUrl) || /\.(png|jpe?g)$/i.test(fileName || '');
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="w-[95vw] max-w-[95vw] h-[95vh] max-h-[95vh] overflow-y-auto">
+      <DialogContent className="w-[95vw] max-w-[95vw] h-[95dvh] max-h-[95dvh] overflow-y-auto">
         <DialogHeader><DialogTitle>Set up fields: {title}</DialogTitle></DialogHeader>
         {!usable ? <p className="text-sm text-muted-foreground">Only PDFs and images can have fields. Upload this form as a PDF.</p> : (
           <div className="space-y-4">

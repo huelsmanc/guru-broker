@@ -194,7 +194,7 @@ export default function Offers() {
 
       {useForm && (
         <Dialog open onOpenChange={(o) => !o && setUseForm(null)}>
-          <DialogContent className="w-[96vw] max-w-6xl max-h-[94vh] overflow-y-auto">
+          <DialogContent className="w-[96vw] max-w-6xl max-h-[94dvh] overflow-y-auto">
             <DialogHeader><DialogTitle>{useForm.state ? `${useForm.state} · ` : ''}{useForm.name}</DialogTitle></DialogHeader>
             <UnifiedESignCreator user={user} brokerageId={brokerageId} initialTitle={useForm.name} initialForm={useForm}
               facts={{ brokerage_name: brokerageName, agent_name: user.full_name, agent_email: user.email }}
@@ -352,7 +352,7 @@ function OfferEditor({ offer, user, brokerageId, onClose, onSaved }) {
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="w-[96vw] max-w-3xl max-h-[92vh] overflow-y-auto">
+      <DialogContent className="w-[96vw] max-w-3xl max-h-[92dvh] overflow-y-auto">
         <DialogHeader><DialogTitle>{offer.id ? 'Edit offer' : 'New offer'}</DialogTitle></DialogHeader>
         <div className="grid sm:grid-cols-6 gap-3">
           <div className="sm:col-span-6"><Label>Property address</Label><Input className="mt-1" value={f.property_address} onChange={set('property_address')} placeholder="12 Elm St" /></div>
@@ -469,7 +469,7 @@ function SendOffer({ offer, user, brokerageId, brokerageName, onClose, onSent })
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="w-[96vw] max-w-6xl max-h-[94vh] overflow-y-auto">
+      <DialogContent className="w-[96vw] max-w-6xl max-h-[94dvh] overflow-y-auto">
         <DialogHeader><DialogTitle>Send offer for signature</DialogTitle></DialogHeader>
         {error && <p className="text-sm text-destructive">{error}</p>}
         {!ready ? (

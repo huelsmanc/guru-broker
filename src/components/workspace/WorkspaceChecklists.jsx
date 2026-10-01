@@ -221,7 +221,7 @@ function ItemPanel({ checklistId, fileScope, item, tx, user, approver, admin, ma
         onPick={(f) => { setPicking(false); run({ action: 'attach', item_id: item.id, url: f.file_url, name: f.file_name }); }} />}
       {signing && (
         <Dialog open onOpenChange={(o) => !o && setSigning(null)}>
-          <DialogContent className="w-[96vw] max-w-6xl max-h-[94vh] overflow-y-auto">
+          <DialogContent className="w-[96vw] max-w-6xl max-h-[94dvh] overflow-y-auto">
             <DialogHeader><DialogTitle>Send "{item.title}" for signature</DialogTitle></DialogHeader>
             <UnifiedESignCreator user={user} brokerageId={tx?.brokerage_id || user?.brokerage_id} transactionId={tx?.id}
               initialTitle={`${item.title}${tx?.property_address ? ` - ${tx.property_address}` : ''}`} initialDocumentUrl={signing}
@@ -243,7 +243,7 @@ export function LibraryPicker({ brokerageId, onPick, onClose }) {
   const shown = files.filter((f) => !q || `${f.file_name} ${f.category} ${(f.tags || []).join(' ')}`.toLowerCase().includes(q.toLowerCase()));
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+      <DialogContent className="max-w-lg max-h-[80dvh] overflow-y-auto">
         <DialogHeader><DialogTitle>Use a form from the library</DialogTitle></DialogHeader>
         <Input placeholder="Search forms" value={q} onChange={(e) => setQ(e.target.value)} />
         {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : (

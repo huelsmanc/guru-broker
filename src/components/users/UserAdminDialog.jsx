@@ -83,7 +83,7 @@ export default function UserAdminDialog({ person, me, onClose }) {
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="w-[96vw] max-w-4xl max-h-[92vh] overflow-y-auto">
+      <DialogContent className="w-[96vw] max-w-4xl max-h-[92dvh] overflow-y-auto">
         <DialogHeader><DialogTitle>{person.full_name || person.email}</DialogTitle></DialogHeader>
         <div className="flex flex-wrap gap-1 border-b pb-2">
           {TABS.map(([k, l]) => <button key={k} onClick={() => setTab(k)} className={`px-3 py-1.5 rounded-md text-sm ${tab === k ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}>{l}</button>)}

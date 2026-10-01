@@ -158,7 +158,7 @@ export default function TransactionESign({ tx, isAdmin, user, onUpdate }) {
 
       {showCreator && (
         <Dialog open={showCreator} onOpenChange={setShowCreator}>
-          <DialogContent className="w-[96vw] max-w-6xl max-h-[94vh] overflow-y-auto">
+          <DialogContent className="w-[96vw] max-w-6xl max-h-[94dvh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Send for signature</DialogTitle>
             </DialogHeader>

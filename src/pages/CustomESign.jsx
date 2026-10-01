@@ -145,7 +145,7 @@ export default function CustomESign() {
 
       {/* Editor Modal */}
       <Dialog open={showEditor} onOpenChange={setShowEditor}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Create E-Sign Document</DialogTitle>
           </DialogHeader>
@@ -156,7 +156,7 @@ export default function CustomESign() {
       {/* Document Detail Modal */}
       {selectedDoc && (
         <Dialog open={!!selectedDoc} onOpenChange={() => setSelectedDoc(null)}>
-          <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="sm:max-w-2xl max-h-[90dvh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{selectedDoc.title}</DialogTitle>
             </DialogHeader>

@@ -62,7 +62,7 @@ export default function ContractPreview({ contractText, formData, onDownload }) 
           </Button>
         </div>
       </div>
-      <div className="max-h-[70vh] overflow-y-auto">
+      <div className="max-h-[70dvh] overflow-y-auto">
         <div ref={contentRef} className="p-8 lg:p-12 bg-white">
           <ReactMarkdown
             className="contract-document"

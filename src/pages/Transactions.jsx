@@ -695,7 +695,7 @@ export default function Transactions() {
 
       {/* Create Transaction Dialog */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-lg max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>New Transaction File</DialogTitle>
           </DialogHeader>
@@ -824,7 +824,7 @@ export default function Transactions() {
 
       {/* Edit Transaction Dialog */}
       <Dialog open={!!editingTx} onOpenChange={() => setEditingTx(null)}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-lg max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Transaction</DialogTitle>
           </DialogHeader>

@@ -51,7 +51,7 @@ export default function ChannelMembersManageDialog({ open, onOpenChange, channel
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md max-h-[80vh] overflow-auto">
+      <DialogContent className="sm:max-w-md max-h-[80dvh] overflow-auto">
         <DialogHeader>
           <DialogTitle>Manage Channel Members</DialogTitle>
         </DialogHeader>
