@@ -187,6 +187,7 @@ export default function MessageList({ conv, kind, chat, variant = 'slack', canMo
     if (!el) return undefined;
     const ro = new ResizeObserver(() => { if (atBottom.current) el.scrollTop = el.scrollHeight; });
     if (el.firstElementChild) ro.observe(el.firstElementChild);
+    ro.observe(el); // the list shrinks when the phone keyboard opens: keep the newest message in view
     return () => ro.disconnect();
   }, [loading]);
 

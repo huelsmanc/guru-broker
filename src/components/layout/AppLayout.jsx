@@ -23,6 +23,26 @@ export default function AppLayout() {
   const chatScreen = pathname === '/DirectMessages' || pathname === '/SocialChat';
   const inConversation = (pathname === '/DirectMessages' && /[?&](dm|group)=/.test(search)) || pathname === '/SocialChat';
   useEffect(() => { setMobileOpen(false); }, [pathname, search]);
+  // Messaging screens are pinned to the visible screen: the page can't be dragged up, and when the
+  // phone keyboard opens the conversation shrinks to the space above it instead of the page scrolling.
+  useEffect(() => {
+    if (!chatScreen) return undefined;
+    const root = document.documentElement;
+    const vv = window.visualViewport;
+    const fit = () => {
+      if (vv) root.style.setProperty('--vvh', `${Math.round(vv.height)}px`);
+      if (window.scrollY) window.scrollTo(0, 0);
+    };
+    const prev = [root.style.overflow, document.body.style.overflow, root.style.overscrollBehavior];
+    root.style.overflow = 'hidden'; document.body.style.overflow = 'hidden'; root.style.overscrollBehavior = 'none';
+    fit();
+    vv?.addEventListener('resize', fit); vv?.addEventListener('scroll', fit); window.addEventListener('scroll', fit);
+    return () => {
+      vv?.removeEventListener('resize', fit); vv?.removeEventListener('scroll', fit); window.removeEventListener('scroll', fit);
+      [root.style.overflow, document.body.style.overflow, root.style.overscrollBehavior] = prev;
+      root.style.removeProperty('--vvh');
+    };
+  }, [chatScreen]);
 
   // Pick up profile changes (e.g. a new name saved on My Profile).
   useEffect(() => {
@@ -76,7 +96,11 @@ export default function AppLayout() {
       </div>
 
       {/* Main content */}
-      <main className={cn('md:ml-64 pt-16 md:pt-0', chatScreen ? cn('h-[100dvh] overflow-hidden', !inConversation && 'pb-20 lg:pb-0') : 'pb-20 min-h-screen')}>
+      <main
+        className={chatScreen
+          ? cn('fixed left-0 right-0 md:left-64 top-16 md:top-0 overflow-hidden [--chat-top:4rem] md:[--chat-top:0px]', !inConversation && 'pb-20 lg:pb-0')
+          : 'md:ml-64 pt-16 md:pt-0 pb-20 min-h-screen'}
+        style={chatScreen ? { height: 'calc(var(--vvh, 100dvh) - var(--chat-top))' } : undefined}>
         <Outlet context={{ user, brokerageId: user?.brokerage_id }} />
       </main>
 
