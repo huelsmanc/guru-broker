@@ -128,13 +128,28 @@ async function openaiInvoke({ prompt, response_json_schema, add_context_from_int
       ? { text: { format: { type: 'json_schema', name: 'response', schema: normalizeSchema(response_json_schema), strict: false } } }
       : {}),
   };
-  const res = await fetch('https://api.openai.com/v1/responses', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
-    body: JSON.stringify(body),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data?.error?.message || `OpenAI error ${res.status}`);
+  // Per-minute limits: wait briefly and try again when OpenAI says how long (short waits only).
+  let res; let data;
+  for (let attempt = 0; ; attempt++) {
+    res = await fetch('https://api.openai.com/v1/responses', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+      body: JSON.stringify(body),
+    });
+    data = await res.json();
+    if (res.status !== 429 || attempt >= 2) break;
+    const msg = String(data?.error?.message || '');
+    if (/Request too large/i.test(msg)) break; // waiting won't help
+    const m = msg.match(/try again in ([\d.]+)\s*(ms|s)/i);
+    const wait = m ? Number(m[1]) * (m[2].toLowerCase() === 'ms' ? 1 : 1000) : 8000;
+    if (wait > 20000) break;
+    await new Promise((r) => setTimeout(r, wait + 250));
+  }
+  if (!res.ok) {
+    const e = new Error(data?.error?.message || `OpenAI error ${res.status}`);
+    e.status = res.status === 429 ? 429 : 502;
+    throw e;
+  }
   const text = data.output_text ?? (data.output || [])
     .flatMap((o) => o.content || [])
     .filter((c) => c.type === 'output_text')

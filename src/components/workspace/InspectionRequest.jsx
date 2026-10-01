@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Loader2, ScanLine, Upload, AlertTriangle, FileText, Send, Eye, CheckCircle2, Mail, ArrowRight } from 'lucide-react';
 import UnifiedESignCreator from '@/components/esign/UnifiedESignCreator';
+import { pdfPageTexts, chunkPages } from '@/lib/pdfText';
 
 const SEV = {
   major: { label: 'Major', cls: 'bg-red-100 text-red-800 border-red-200' },
@@ -32,12 +33,51 @@ export default function InspectionRequest({ tx, user, contacts = [], refresh, on
   const [busy, setBusy] = useState(false);
   const fileRef = useRef(null);
 
+  const [progress, setProgress] = useState('');
+  // Reads the report's text here, then has the AI go through it a few pages at a time (big
+  // reports would otherwise go over the AI account's per-minute limit). Scanned reports with
+  // no text are sent whole.
   const scan = async ({ file, url, name }) => {
-    setError(null); setPhase('scanning');
+    setError(null); setPhase('scanning'); setProgress('Reading the report…');
     try {
       let fileUrl = url;
       if (file) fileUrl = (await base44.integrations.Core.UploadFile({ file, scope: { kind: 'tx', id: tx.id } })).file_url;
-      const res = await base44.functions.invoke('inspectionRequest', { action: 'scan', transactionId: tx.id, file_urls: [fileUrl], name: name || file?.name });
+      let pages = [];
+      try { pages = await pdfPageTexts(file || fileUrl, { onProgress: (n, t) => setProgress(`Reading page ${n} of ${t}…`) }); } catch { pages = []; }
+      const chars = pages.reduce((s, p) => s + p.text.trim().length, 0);
+      if (chars < 400) {
+        setProgress('Reading the report with AI…');
+        const res = await base44.functions.invoke('inspectionRequest', { action: 'scan', transactionId: tx.id, file_urls: [fileUrl], name: name || file?.name });
+        setReq(res.data.request); setPhase('review'); refresh();
+        return;
+      }
+      const chunks = chunkPages(pages);
+      const items = []; let inspector = null; let inspectionDate = null;
+      for (const [i, chunk] of chunks.entries()) {
+        const label = `Finding issues: pages ${chunk[0].n}-${chunk[chunk.length - 1].n} of ${pages.length}${items.length ? ` (${items.length} found so far)` : ''}…`;
+        setProgress(label);
+        let res;
+        for (let attempt = 0; ; attempt++) {
+          try {
+            res = await base44.functions.invoke('inspectionRequest', { action: 'scan_chunk', transactionId: tx.id, pages: chunk });
+            break;
+          } catch (err) {
+            // The AI account's per-minute limit: wait and carry on.
+            if (attempt < 5 && /rate limit|tokens per min|try again|429/i.test(err.message)) {
+              const m = err.message.match(/try again in ([\d.]+)\s*s/i);
+              const wait = Math.min(65, Math.max(10, m ? Number(m[1]) + 2 : 20 * (attempt + 1)));
+              for (let t = wait; t > 0; t--) { setProgress(`${label} (pausing ${t}s for the AI's rate limit)`); await new Promise((r) => setTimeout(r, 1000)); }
+              continue;
+            }
+            throw err;
+          }
+        }
+        items.push(...(res.data.items || []));
+        inspector = inspector || res.data.inspector; inspectionDate = inspectionDate || res.data.inspection_date;
+        if (i < chunks.length - 1) await new Promise((r) => setTimeout(r, 400));
+      }
+      setProgress('Putting it together…');
+      const res = await base44.functions.invoke('inspectionRequest', { action: 'scan_finish', transactionId: tx.id, items, inspector, inspection_date: inspectionDate, file_url: fileUrl, name: name || file?.name });
       setReq(res.data.request); setPhase('review'); refresh();
     } catch (err) { setError(err.message); setPhase('upload'); }
   };
@@ -71,8 +111,8 @@ export default function InspectionRequest({ tx, user, contacts = [], refresh, on
         {phase === 'scanning' && (
           <div className="py-20 text-center space-y-3">
             <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
-            <p className="font-medium">Reading the inspection report…</p>
-            <p className="text-sm text-muted-foreground">Long reports can take a minute.</p>
+            <p className="font-medium">{progress || 'Reading the inspection report…'}</p>
+            <p className="text-sm text-muted-foreground">Long reports can take a couple of minutes. Keep this window open.</p>
           </div>
         )}
         {phase === 'review' && req && (

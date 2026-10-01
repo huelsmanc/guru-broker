@@ -204,6 +204,16 @@ globalThis.__db.checklist = [...(globalThis.__db.checklist || []), { id: 'clA', 
   assert.equal(r.status, 200, JSON.stringify(r.body)); assert.equal(r.body.signed, false);
   assert.equal(emailsSent(), before + 1, 'emailed with the PDF');
   r = await call('inspectionRequest', { action: 'build', transactionId: 'nope', requestId: req.id, selected: [{ id: 'f1' }] });
-  assert.equal(r.status, 404);
+
+  assert.equal(r.status, 404);  // Big reports go page-by-page from the browser
+  r = await call('inspectionRequest', { action: 'scan_chunk', transactionId: 'txI', pages: [{ n: 7, text: '3.1 Roof: shingles worn' }, { n: 8, text: '6.2 Water heater' }] });
+  assert.equal(r.status, 200); assert.equal(r.body.items.length, 3);
+  assert.match(JSON.stringify(calls.at(-1).body), /Page 7/, 'page text sent, not the file');
+  assert.ok(!JSON.stringify(calls.at(-1).body).includes('input_file'), 'no PDF attached');
+  r = await call('inspectionRequest', { action: 'scan_finish', transactionId: 'txI', items: [...r.body.items, { ...r.body.items[0] }], inspector: 'Ace', inspection_date: '2026-09-28', name: 'Report.pdf' });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.request.items.length, 3, 'duplicates merged');
+  assert.deepEqual(r.body.request.items.map((i) => i.severity), ['major', 'moderate', 'minor'], 'most serious first');
+  assert.ok(r.body.request.summary.length > 0);
 }
 console.log('Roles, review and send: all checks passed');

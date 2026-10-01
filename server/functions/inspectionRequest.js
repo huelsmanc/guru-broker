@@ -59,12 +59,69 @@ export default async (req) => {
     const list = Array.isArray(tx.inspection_requests) ? tx.inspection_requests : [];
     const saveList = (next) => base44.entities.Transaction.update(tx.id, { inspection_requests: next });
 
+    // Big reports: the browser reads the PDF text and sends it a few pages at a time
+    // (keeps each AI call small, within the AI account's per-minute limits).
+    if (body.action === 'scan_chunk') {
+      const pages = (Array.isArray(body.pages) ? body.pages : []).slice(0, 40)
+        .map((p) => ({ n: Number(p.n) || 0, text: String(p.text || '').slice(0, 9000) })).filter((p) => p.text.trim());
+      if (!pages.length) return Response.json({ items: [] });
+      const text = pages.map((p) => `--- Page ${p.n} ---\n${p.text}`).join('\n').slice(0, 26000);
+      const r = await InvokeLLM({
+        max_tokens: 3500, response_json_schema: SCAN_SCHEMA,
+        system: 'You are an experienced buyer\'s agent reading part of a home inspection report. List every finding the inspector flagged in these pages, faithfully, with the page number. Never invent findings. If these pages have no findings (cover, table of contents, general info), return an empty list.',
+        prompt: `Pages ${pages[0].n}-${pages[pages.length - 1].n} of the inspection report for ${tx.property_address || 'the property'}. For each finding give severity and what a buyer would typically ask for (repair, replace, credit, evaluate, or none for minor/cosmetic). The summary can be one short sentence about these pages.\n\n${text}`,
+      });
+      return Response.json({ items: (r?.items || []).slice(0, 80), inspector: r?.inspector || null, inspection_date: r?.inspection_date || null });
+    }
+
+    if (body.action === 'scan_finish') {
+      const raw = (Array.isArray(body.items) ? body.items : []).slice(0, 250);
+      // The same finding can show up in a summary page and its section: keep one.
+      const seen = new Set();
+      const items = [];
+      for (const it of raw) {
+        const key = String(it.title || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        items.push({
+          id: `f${items.length + 1}`,
+          title: String(it.title || 'Item').slice(0, 160),
+          location: it.location ? String(it.location).slice(0, 120) : null,
+          category: it.category || 'other',
+          severity: SEVERITY.includes(it.severity) ? it.severity : 'moderate',
+          description: String(it.description || '').slice(0, 600),
+          reference: it.reference ? String(it.reference).slice(0, 80) : null,
+          suggested_ask: ASKS.includes(it.suggested_ask) ? it.suggested_ask : 'repair',
+        });
+      }
+      const rank = { major: 0, moderate: 1, minor: 2 };
+      items.sort((x, y) => rank[x.severity] - rank[y.severity]);
+      items.forEach((it, i) => { it.id = `f${i + 1}`; });
+      let summary = '';
+      try {
+        summary = await InvokeLLM({
+          max_tokens: 300,
+          system: 'You summarize home inspection findings for a buyer in two or three plain sentences. No lists.',
+          prompt: `Findings at ${tx.property_address || 'the property'}:\n${items.slice(0, 60).map((i) => `- [${i.severity}] ${i.title}`).join('\n')}`,
+        });
+      } catch { summary = `${items.filter((i) => i.severity === 'major').length} major, ${items.filter((i) => i.severity === 'moderate').length} moderate and ${items.filter((i) => i.severity === 'minor').length} minor findings.`; }
+      const date = String(body.inspection_date || '');
+      const request = {
+        id: `ir_${Date.now().toString(36)}`, status: 'draft', created_at: new Date().toISOString(), created_by: me.email,
+        report: { url: body.file_url || null, name: String(body.name || 'Inspection report').slice(0, 160) },
+        inspector: body.inspector ? String(body.inspector).slice(0, 120) : null, inspection_date: /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null,
+        summary: String(summary || '').trim().slice(0, 800), items,
+      };
+      await saveList([...list, request]);
+      return Response.json({ request });
+    }
+
     if (body.action === 'scan') {
       const given = (body.file_urls || []).filter(Boolean).slice(0, 5);
       if (!given.length) return Response.json({ error: 'Add the inspection report' }, { status: 400 });
       const urls = await resolveForUser(me, base44.entities, given);
       const r = await InvokeLLM({
-        max_tokens: 12000, file_urls: urls, response_json_schema: SCAN_SCHEMA,
+        max_tokens: 8000, file_urls: urls, response_json_schema: SCAN_SCHEMA,
         system: 'You are an experienced buyer\'s agent reading a home inspection report. List every finding the inspector flagged, faithfully, with its location in the report. Never invent findings.',
         prompt: `Read this home inspection report for ${tx.property_address || 'the property'} and list every finding. Mark severity carefully and suggest what a buyer would typically ask the seller for (repair, replace, credit, further evaluation, or none for minor/cosmetic items).`,
       });
