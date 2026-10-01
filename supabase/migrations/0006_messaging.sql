@@ -169,3 +169,7 @@ create unique index if not exists push_subscription_endpoint on public.push_subs
 -- Morning digest of unread messages and mentions (12:00 UTC = 8am Eastern).
 do $$ begin perform cron.unschedule(jobname) from cron.job where jobname = 'chat-digest'; end $$;
 select cron.schedule('chat-digest', '0 12 * * *', $$ select private.call_app('/api/fn/chatDigest') $$);
+
+-- Finish AI call notes after calls end (every 5 minutes).
+do $$ begin perform cron.unschedule(jobname) from cron.job where jobname = 'call-notes'; end $$;
+select cron.schedule('call-notes', '*/5 * * * *', $$ select private.call_app('/api/fn/callNotes') $$);

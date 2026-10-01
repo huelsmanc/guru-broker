@@ -9,6 +9,7 @@ export const FUNCTIONS = {
   bankLink: () => import('./bankLink.js'),
   callAction: () => import('./callAction.js'),
   callJoin: () => import('./callJoin.js'),
+  callNotes: () => import('./callNotes.js'),
   callStart: () => import('./callStart.js'),
   cancelESignDocument: () => import('./cancelESignDocument.js'),
   captureSigningMetadata: () => import('./captureSigningMetadata.js'),

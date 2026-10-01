@@ -2,7 +2,7 @@
 // call cards shown inside conversations. Mounted once for the whole app.
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Phone, PhoneOff, Video, Minimize2, Maximize2, Loader2, PhoneIncoming, PhoneMissed } from 'lucide-react';
+import { Phone, PhoneOff, Video, Minimize2, Maximize2, Loader2, PhoneIncoming, PhoneMissed, NotebookPen } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { cn } from '@/lib/utils';
 import { useChat, lc, playTone } from './ChatProvider';
@@ -139,11 +139,38 @@ export function CallProvider({ children }) {
     base44.functions.invoke('callAction', { callId: call.id, action: 'decline' }).catch(() => {});
   }, []);
 
+  // If I turned on AI notes, ask for them a few times after the call (a scheduled job is the backup).
+  const fetchNotesLater = (callId) => {
+    let tries = 0;
+    const tick = async () => {
+      tries += 1;
+      const r = await base44.functions.invoke('callNotes', { callId, action: 'summarize' }).catch(() => null);
+      if (r?.data?.status === 'pending' && tries < 6) setTimeout(tick, 30000);
+    };
+    setTimeout(tick, 20000);
+  };
+
   const left = useCallback(() => {
     const c = currentRef.current?.call;
     setCurrent(null); setBig(false);
-    if (c) base44.functions.invoke('callAction', { callId: c.id, action: lc(c.created_by_email) === me && c.status === 'ringing' ? 'cancel' : 'leave' }).catch(() => {});
+    if (c) {
+      base44.functions.invoke('callAction', { callId: c.id, action: lc(c.created_by_email) === me && c.status === 'ringing' ? 'cancel' : 'leave' }).catch(() => {});
+      if (c.notes_status === 'recording' && lc(c.notes_started_by) === me) fetchNotesLater(c.id);
+    }
   }, [me]);
+
+  const toggleNotes = async () => {
+    const c = currentRef.current?.call;
+    if (!c) return;
+    if (c.notes_status === 'recording') {
+      if (!window.confirm('Stop AI notes? A summary of what was said so far will be posted after the call.')) return;
+      await base44.functions.invoke('callNotes', { callId: c.id, action: 'stop' }).catch((e) => window.alert(e.message));
+      return;
+    }
+    if (!window.confirm('Turn on AI notes? Everyone on the call is told it is being transcribed, and a summary with to-dos is posted in the chat afterwards.')) return;
+    try { const r = await base44.functions.invoke('callNotes', { callId: c.id, action: 'start' }); setCurrent((x) => (x ? { ...x, call: r.data.call } : x)); }
+    catch (e) { window.alert(e.message); }
+  };
 
   const c = current?.call;
   const waiting = c && c.status === 'ringing' && lc(c.created_by_email) === me;
@@ -186,10 +213,14 @@ export function CallProvider({ children }) {
               {c.kind === 'video' ? <Video className="w-4 h-4 text-emerald-400" /> : <Phone className="w-4 h-4 text-emerald-400" />}
               <span className="font-medium truncate flex-1">{c.conversation_kind === 'dm' ? chat.personOf(others[0]).name : c.title}</span>
               <span className="text-xs text-white/60 tabular-nums">{waiting ? 'Ringing…' : ended ? 'Call ended' : fmt(secs)}</span>
+              {!waiting && !ended && c.conversation_kind !== 'scheduled' && (
+                <button className={cn('p-1.5 rounded hover:bg-white/10', c.notes_status === 'recording' && 'text-red-400')} title={c.notes_status === 'recording' ? 'AI notes are on (click to stop)' : 'Turn on AI notes'} onClick={toggleNotes}><NotebookPen className="w-4 h-4" /></button>
+              )}
               <button className="p-1.5 rounded hover:bg-white/10" title="Minimize" onClick={() => setMinimized(true)}><Minimize2 className="w-4 h-4" /></button>
               <button className="hidden sm:block p-1.5 rounded hover:bg-white/10" title={big ? 'Smaller' : 'Bigger'} onClick={() => setBig((x) => !x)}><Maximize2 className="w-4 h-4" /></button>
               <button className="p-1.5 rounded-full bg-red-500 hover:bg-red-600" title="Hang up" onClick={left}><PhoneOff className="w-4 h-4" /></button>
             </div>
+            {c.notes_status === 'recording' && <div className="bg-red-600/90 text-white text-xs px-3 py-1 flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-white animate-pulse" /> AI notes are on. This call is being transcribed{c.notes_started_by_name ? ` (turned on by ${c.notes_started_by_name})` : ''}.</div>}
             <div className="relative flex-1">
               <DailyFrame url={c.room_url} token={current.token} video={current.video} onLeft={left} />
               {waiting && (

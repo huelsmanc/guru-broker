@@ -66,7 +66,7 @@ Do these in order. Budget about an hour.
 
    For phone and desktop notifications (messages, mentions, calls, approvals), run `node scripts/gen-vapid.mjs` once on your computer and add the two values it prints, `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY`. On iPhone, people add the app to their Home Screen (Share → Add to Home Screen) and turn notifications on from there; the app shows them how.
 
-   For voice and video calls add `DAILY_API_KEY`: sign up at daily.co, then Developers → API keys. Free for the first 10,000 call minutes each month. Without it everything else works and the call buttons explain what's missing.
+   For voice and video calls add `DAILY_API_KEY`: sign up at daily.co, then Developers → API keys. Free for the first 10,000 call minutes each month. Without it everything else works and the call buttons explain what's missing. AI call notes also need Daily's transcription add-on turned on in your Daily account (billed by Daily per minute transcribed); without it the notes button says so.
 
 3. Deploy, then open the preview URL and check that the sign-in page loads.
 

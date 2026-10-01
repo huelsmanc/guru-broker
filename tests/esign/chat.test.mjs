@@ -4,12 +4,20 @@ import assert from 'node:assert/strict';
 Object.assign(process.env, { SUPABASE_URL: 'http://sb', SUPABASE_SERVICE_ROLE_KEY: 'service', SUPABASE_ANON_KEY: 'anon', HOOK_SECRET: 'hs', RESEND_API_KEY: 're', APP_URL: 'https://gurubroker.app', DAILY_API_KEY: 'dk', ANTHROPIC_API_KEY: 'sk-ant', AI_PROVIDER: 'anthropic' });
 const calls = [];
 let roomN = 0;
+let transcribeFails = false;
+let transcriptStatus = 't_in_progress';
 globalThis.fetch = async (url, init = {}) => {
   url = String(url); calls.push({ url, init });
   if (url.includes('resend')) return new Response('{"id":"e"}');
   if (url.endsWith('/v1/rooms') && init.method === 'POST') { roomN += 1; return new Response(JSON.stringify({ name: `room${roomN}`, url: `https://guru.daily.co/room${roomN}` })); }
   if (url.endsWith('/v1/meeting-tokens')) return new Response(JSON.stringify({ token: `tok-${JSON.parse(init.body).properties.user_name}` }));
   if (url.includes('/v1/rooms/') && init.method === 'DELETE') return new Response('{"deleted":true}');
+  if (url.includes('/transcription/start')) return new Response(transcribeFails ? '{"error":"invalid-request-error","info":"transcription is not enabled for this plan"}' : '{"sent":true}', { status: transcribeFails ? 400 : 200 });
+  if (url.includes('/transcription/stop')) return new Response('{"sent":true}');
+  if (url.includes('/v1/transcript?')) return new Response(JSON.stringify({ total_count: 1, data: [{ transcriptId: 'tr1', status: transcriptStatus, isVttAvailable: true, created_at: '2026-09-30T10:00:00Z' }] }));
+  if (url.includes('/v1/transcript/tr1/access-link')) return new Response(JSON.stringify({ transcriptId: 'tr1', link: 'https://s3.example/tr1.vtt' }));
+  if (url === 'https://s3.example/tr1.vtt') return new Response('WEBVTT\n\n1\n00:00:01.000 --> 00:00:03.000\n<v Ann Agent>Inspection is Tuesday at 10.</v>\n\n2\n00:00:03.000 --> 00:00:05.000\n<v Bob Buyer>I will order the appraisal.</v>');
+  if (url.includes('anthropic') && JSON.stringify(JSON.parse(init.body).tools || []).includes('dates_and_numbers')) return new Response(JSON.stringify({ content: [{ type: 'tool_use', name: 'respond', input: { summary: 'Inspection set; appraisal next.', decisions: ['Inspection Tue 10am'], action_items: [{ who: 'Bob', what: 'Order appraisal', when: 'this week' }], dates_and_numbers: ['Tue 10am'] } }] }));
   if (url.includes('anthropic')) return new Response(JSON.stringify({ content: [{ type: 'tool_use', name: 'respond', input: { tldr: 'Team planning the open house.', for_me: ['Ann asked you to bring signs'], decisions: ['Open house Sat 1-3'], action_items: [{ who: 'Bob', what: 'Order flyers' }] } }] }));
   if (url.startsWith('https://push.example/')) return new Response('', { status: url.endsWith('gone') ? 410 : 201 });
   throw new Error('unexpected ' + url);
@@ -184,5 +192,37 @@ assert.ok(digests.some((d) => d.to[0] === 'cy@x.com' && /call the lender/.test(d
 assert.ok(!digests.some((d) => d.to[0] === 'bob@x.com'), 'Bob opted out');
 r = await as('ann')('chatDigest', {});
 assert.equal(r.status, 403, 'digest is scheduled-only');
+
+// AI call notes on a deal-chat call: consent message, transcript -> notes in chat and on the deal.
+r = await as('ann')('callStart', { kind: 'group', key: g.id });
+const nc = r.body.call;
+assert.ok(JSON.parse(calls.filter((c) => c.url.endsWith('/v1/rooms')).at(-1).init.body).properties.enable_transcription_storage, 'rooms keep transcripts');
+await as('cy')('callJoin', { callId: nc.id });
+transcribeFails = true;
+r = await as('ann')('callNotes', { callId: nc.id, action: 'start' });
+assert.equal(r.status, 400); assert.match(r.body.error, /Daily\.co account/);
+transcribeFails = false;
+r = await as('ann')('callNotes', { callId: nc.id, action: 'start' });
+assert.equal(r.body.call.notes_status, 'recording');
+assert.ok(globalThis.__db.group_message.some((m) => m.group_id === g.id && /turned on AI notes/.test(m.content)), 'everyone is told');
+r = await as('outsider')('callNotes', { callId: nc.id, action: 'stop' }).catch(() => ({ status: 401 }));
+assert.notEqual(r.status, 200);
+await as('cy')('callAction', { callId: nc.id, action: 'leave' });
+r = await as('ann')('callAction', { callId: nc.id, action: 'leave' });
+assert.equal(r.body.call.status, 'ended'); assert.equal(r.body.call.notes_status, 'processing');
+assert.ok(!calls.some((c) => c.url.endsWith(`/v1/rooms/${nc.room_name}`) && c.init.method === 'DELETE'), 'room kept until notes are written');
+r = await as('ann')('callNotes', { callId: nc.id, action: 'summarize' });
+assert.equal(r.body.status, 'pending');
+transcriptStatus = 't_finished';
+const ended = globalThis.__db.call.find((c) => c.id === nc.id); ended.ended_at = new Date(Date.now() - 120e3).toISOString();
+r = await svc2('callNotes', {});
+assert.deepEqual(r.body.processed, ['done'], JSON.stringify(r.body));
+const notesMsg = globalThis.__db.group_message.filter((m) => m.group_id === g.id).at(-1).content;
+assert.match(notesMsg, /Call notes/); assert.match(notesMsg, /Bob: Order appraisal \(this week\)/);
+assert.ok(globalThis.__db.activity_event.some((e) => e.transaction_id === 't1' && /Call notes/.test(e.summary)), 'notes saved on the deal');
+const aiNotesReq = JSON.parse(calls.filter((c) => c.url.includes('anthropic')).at(-1).init.body);
+assert.match(JSON.stringify(aiNotesReq.messages), /Ann Agent: Inspection is Tuesday at 10/);
+r = await svc2('callNotes', {});
+assert.deepEqual(r.body.processed, [], 'only once');
 
 console.log('Messaging and calls: all checks passed');

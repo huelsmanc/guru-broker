@@ -1,6 +1,6 @@
 // New: decline, cancel (caller hangs up before anyone answers), leave or end a call.
 import { createClientFromRequest } from '../lib/base44.js';
-import { deleteRoom } from '../lib/daily.js';
+import { deleteRoom, stopTranscription } from '../lib/daily.js';
 import { canJoin } from './callJoin.js';
 
 const lc = (e) => String(e || '').toLowerCase();
@@ -36,8 +36,16 @@ export default async (req) => {
     } else {
       return Response.json({ error: 'Unknown action' }, { status: 400 });
     }
-    const updated = await E.Call.update(call.id, patch);
-    if (['ended', 'missed'].includes(updated.status)) await deleteRoom(call.room_name);
+    let updated = await E.Call.update(call.id, patch);
+    if (['ended', 'missed'].includes(updated.status)) {
+      if (['recording', 'processing'].includes(call.notes_status)) {
+        // Keep the room until the transcript is written; the notes job finishes it.
+        await stopTranscription(call.room_name);
+        updated = await E.Call.update(call.id, { notes_status: 'processing' });
+      } else {
+        await deleteRoom(call.room_name);
+      }
+    }
     return Response.json({ call: updated });
   } catch (error) {
     return Response.json({ error: error.message }, { status: error.status || 500 });
