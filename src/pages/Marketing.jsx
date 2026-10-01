@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { isAdminRole } from '../../shared/permissions.generated.js';
+import { renderImage } from '@/lib/inlineImages';
 import Design, { FORMATS, TEMPLATES, KINDS, emailHtml } from '@/components/marketing/Design';
 
 const STYLES = ['Modern', 'Luxury', 'Classic', 'Bold', 'Minimal', 'Coastal', 'Farmhouse', 'Playful'];
@@ -119,7 +120,7 @@ function Studio({ user, brokerageId, agent, brand, initial, onNeedBrand }) {
   const exportPng = () => run('png', async () => {
     const { toPng } = await loadHtmlToImage();
     const node = exportRef.current.firstElementChild;
-    const url = await toPng(node, { pixelRatio: format === 'flyer' ? 2 : 1, cacheBust: true });
+    const url = await renderImage(toPng, node, { pixelRatio: format === 'flyer' ? 2 : 1 });
     const a = Object.assign(document.createElement('a'), { href: url, download: `${(content?.headline || 'design').replace(/[^\w ]+/g, '').slice(0, 40)}-${format}.png` });
     a.click();
   });
@@ -140,7 +141,7 @@ function Studio({ user, brokerageId, agent, brand, initial, onNeedBrand }) {
     let thumb = '';
     try {
       const { toJpeg } = await loadHtmlToImage();
-      const dataUrl = await toJpeg(exportRef.current.firstElementChild, { pixelRatio: 0.35, quality: 0.8, cacheBust: true });
+      const dataUrl = await renderImage(toJpeg, exportRef.current.firstElementChild, { pixelRatio: 0.35, quality: 0.8 });
       const blob = await (await fetch(dataUrl)).blob();
       thumb = (await base44.integrations.Core.UploadFile({ file: new File([blob], 'thumb.jpg', { type: 'image/jpeg' }) })).file_url;
     } catch { /* thumbnail optional */ }
