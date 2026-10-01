@@ -373,13 +373,76 @@ function Gallery({ user, brokerageId, agent, brand, onOpen }) {
   );
 }
 
+// Drag to move, slider to zoom; saves a 600x600 square so every design and avatar shows the same framing.
+function HeadshotCropper({ src, onCancel, onDone }) {
+  const BOX = 260;
+  const [img, setImg] = useState(null);
+  const [zoom, setZoom] = useState(1);
+  const [pos, setPos] = useState({ x: 0, y: 0 });
+  const [err, setErr] = useState('');
+  const drag = useRef(null);
+  useEffect(() => {
+    const i = new Image(); i.crossOrigin = 'anonymous';
+    i.onload = () => { setImg(i); setPos({ x: 0, y: 0 }); setZoom(1); };
+    i.onerror = () => setErr("Couldn't open that photo. Upload it again.");
+    i.src = src;
+  }, [src]);
+  const base = img ? BOX / Math.min(img.width, img.height) : 1; // cover the square at zoom 1
+  const w = img ? img.width * base * zoom : 0; const h = img ? img.height * base * zoom : 0;
+  const clamp = (p, z = zoom) => {
+    if (!img) return p;
+    const ww = img.width * base * z; const hh = img.height * base * z;
+    return { x: Math.min(0, Math.max(BOX - ww, p.x)), y: Math.min(0, Math.max(BOX - hh, p.y)) };
+  };
+  useEffect(() => { if (img) setPos((p) => clamp(p.x === 0 && p.y === 0 ? { x: (BOX - w) / 2, y: (BOX - h) / 2 } : p)); }, [img]); // center first
+  const onZoom = (z) => {
+    const c = { x: BOX / 2, y: BOX / 2 }; const k = z / zoom;
+    setPos(clamp({ x: c.x - (c.x - pos.x) * k, y: c.y - (c.y - pos.y) * k }, z)); setZoom(z);
+  };
+  const down = (e) => { drag.current = { sx: e.clientX, sy: e.clientY, x: pos.x, y: pos.y }; e.currentTarget.setPointerCapture?.(e.pointerId); };
+  const move = (e) => { const d = drag.current; if (!d) return; setPos(clamp({ x: d.x + e.clientX - d.sx, y: d.y + e.clientY - d.sy })); };
+  const done = async () => {
+    try {
+      const c = document.createElement('canvas'); c.width = 600; c.height = 600;
+      const k = 600 / BOX;
+      c.getContext('2d').drawImage(img, pos.x * k, pos.y * k, w * k, h * k);
+      const blob = await new Promise((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error('no image'))), 'image/jpeg', 0.9));
+      let original = null;
+      if (src.startsWith('blob:')) original = new File([await (await fetch(src)).blob()], 'headshot-original.jpg', { type: 'image/jpeg' });
+      onDone(blob, original);
+    } catch { setErr("Couldn't save that framing. Upload the photo again, then reposition it."); }
+  };
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={onCancel}>
+      <div className="rounded-2xl bg-card p-5 shadow-xl space-y-4 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+        <div><p className="font-semibold">Position your headshot</p><p className="text-sm text-muted-foreground">Drag to move. Use the slider to zoom.</p></div>
+        <div className="mx-auto relative overflow-hidden rounded-full bg-muted touch-none cursor-grab active:cursor-grabbing select-none" style={{ width: BOX, height: BOX }}
+          onPointerDown={down} onPointerMove={move} onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }}>
+          {img && <img src={src} alt="" draggable={false} className="absolute max-w-none pointer-events-none" style={{ left: pos.x, top: pos.y, width: w, height: h }} />}
+          {!img && !err && <Loader2 className="w-6 h-6 animate-spin absolute inset-0 m-auto" />}
+        </div>
+        <input type="range" min="1" max="4" step="0.01" value={zoom} onChange={(e) => onZoom(Number(e.target.value))} className="w-full" aria-label="Zoom" />
+        {err && <p className="text-sm text-red-600">{err}</p>}
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={onCancel}>Cancel</Button>
+          <Button onClick={done} disabled={!img}>Use this</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const TITLES = ['Real Estate Agent', 'Real Estate Salesperson', 'REALTOR®', 'Associate Broker', 'Broker', 'Broker/Owner', ''];
 
 function BrandKit({ user, onSaved, agent, brand }) {
   const [f, setF] = useState({ headshot: user?.headshot || '', marketing_logo_url: user?.marketing_logo_url || '', brand_color: user?.brand_color || '#0f172a', marketing_title: user?.marketing_title ?? 'Real Estate Agent', phone: user?.phone || '', license_number: user?.license_number || '' });
   const [busy, setBusy] = useState(null);
+  const [crop, setCrop] = useState(null); // { src, revoke }
   const up = (k) => async (e) => {
     const file = e.target.files?.[0]; if (!file) return;
+    e.target.value = '';
+    // Headshots: frame it first (drag and zoom), then upload the framed square.
+    if (k === 'headshot') { const src = URL.createObjectURL(file); setCrop({ src, revoke: true }); return; }
     setBusy(k);
     try { const { file_url } = await base44.integrations.Core.UploadFile({ file }); setF((x) => ({ ...x, [k]: file_url })); } finally { setBusy(null); }
   };
@@ -395,8 +458,22 @@ function BrandKit({ user, onSaved, agent, brand }) {
         <p className="text-sm text-muted-foreground">Set this once. Every flyer, post and email uses it.</p>
         <div className="flex items-center gap-4">
           {f.headshot ? <img src={f.headshot} alt="" className="w-20 h-20 rounded-full object-cover border" /> : <div className="w-20 h-20 rounded-full bg-muted" />}
-          <label className="text-sm text-primary cursor-pointer flex items-center gap-1">{busy === 'headshot' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} Headshot<input type="file" accept="image/*" className="hidden" onChange={up('headshot')} /></label>
+          <label className="text-sm text-primary cursor-pointer flex items-center gap-1">{busy === 'headshot' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} {f.headshot ? 'New headshot' : 'Headshot'}<input type="file" accept="image/*" className="hidden" onChange={up('headshot')} /></label>
+          {f.headshot && <button type="button" className="text-sm text-primary" onClick={() => setCrop({ src: user?.headshot_original || f.headshot })}>Reposition</button>}
         </div>
+        {crop && (
+          <HeadshotCropper src={crop.src} onCancel={() => { if (crop.revoke) URL.revokeObjectURL(crop.src); setCrop(null); }}
+            onDone={async (blob, original) => {
+              setBusy('headshot');
+              try {
+                const { file_url } = await base44.integrations.Core.UploadFile({ file: new File([blob], 'headshot.jpg', { type: 'image/jpeg' }) });
+                let orig = user?.headshot_original || null;
+                if (original) orig = (await base44.integrations.Core.UploadFile({ file: original })).file_url;
+                setF((x) => ({ ...x, headshot: file_url, headshot_original: orig }));
+              } catch (err) { window.alert(err.message || 'Upload failed'); }
+              finally { setBusy(null); if (crop.revoke) URL.revokeObjectURL(crop.src); setCrop(null); }
+            }} />
+        )}
         <div className="flex items-center gap-4">
           {f.marketing_logo_url || brand.logo ? <img src={f.marketing_logo_url || brand.logo} alt="" className="h-14 max-w-[180px] object-contain border rounded p-1" /> : <div className="h-14 w-32 rounded bg-muted" />}
           <label className="text-sm text-primary cursor-pointer flex items-center gap-1">{busy === 'marketing_logo_url' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} {f.marketing_logo_url ? 'Change logo' : 'Use my own logo'}<input type="file" accept="image/*" className="hidden" onChange={up('marketing_logo_url')} /></label>
