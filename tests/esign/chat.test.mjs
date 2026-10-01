@@ -10,6 +10,7 @@ globalThis.fetch = async (url, init = {}) => {
   if (url.endsWith('/v1/rooms') && init.method === 'POST') { roomN += 1; return new Response(JSON.stringify({ name: `room${roomN}`, url: `https://guru.daily.co/room${roomN}` })); }
   if (url.endsWith('/v1/meeting-tokens')) return new Response(JSON.stringify({ token: `tok-${JSON.parse(init.body).properties.user_name}` }));
   if (url.includes('/v1/rooms/') && init.method === 'DELETE') return new Response('{"deleted":true}');
+  if (url.startsWith('https://push.example/')) return new Response('', { status: url.endsWith('gone') ? 410 : 201 });
   throw new Error('unexpected ' + url);
 };
 globalThis.__users = { admin: { id: 'u0', email: 'admin@x.com' }, ann: { id: 'u1', email: 'ann@x.com' }, bob: { id: 'u2', email: 'bob@x.com' }, cy: { id: 'u3', email: 'cy@x.com' } };
@@ -105,5 +106,53 @@ assert.equal(r.body.call.status, 'missed');
 delete process.env.DAILY_API_KEY;
 r = await as('ann')('callStart', { kind: 'dm', key: 'cy@x.com' });
 assert.equal(r.status, 400); assert.match(r.body.error, /DAILY_API_KEY/);
+
+// Deal chat: created on first open with the deal's people; follows TC/co-agent changes; admins join as guests.
+process.env.DAILY_API_KEY = 'dk';
+globalThis.__db.transaction = [{ id: 't1', brokerage_id: 'B1', property_address: '12 Elm St, Hartford, CT 06101', agent_email: 'ann@x.com', tc_email: 'bob@x.com', co_agents: [], extra: {} }];
+r = await as('ann')('dealChat', { transactionId: 't1' });
+assert.equal(r.status, 200, JSON.stringify(r.body));
+const g = r.body.group;
+assert.equal(g.transaction_id, 't1'); assert.equal(g.name, '🏠 12 Elm St');
+assert.deepEqual(g.members.map((m) => m.email).sort(), ['ann@x.com', 'bob@x.com']);
+r = await as('ann')('dealChat', { transactionId: 't1' });
+assert.equal(r.body.group.id, g.id, 'one chat per deal');
+const svcCall = async (name, body) => { const res = await POST(new Request(`https://gurubroker.app/api/fn/${name}`, { method: 'POST', headers: { 'x-gbh-service': 'hs' }, body: JSON.stringify(body) })); return { status: res.status, body: await res.json() }; };
+const t1 = globalThis.__db.transaction[0];
+t1.tc_email = 'cy@x.com'; t1.co_agents = [];
+await svcCall('dealChatSync', { event: { data: { ...t1 } } });
+assert.deepEqual(globalThis.__db.group_chat.find((x) => x.id === g.id).members.map((m) => m.email).sort(), ['ann@x.com', 'cy@x.com'], 'new TC in, old TC out');
+r = await as('admin')('dealChat', { transactionId: 't1' });
+const ms = r.body.group.members;
+assert.ok(ms.some((m) => m.email === 'admin@x.com' && m.added_as === 'guest'), 'admin joins as guest');
+await svcCall('dealChatSync', { event: { data: { ...t1, co_agents: [{ email: 'bob@x.com' }] } } });
+assert.deepEqual(globalThis.__db.group_chat.find((x) => x.id === g.id).members.map((m) => m.email).sort(), ['admin@x.com', 'ann@x.com', 'bob@x.com', 'cy@x.com'], 'guest stays, co-agent added');
+r = await as('ann')('callStart', { kind: 'group', key: g.id });
+assert.equal(r.status, 200, 'deal chats can call too');
+
+// Push: a new DM reaches the receiver's phone; dead subscriptions are cleaned up; calls ring phones.
+const { makeVapidKeys } = await import('../../../server/lib/push.js');
+const vk = makeVapidKeys(); process.env.VAPID_PUBLIC_KEY = vk.publicKey; process.env.VAPID_PRIVATE_KEY = vk.privateKey;
+const crypto = await import('node:crypto');
+const ua = crypto.createECDH('prime256v1'); const keys = { p256dh: ua.generateKeys().toString('base64url'), auth: crypto.randomBytes(16).toString('base64url') };
+globalThis.__db.push_subscription = [
+  { id: 'ps1', user_email: 'bob@x.com', endpoint: 'https://push.example/bob', ...keys, extra: {} },
+  { id: 'ps2', user_email: 'bob@x.com', endpoint: 'https://push.example/gone', ...keys, extra: {} },
+  { id: 'ps3', user_email: 'cy@x.com', endpoint: 'https://push.example/cy', ...keys, extra: {} },
+];
+const svc2 = async (name, body) => { const res = await POST(new Request(`https://gurubroker.app/api/fn/${name}`, { method: 'POST', headers: { 'x-gbh-service': 'hs' }, body: JSON.stringify(body) })); return { status: res.status, body: await res.json() }; };
+r = await svc2('pushOnMessage', { event: { type: 'create', entity_name: 'DirectMessage', data: { id: 'dmx', sender_email: 'ann@x.com', sender_name: 'Ann Agent', receiver_email: 'bob@x.com', content: 'Lunch?' } } });
+assert.equal(r.body.sent, 1, JSON.stringify(r.body));
+const pushCall = calls.find((c) => c.url === 'https://push.example/bob');
+assert.equal(pushCall.init.headers['Content-Encoding'], 'aes128gcm'); assert.match(pushCall.init.headers.Authorization, /^vapid t=.+, k=/);
+assert.ok(!globalThis.__db.push_subscription.some((x) => x.id === 'ps2'), 'expired subscription removed');
+r = await svc2('pushOnMessage', { event: { type: 'create', entity_name: 'GroupMessage', data: { id: 'gmx', group_id: 'g1', sender_email: 'ann@x.com', sender_name: 'Ann Agent', content: 'hi team' } } });
+assert.equal(r.body.sent, 1, 'group members except the sender');
+const before = calls.filter((c) => c.url === 'https://push.example/cy').length;
+r = await as('ann')('callStart', { kind: 'dm', key: 'cy@x.com', video: true });
+assert.equal(r.status, 200, JSON.stringify(r.body));
+const ring = calls.filter((c) => c.url === 'https://push.example/cy');
+assert.equal(ring.length, before + 1, 'incoming call rings the phone');
+assert.equal(ring.at(-1).init.headers.Urgency, 'high');
 
 console.log('Messaging and calls: all checks passed');

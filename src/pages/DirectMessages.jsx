@@ -111,7 +111,7 @@ export default function DirectMessages() {
   );
 }
 
-function groupName(g, chat) {
+export function groupName(g, chat) {
   if (!g) return 'Group';
   if (g.name && !g.auto_name) return g.name;
   return (g.members || []).filter((m) => lc(m.email) !== chat.me).map((m) => chat.personOf(m.email).name.split(' ')[0]).join(', ') || g.name || 'Group';
@@ -132,7 +132,7 @@ function OnlineRow({ chat, onOpen }) {
   );
 }
 
-function Conversation({ kind, convKey, group, chat, onBack }) {
+export function Conversation({ kind, convKey, group, chat, onBack, embedded }) {
   const room = useRoom(`${kind}:${kind === 'dm' ? [chat.me, convKey].sort().join('|') : convKey}`);
   const [manage, setManage] = useState(false);
   const conv = useConversation(kind, convKey, {
@@ -178,14 +178,15 @@ function Conversation({ kind, convKey, group, chat, onBack }) {
   return (
     <>
       <header className="flex items-center gap-3 px-3 sm:px-4 py-2.5 border-b">
-        <button onClick={onBack} className="md:hidden p-2 -ml-1 rounded-full hover:bg-muted"><ArrowLeft className="w-5 h-5" /></button>
+        {!embedded && <button onClick={onBack} className="md:hidden p-2 -ml-1 rounded-full hover:bg-muted"><ArrowLeft className="w-5 h-5" /></button>}
         {kind === 'dm' ? <Avatar person={chat.personOf(convKey)} size={40} online={online} /> : <span className="w-10 h-10 rounded-full bg-gradient-to-br from-violet-200 to-sky-200 dark:from-violet-900 dark:to-sky-900 flex items-center justify-center"><Users className="w-5 h-5 text-violet-700 dark:text-violet-200" /></span>}
         <div className="flex-1 min-w-0">
           <p className="font-semibold truncate">{title}</p>
-          <p className="text-xs text-muted-foreground truncate">{kind === 'dm' ? (online ? <span className="text-emerald-600">Active now</span> : chat.people.get(convKey)?.role ? 'Offline' : '') : `${members.length} people${online ? ' · some online' : ''}`}</p>
+          <p className="text-xs text-muted-foreground truncate">{kind === 'dm' ? (online ? <span className="text-emerald-600">Active now</span> : chat.people.get(convKey)?.role ? 'Offline' : '') : group.transaction_id ? `Deal chat · ${people.map((p) => p.name.split(' ')[0]).join(', ')}` : `${members.length} people${online ? ' · some online' : ''}`}</p>
         </div>
         <CallButtons kind={kind} convKey={convKey} />
-        {kind === 'group' && <button onClick={() => setManage(true)} className="p-2 rounded-lg hover:bg-muted text-muted-foreground" title="Group settings"><Users className="w-4 h-4" /></button>}
+        {kind === 'group' && group.transaction_id && !embedded && <a href={`/Transactions/${group.transaction_id}`} className="text-xs text-primary hover:underline px-2">Open deal</a>}
+        {kind === 'group' && !group.transaction_id && <button onClick={() => setManage(true)} className="p-2 rounded-lg hover:bg-muted text-muted-foreground" title="Group settings"><Users className="w-4 h-4" /></button>}
       </header>
       <MessageList key={`${kind}:${convKey}`} conv={conv} kind={kind} chat={chat} variant="bubble" renderCall={renderCall} seenBy={seenBy} typers={room.typers}
         emptyText={kind === 'dm' ? `This is the start of your conversation with ${title}.` : 'Say hi to the group!'} />

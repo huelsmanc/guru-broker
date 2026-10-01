@@ -149,3 +149,19 @@ revoke execute on function public.chat_toggle_reaction(text, text, text) from an
 revoke execute on function public.chat_mark_read(text, text) from anon;
 revoke execute on function public.chat_unread() from anon;
 revoke execute on function public.chat_readers(text, text) from anon;
+
+-- Deal chats follow the deal: when the agent, co-agents or TC change, update the chat.
+drop trigger if exists automation_transaction_people on public.transaction;
+create trigger automation_transaction_people after update of agent_email, tc_email, co_agents on public.transaction
+  for each row when (old.agent_email is distinct from new.agent_email or old.tc_email is distinct from new.tc_email or old.co_agents is distinct from new.co_agents)
+  execute function private.on_row_change();
+create index if not exists group_chat_transaction on public.group_chat (transaction_id);
+
+-- Phone/desktop push for new DMs and group messages.
+drop trigger if exists automation_direct_message on public.direct_message;
+create trigger automation_direct_message after insert on public.direct_message
+  for each row execute function private.on_row_change();
+drop trigger if exists automation_group_message on public.group_message;
+create trigger automation_group_message after insert on public.group_message
+  for each row execute function private.on_row_change();
+create unique index if not exists push_subscription_endpoint on public.push_subscription (endpoint);

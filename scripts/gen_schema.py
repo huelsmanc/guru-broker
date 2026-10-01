@@ -42,7 +42,7 @@ ENTITIES = {
     "EventRSVP": "brokerage_id checked_in dietary_notes event_id guests_count status user_email user_name",
     "FileRepository": "brokerage_id category description downloads_count file_name file_size file_url is_featured tags uploaded_by_email uploaded_by_name",
     "GeneratedContract": "brokerage_id buyer_name contract_text created_by_email created_by_name property_address purchase_price seller_name state",
-    "GroupChat": "brokerage_id created_by_email created_by_name members name",
+    "GroupChat": "brokerage_id transaction_id auto_name created_by_email created_by_name members name",
     "GroupMessage": "brokerage_id edited_at mentions content group_id reactions sender_email sender_id sender_name sender_photo",
     "Idea": "admin_notes brokerage_id category description downvotes is_anonymous status submitter_email submitter_name title upvotes",
     "IdeaPadNote": "content messages title user_email",
@@ -68,6 +68,7 @@ ENTITIES = {
     "UserBadge": "brokerage_id user_email badge_type",
     "Call": "brokerage_id room_name room_url kind title created_by_email created_by_name invitees conversation_kind conversation_key status started_at ended_at",
     "MarketingDesign": "brokerage_id owner_email title kind format template data thumbnail_url transaction_id listing_id",
+    "PushSubscription": "brokerage_id user_email endpoint p256dh auth user_agent",
     "ChatReadState": "brokerage_id user_email kind conv_key last_read_at",
 }
 
@@ -77,7 +78,7 @@ USER_FIELDS = "email full_name display_name role brokerage_id suspended headshot
 JSON_FIELDS = set("""co_agents referral deductions commission_calc config calc items changed mls_ids answers buyers checklist completed_dates details documents encryption_metadata esign_docs fields items
 data members invitees mentions messages options reactions read_by sellers signatories signature_fields signers tags tech_links updates
 versions cma_report""".split())
-BOOL_FIELDS = set("is_private is_client is_default active appraisal_contingency read pinned encrypted suspended submitted checked_in is_active is_anonymous is_featured signed passed require_sequential_signing".split())
+BOOL_FIELDS = set("auto_name is_private is_client is_default active appraisal_contingency read pinned encrypted suspended submitted checked_in is_active is_anonymous is_featured signed passed require_sequential_signing".split())
 INT_FIELDS = set("level inspection_days financing_days bathrooms bedrooms downloads_count downvotes upvotes guests_count order passing_score rating signer_index version file_size score".split())
 NUM_FIELDS = set("""lead_pct gross_share company_dollar agent_net fees team_lead revshare_total amount list_price offer_price earnest_money down_payment_percent loan_amount seller_concessions agent_net agent_split_percentage brokerage_fee brokerage_fee_flat brokerage_fee_percentage commission_amount
 commission_flat commission_percentage commission_sale_price sale_price sales_amount transaction_fee transaction_fee_flat
@@ -86,7 +87,7 @@ DATE_FIELDS = set("cap_year_start closed_date license_expiration eo_expiration s
 TS_FIELDS = set("edited_at started_at ended_at last_read_at approved_at sent_at paid_at bank_linked_at thank_you_sent_at offer_expiration accepted_at completed_at submitted_at signed_at response_date scheduled_at".split())
 
 # Tables not scoped by brokerage (owned by a user or reached via a parent)
-PERSONAL = {"IdeaPadNote": "user_email", "ChatReadState": "user_email"}
+PERSONAL = {"IdeaPadNote": "user_email", "ChatReadState": "user_email", "PushSubscription": "user_email"}
 
 def snake(name):
     s = re.sub(r"(?<=[a-z0-9])([A-Z])", r"_\1", name).lower()

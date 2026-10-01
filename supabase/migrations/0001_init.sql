@@ -1375,27 +1375,32 @@ create index if not exists generated_contract_brokerage_id_idx on public.generat
 -- GroupChat -------------------------------------------------------------
 create table if not exists public.group_chat (
   id text primary key default replace(gen_random_uuid()::text, '-', ''),
+  auto_name boolean,
   brokerage_id text,
   created_by_email text,
   created_by_name text,
   members jsonb,
   name text,
+  transaction_id text,
   extra jsonb not null default '{}'::jsonb,
   created_date timestamptz not null default now(),
   updated_date timestamptz not null default now(),
   created_by text
 );
+alter table public.group_chat add column if not exists auto_name boolean;
 alter table public.group_chat add column if not exists brokerage_id text;
 alter table public.group_chat add column if not exists created_by_email text;
 alter table public.group_chat add column if not exists created_by_name text;
 alter table public.group_chat add column if not exists members jsonb;
 alter table public.group_chat add column if not exists name text;
+alter table public.group_chat add column if not exists transaction_id text;
 drop trigger if exists group_chat_touch on public.group_chat;
 create trigger group_chat_touch before update on public.group_chat for each row execute function public.touch_updated_date();
 drop trigger if exists group_chat_fill on public.group_chat;
 create trigger group_chat_fill before insert on public.group_chat for each row execute function public.fill_owner();
 alter table public.group_chat enable row level security;
 create index if not exists group_chat_brokerage_id_idx on public.group_chat (brokerage_id);
+create index if not exists group_chat_transaction_id_idx on public.group_chat (transaction_id);
 
 -- GroupMessage ----------------------------------------------------------
 create table if not exists public.group_message (
@@ -1762,6 +1767,34 @@ alter table public.payout enable row level security;
 create index if not exists payout_brokerage_id_idx on public.payout (brokerage_id);
 create index if not exists payout_payee_email_idx on public.payout (payee_email);
 create index if not exists payout_transaction_id_idx on public.payout (transaction_id);
+
+-- PushSubscription ------------------------------------------------------
+create table if not exists public.push_subscription (
+  id text primary key default replace(gen_random_uuid()::text, '-', ''),
+  auth text,
+  brokerage_id text,
+  endpoint text,
+  p256dh text,
+  user_agent text,
+  user_email text,
+  extra jsonb not null default '{}'::jsonb,
+  created_date timestamptz not null default now(),
+  updated_date timestamptz not null default now(),
+  created_by text
+);
+alter table public.push_subscription add column if not exists auth text;
+alter table public.push_subscription add column if not exists brokerage_id text;
+alter table public.push_subscription add column if not exists endpoint text;
+alter table public.push_subscription add column if not exists p256dh text;
+alter table public.push_subscription add column if not exists user_agent text;
+alter table public.push_subscription add column if not exists user_email text;
+drop trigger if exists push_subscription_touch on public.push_subscription;
+create trigger push_subscription_touch before update on public.push_subscription for each row execute function public.touch_updated_date();
+drop trigger if exists push_subscription_fill on public.push_subscription;
+create trigger push_subscription_fill before insert on public.push_subscription for each row execute function public.fill_owner();
+alter table public.push_subscription enable row level security;
+create index if not exists push_subscription_brokerage_id_idx on public.push_subscription (brokerage_id);
+create index if not exists push_subscription_user_email_idx on public.push_subscription (user_email);
 
 -- Recognition -----------------------------------------------------------
 create table if not exists public.recognition (
@@ -2264,6 +2297,8 @@ create policy onboarding_access on public.onboarding for all using (brokerage_id
 drop policy if exists payout_access on public.payout;
 create policy payout_access on public.payout for select using (lower(payee_email) = public.auth_email() or (brokerage_id = public.auth_brokerage_id() and (public.is_brokerage_admin() or public.has_perm('accounting.access'))) or public.is_super_admin());
 -- payout: written only by server routes (approvals and sending money).
+drop policy if exists push_subscription_access on public.push_subscription;
+create policy push_subscription_access on public.push_subscription for all using (lower(user_email) = public.auth_email()) with check (lower(user_email) = public.auth_email());
 drop policy if exists recognition_access on public.recognition;
 create policy recognition_access on public.recognition for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 drop policy if exists scheduled_call_access on public.scheduled_call;

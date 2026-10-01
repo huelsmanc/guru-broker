@@ -23,3 +23,4 @@ node .build/chat.test.mjs
 node .build/marketing.test.mjs
 node ../entities.test.mjs
 node ../commission.test.mjs
+node ../push.test.mjs

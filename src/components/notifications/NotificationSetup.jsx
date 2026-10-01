@@ -4,9 +4,11 @@ import { Button } from '@/components/ui/button';
 
 // The original imported a helper that never existed, so this button crashed.
 // Browser notifications are shown by the notification manager while the app is open.
+import { enablePush } from '@/lib/push';
+import { base44 } from '@/api/base44Client';
 const NotificationManager = {
   async requestPermission() {
-    try { return (await Notification.requestPermission()) === 'granted'; } catch { return false; }
+    try { return (await enablePush(await base44.auth.me())) === 'on'; } catch { return false; }
   },
   async subscribeToPushNotifications() {},
 };
@@ -35,7 +37,7 @@ export default function NotificationSetup() {
       setHasPermission(true);
       await NotificationManager.subscribeToPushNotifications();
       
-      new Notification('Notifications enabled', { body: 'You will now get alerts while Go Broker Hub is open.' });
+      base44.functions.invoke('pushKey', { test: true }).catch(() => {});
     }
     
     setIsLoading(false);

@@ -4,6 +4,7 @@
 import { createClientFromRequest } from '../lib/base44.js';
 import { isAdminRole } from '../lib/team.js';
 import { createRoom, meetingToken } from '../lib/daily.js';
+import { pushTo } from '../lib/push.js';
 
 const lc = (e) => String(e || '').toLowerCase();
 
@@ -66,6 +67,10 @@ export default async (req) => {
     if (kind === 'group') await E.GroupMessage.create({ ...sender, group_id: key, mentions: [] });
     if (kind === 'channel') await E.SocialMessage.create({ ...sender, channel: key, mentions: [], call_id: call.id });
 
+    // Ring phones too (the app shows the answer screen when opened from the notification).
+    if (invitees.length) {
+      await pushTo(E, invitees, { title: `${nameOf(myEmail)} is calling`, body: `${video ? 'Video' : 'Voice'} call${kind === 'dm' ? '' : ` · ${title}`}. Tap to answer.`, url: `/Dashboard?call=${call.id}`, tag: `call:${call.id}`, kind: 'call' }, { ttl: 45, urgency: 'high' }).catch(() => {});
+    }
     const token = await meetingToken({ room: room.name, name: nameOf(myEmail), userId: me.id, owner: true, video });
     return Response.json({ call, token });
   } catch (error) {

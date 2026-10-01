@@ -11,7 +11,9 @@ const AUTOMATIONS = {
   compliance_training: { INSERT: ['notifyAgentsNewTraining'], entity: 'ComplianceTraining' },
   activity_log: { INSERT: ['notifyDocumentActivity'], entity: 'ActivityLog' },
   esign_document: { UPDATE: ['notifySignatureUpdate'], entity: 'ESignDocument' },
-  transaction: { INSERT: ['applyDefaultChecklists'], entity: 'Transaction' },
+  direct_message: { INSERT: ['pushOnMessage'], entity: 'DirectMessage' },
+  group_message: { INSERT: ['pushOnMessage'], entity: 'GroupMessage' },
+  transaction: { INSERT: ['applyDefaultChecklists'], UPDATE: ['dealChatSync'], entity: 'Transaction' },
   profiles: { INSERT: ['applyDefaultChecklists'], UPDATE: ['applyDefaultChecklists'], entity: 'User' },
 };
 

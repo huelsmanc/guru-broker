@@ -4,11 +4,38 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "functions": {
-    "api/fn/[name].js": { "maxDuration": 60, "includeFiles": "server/**" },
-    "api/hooks/db.js": { "maxDuration": 60, "includeFiles": "server/**" }
+    "api/fn/[name].js": {
+      "maxDuration": 60,
+      "includeFiles": "server/**"
+    },
+    "api/hooks/db.js": {
+      "maxDuration": 60,
+      "includeFiles": "server/**"
+    }
   },
   "rewrites": [
-    { "source": "/api/functions/:name", "destination": "/api/fn/:name" },
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    {
+      "source": "/api/functions/:name",
+      "destination": "/api/fn/:name"
+    },
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/sw.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        },
+        {
+          "key": "Service-Worker-Allowed",
+          "value": "/"
+        }
+      ]
+    }
   ]
 }

@@ -2,11 +2,12 @@ import React from 'react';
 import { useParams, useSearchParams, useOutletContext, Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Loader2, ArrowLeft, ListChecks, FileText, Users, DollarSign, Share2, Activity, LayoutDashboard } from 'lucide-react';
+import { Loader2, ArrowLeft, ListChecks, FileText, Users, DollarSign, Share2, Activity, LayoutDashboard, MessagesSquare } from 'lucide-react';
 import { can, isAdminRole } from '../../shared/permissions.generated.js';
 import WorkspaceOverview from '@/components/workspace/WorkspaceOverview';
 import WorkspaceChecklists from '@/components/workspace/WorkspaceChecklists';
 import WorkspaceDocuments from '@/components/workspace/WorkspaceDocuments';
+import WorkspaceChat from '@/components/workspace/WorkspaceChat';
 import WorkspaceContacts from '@/components/workspace/WorkspaceContacts';
 import WorkspaceFinances from '@/components/workspace/WorkspaceFinances';
 import WorkspaceActivity from '@/components/workspace/WorkspaceActivity';
@@ -50,6 +51,7 @@ export default function TransactionWorkspace() {
     ['overview', 'Overview', LayoutDashboard],
     ['checklists', 'Checklists', ListChecks],
     ['documents', 'Documents', FileText],
+    ['chat', 'Deal chat', MessagesSquare],
     ['contacts', 'Users & contacts', Users],
     ...(admin || can(user, 'tx.view_commissions') || isOwner ? [['finances', 'Finances', DollarSign]] : []),
     ['shared', 'Shared', Share2],
@@ -79,6 +81,7 @@ export default function TransactionWorkspace() {
         {tab === 'overview' && <WorkspaceOverview {...ctx} />}
         {tab === 'checklists' && <WorkspaceChecklists {...ctx} />}
         {tab === 'documents' && <WorkspaceDocuments {...ctx} />}
+        {tab === 'chat' && <WorkspaceChat {...ctx} />}
         {tab === 'contacts' && <WorkspaceContacts {...ctx} />}
         {tab === 'finances' && <WorkspaceFinances {...ctx} />}
         {tab === 'shared' && <WorkspaceShared {...ctx} />}

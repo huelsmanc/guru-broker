@@ -825,17 +825,20 @@ export const SCHEMA = {
   "GroupChat": {
     "table": "group_chat",
     "columns": [
+      "auto_name",
       "brokerage_id",
       "created_by_email",
       "created_by_name",
       "members",
       "name",
+      "transaction_id",
       "id",
       "created_date",
       "updated_date",
       "created_by"
     ],
     "typed": [
+      "auto_name",
       "members"
     ]
   },
@@ -1078,6 +1081,22 @@ export const SCHEMA = {
       "paid_at",
       "sent_at"
     ]
+  },
+  "PushSubscription": {
+    "table": "push_subscription",
+    "columns": [
+      "auth",
+      "brokerage_id",
+      "endpoint",
+      "p256dh",
+      "user_agent",
+      "user_email",
+      "id",
+      "created_date",
+      "updated_date",
+      "created_by"
+    ],
+    "typed": []
   },
   "Recognition": {
     "table": "recognition",

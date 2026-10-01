@@ -31,7 +31,7 @@ export default function AppLayout() {
     <ChatProvider user={user}>
     <CallProvider>
     <div className="min-h-screen bg-background">
-      <PushNotificationBanner />
+      <PushNotificationBanner user={user} />
       {user && <NotificationManager user={user} brokerageId={user?.brokerage_id} />}
       {/* Mobile header */}
        <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-sidebar z-50 flex items-center px-4">

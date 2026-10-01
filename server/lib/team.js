@@ -2,6 +2,7 @@
 // Permissions live in `role` (user/agent, admin, broker, super_admin).
 // Team duties live in `duties` (['tc'], ['compliance'], or both), so an agent can also be a TC.
 import { appUrl } from './base44.js';
+import { pushTo } from './push.js';
 import { SendEmail } from './integrations.js';
 import { esc } from './esign.js';
 
@@ -65,6 +66,8 @@ ${link ? `<p><a href="${esc(appUrl() + link)}" style="display:inline-block;paddi
 </div>`,
     }).catch((e) => console.error('email failed', email, e.message));
   }
+  // Phone/desktop push too (when set up).
+  await pushTo(entities, [...seen], { title, body: message, url: link || '/Dashboard', tag: referenceId ? `${referenceType || 'n'}:${referenceId}` : undefined }).catch(() => {});
   return seen.size;
 }
 
