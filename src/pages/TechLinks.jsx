@@ -1,5 +1,6 @@
 import React from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, Link } from 'react-router-dom';
+import { isAdminRole } from '../../shared/permissions.generated.js';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { ExternalLink } from 'lucide-react';
@@ -35,7 +36,9 @@ export default function TechLinks() {
         <div className="text-center py-24 text-muted-foreground">
           <p className="text-4xl mb-3">🔗</p>
           <p className="font-medium text-foreground">No links added yet</p>
-          <p className="text-sm mt-1">Ask your broker to add tech tools in Settings.</p>
+          {isAdminRole(user?.role)
+            ? <p className="text-sm mt-1">Add them in <Link to="/Settings" className="text-primary underline">Settings → Tech Links</Link>.</p>
+            : <p className="text-sm mt-1">Ask your broker to add tech tools in Settings.</p>}
         </div>
       ) : (
         <div className="space-y-8">

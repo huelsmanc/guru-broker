@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import React, { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
@@ -15,6 +16,7 @@ import { isAdminRole, normalizeRole, can } from '../../shared/permissions.genera
 export default function Settings() {
   const { user, brokerageId } = useOutletContext();
   const isAdmin = isAdminRole(user?.role);
+  const queryClient = useQueryClient();
   const [form, setForm] = useState({
     brokerage_name: '',
     broker_name: '',
@@ -303,9 +305,12 @@ export default function Settings() {
                 onSave={async (links) => {
                   const updated = { ...form, tech_links: links };
                   setForm(updated);
-                  if (settingsId) {
-                    await base44.entities.BrokerageSettings.update(settingsId, { tech_links: links });
-                  }
+                  try {
+                    // The brokerage may not have a settings record yet: create it on first save.
+                    if (settingsId) await base44.entities.BrokerageSettings.update(settingsId, { tech_links: links });
+                    else { const created = await base44.entities.BrokerageSettings.create({ ...updated, brokerage_id: brokerageId }); setSettingsId(created.id); }
+                    queryClient.invalidateQueries({ queryKey: ['brokerage-settings'] });
+                  } catch (err) { window.alert(`Links weren't saved: ${err.message}`); }
                 }}
               />
             </div>
