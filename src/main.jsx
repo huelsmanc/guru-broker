@@ -4,6 +4,21 @@ import App from '@/App.jsx'
 import '@/index.css'
 import { CONFIG_MISSING } from '@/api/base44Client'
 
+// After a new version is deployed, a tab that was already open asks for page files that no
+// longer exist. Reload once to get the new version instead of leaving the page stuck.
+const isStaleChunk = (msg) => /dynamically imported module|Importing a module script failed|error loading dynamically imported|Failed to fetch module/i.test(String(msg || ''));
+function reloadOnce() {
+  try {
+    const last = Number(sessionStorage.getItem('gbh-reloaded') || 0);
+    if (Date.now() - last < 20000) return false;
+    sessionStorage.setItem('gbh-reloaded', String(Date.now()));
+  } catch { /* ignore */ }
+  window.location.reload();
+  return true;
+}
+window.addEventListener('vite:preloadError', (e) => { if (reloadOnce()) e.preventDefault(); });
+window.addEventListener('unhandledrejection', (e) => { if (isStaleChunk(e.reason?.message)) reloadOnce(); });
+
 // Shows what went wrong instead of a blank white page.
 function Problem({ title, children }) {
   return (
@@ -17,6 +32,7 @@ function Problem({ title, children }) {
 class ErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { error: null } }
   static getDerivedStateFromError(error) { return { error } }
+  componentDidCatch(error) { if (isStaleChunk(error?.message)) reloadOnce() }
   render() {
     if (!this.state.error) return this.props.children
     return (
