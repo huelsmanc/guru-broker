@@ -79,6 +79,7 @@ export default function Sidebar({ user, brokerageId, onChannelClick }) {
 
   const superAdminLinks = [
     { to: '/SuperAdmin', icon: Building2, label: 'Brokerages' },
+    { to: '/Offers?tab=forms', icon: ScrollText, label: 'State Contract Forms' },
     { to: '/Import', icon: Database, label: 'Import Data' },
   ];
 
@@ -194,7 +195,7 @@ export default function Sidebar({ user, brokerageId, onChannelClick }) {
           </button>
         )}
         {links.map(({ to, icon: Icon, label }) => {
-          const active = location.pathname === to;
+          const active = location.pathname === to.split('?')[0];
           return (
             <Link
               key={to}
