@@ -256,7 +256,7 @@ export default (async (req) => {
 
     // Return PDF as base64
     const pdfData = pdf.output('arraybuffer');
-    const pdfBase64 = btoa(String.fromCharCode(...new Uint8Array(pdfData)));
+    const pdfBase64 = Buffer.from(pdfData).toString('base64'); // (spreading every byte into one call overflows once the PDF has a photo)
 
     return Response.json({ 
       success: true,
