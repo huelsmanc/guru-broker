@@ -376,7 +376,7 @@ export default function Chat() {
   }
 
   return (
-    <div className="h-[100dvh] flex flex-col overflow-hidden">
+    <div className="h-[calc(100dvh-9rem)] md:h-[calc(100dvh-5rem)] lg:h-[100dvh] flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-border/30 bg-background flex-shrink-0">
         <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -457,7 +457,7 @@ export default function Chat() {
        )}
 
       {/* Messages */}
-       <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3 bg-background pb-[calc(env(safe-area-inset-bottom)+5rem)] flex flex-col">
+       <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3 bg-background pb-4 flex flex-col">
          {[...messages, ...optimisticMessages].map((msg) => {
            const isOwnMsg = (msg.sender_role === 'agent' && !isAdmin) || (msg.sender_role === 'broker' && isAdmin);
            const isEditing = editingMsgId === msg.id;

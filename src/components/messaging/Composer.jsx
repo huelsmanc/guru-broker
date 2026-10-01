@@ -111,7 +111,7 @@ export default function Composer({ onSend, people = [], allowChannel, placeholde
   const stopRec = (cancel) => { if (!rec) return; rec.recorder._cancel = cancel; rec.recorder.stop(); setRec(null); };
 
   return (
-    <div className={cn('relative border-t bg-background px-3 sm:px-4 py-3', dragging && 'ring-2 ring-primary ring-inset')}
+    <div className={cn('relative border-t bg-background px-2 sm:px-4 pt-2 sm:pt-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:pb-3', dragging && 'ring-2 ring-primary ring-inset')}
       onDragOver={(e) => { if (e.dataTransfer?.types?.includes('Files')) { e.preventDefault(); setDragging(true); } }}
       onDragLeave={() => setDragging(false)}
       onDrop={(e) => { e.preventDefault(); setDragging(false); if (e.dataTransfer.files?.length) sendFiles(e.dataTransfer.files); }}>
@@ -126,7 +126,7 @@ export default function Composer({ onSend, people = [], allowChannel, placeholde
         </div>
       )}
       {options.length > 0 && (
-        <ul className="absolute bottom-full left-3 mb-1 w-72 rounded-xl border bg-popover shadow-xl py-1 z-30">
+        <ul className="absolute bottom-full left-3 mb-1 w-72 max-w-[calc(100%-1.5rem)] rounded-xl border bg-popover shadow-xl py-1 z-30">
           {options.map((p, i) => (
             <li key={p.email}><button type="button" onMouseDown={(e) => { e.preventDefault(); choose(p); }} className={cn('w-full flex items-center gap-2 px-3 py-1.5 text-left text-sm', i === hi && 'bg-muted')}>
               {p.email === 'channel' ? <span className="w-6 h-6 rounded-full bg-primary/15 text-primary flex items-center justify-center text-xs font-bold">@</span> : <Avatar person={p} size={24} />}
@@ -144,11 +144,11 @@ export default function Composer({ onSend, people = [], allowChannel, placeholde
           <button className="rounded-full bg-primary text-primary-foreground px-3 py-1.5 text-sm flex items-center gap-1" onClick={() => stopRec(false)}><Square className="w-3.5 h-3.5" /> Send</button>
         </div>
       ) : (
-        <div className="flex items-end gap-1.5 rounded-2xl border bg-muted/40 focus-within:border-primary/50 focus-within:bg-background px-2 py-1.5">
+        <div className="flex items-end gap-1 rounded-3xl border bg-muted/40 focus-within:border-primary/50 focus-within:bg-background px-2 py-1.5">
           <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => { sendFiles(e.target.files); e.target.value = ''; }} />
           <button type="button" className="p-2 rounded-full hover:bg-muted text-muted-foreground" title="Attach files" disabled={disabled} onClick={() => fileRef.current?.click()}><Paperclip className="w-4 h-4" /></button>
           <textarea ref={ta} rows={1} value={text} onChange={change} onKeyDown={key} onPaste={paste} onBlur={() => onStopTyping?.()} disabled={disabled}
-            placeholder={placeholder} className="flex-1 resize-none bg-transparent px-1 py-2 text-sm outline-none max-h-[180px] placeholder:text-muted-foreground/70" />
+            placeholder={placeholder} className="flex-1 min-w-0 resize-none bg-transparent px-1 py-1.5 text-base sm:text-sm outline-none max-h-[180px] placeholder:text-muted-foreground/70" />
           <button type="button" className="p-2 rounded-full hover:bg-muted text-muted-foreground" title="Emoji" onClick={() => setEmoji((x) => !x)}><Smile className="w-4 h-4" /></button>
           {text.trim() ? (
             <button type="button" onClick={submit} disabled={disabled} className="p-2 rounded-full bg-primary text-primary-foreground hover:bg-primary/90" title="Send (Enter)"><Send className="w-4 h-4" /></button>

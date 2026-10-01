@@ -4,7 +4,7 @@ import { Home, MessageSquare, Mail, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTabHistory } from './MobileTabBarProvider';
 
-export default function MobileTabBar() {
+export default function MobileTabBar({ hidden }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { saveNavigation, getLastPath } = useTabHistory();
@@ -40,6 +40,7 @@ export default function MobileTabBar() {
     }
   };
 
+  if (hidden) return null;
   return (
     <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border z-40">
       <div className="flex items-center justify-around h-20" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>

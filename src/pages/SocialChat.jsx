@@ -47,12 +47,12 @@ export default function SocialChat() {
 
   if (!chat) return null;
   if (!loadingChannels && !channels.length) {
-    return <div className="h-[calc(100dvh-4rem)] md:h-[100dvh] flex items-center justify-center text-sm text-muted-foreground p-6 text-center">{admin ? 'No channels yet. Create one with the + next to Channels in the sidebar.' : "You're not in any channels yet."}</div>;
+    return <div className="h-full flex items-center justify-center text-sm text-muted-foreground p-6 text-center">{admin ? 'No channels yet. Create one with the + next to Channels in the sidebar.' : "You're not in any channels yet."}</div>;
   }
-  if (!current) return <div className="h-[100dvh] flex items-center justify-center"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>;
+  if (!current) return <div className="h-full flex items-center justify-center"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>;
 
   return (
-    <div className="h-[calc(100dvh-4rem)] md:h-[100dvh] flex overflow-hidden bg-background">
+    <div className="h-full flex overflow-hidden bg-background">
       <ChannelView key={current.name} channel={current} admin={admin} chat={chat} panel={panel} setPanel={setPanel}
         openThread={(m) => setParams((p) => { p.set('thread', m.id); return p; })} onMembers={() => setShowMembers(true)} onSettings={() => setShowSettings(true)} />
       {threadId && (

@@ -55,7 +55,7 @@ export default function ChatInput({ onSend, disabled, fileScope }) {
           placeholder="Type your message..."
           disabled={disabled || !!voiceMemoUrl}
           rows={1}
-          className="flex-1 resize-none bg-muted rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-muted-foreground/50 min-h-[44px] max-h-[120px] disabled:opacity-50"
+          className="flex-1 resize-none bg-muted rounded-xl px-4 py-3 text-base sm:text-sm outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-muted-foreground/50 min-h-[44px] max-h-[120px] disabled:opacity-50"
         />
         <VoiceMemoButton onSend={onSend} onStage={handleStageVoiceMemo} disabled={disabled || !!voiceMemoUrl} scope={fileScope} />
         <Button

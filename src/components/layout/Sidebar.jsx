@@ -9,7 +9,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useChat } from '@/lib/chat/ChatProvider';
 import { isAdminRole, normalizeRole, can } from '../../../shared/permissions.generated.js';
 
-export default function Sidebar({ user, brokerageId, onChannelClick }) {
+export default function Sidebar({ user, brokerageId, onChannelClick, mobile }) {
   const location = useLocation();
   const isAdmin = isAdminRole(user?.role);
   const [brokerageSettings, setBrokerageSettings] = useState(null);
@@ -142,7 +142,7 @@ export default function Sidebar({ user, brokerageId, onChannelClick }) {
   const links = at < 0 ? [...baseLinks, ...backOffice] : [...baseLinks.slice(0, at + 1), ...backOffice, ...baseLinks.slice(at + 1)];
 
   return (
-    <aside className="fixed left-0 top-0 h-screen w-64 bg-sidebar text-sidebar-foreground flex flex-col z-40">
+    <aside className={mobile ? 'h-full w-full bg-sidebar text-sidebar-foreground flex flex-col shadow-2xl' : 'fixed left-0 top-0 h-screen w-64 bg-sidebar text-sidebar-foreground flex flex-col z-40'}>
       <div className="p-6 border-b border-sidebar-border">
         <div className="flex items-center gap-3">
           {brokerage?.logo_url ? (
@@ -163,7 +163,10 @@ export default function Sidebar({ user, brokerageId, onChannelClick }) {
         </div>
       </div>
 
-      <nav className="flex-1 overflow-y-auto p-4 space-y-1">
+      {/* On phones the menu and channels scroll together so channels are always reachable;
+          on bigger screens the menu scrolls on its own and channels stay in view below it. */}
+      <div className={mobile ? 'flex-1 min-h-0 overflow-y-auto overscroll-contain' : 'flex-1 min-h-0 flex flex-col'}>
+      <nav className={mobile ? 'p-4 space-y-1' : 'flex-1 min-h-0 overflow-y-auto p-4 space-y-1'}>
         {isSuperAdmin && brokerageId && (
           <button
             onClick={async () => {
@@ -204,10 +207,11 @@ export default function Sidebar({ user, brokerageId, onChannelClick }) {
       </nav>
 
       <ChatChannelsDropdown brokerageId={brokerageId} isAdmin={isAdmin} isSuperAdmin={isSuperAdmin} onChannelClick={onChannelClick} />
+      </div>
 
 
 
-      <div className="p-4 border-t border-sidebar-border">
+      <div className="p-4 border-t border-sidebar-border" style={mobile ? { paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' } : undefined}>
         <div className="flex items-center gap-3 px-4 py-3">
           <div className="w-8 h-8 rounded-full bg-sidebar-accent flex items-center justify-center">
             <span className="text-xs font-semibold text-sidebar-accent-foreground">

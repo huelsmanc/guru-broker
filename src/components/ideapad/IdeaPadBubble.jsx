@@ -133,7 +133,7 @@ Respond as the assistant:`,
         }}
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.95 }}
-        className="fixed bottom-24 right-4 lg:bottom-6 lg:right-6 z-50 w-14 h-14 rounded-full bg-gradient-to-br from-primary to-accent shadow-lg flex items-center justify-center text-white"
+        className={cn('fixed bottom-24 right-4 lg:bottom-6 lg:right-6 z-50 w-14 h-14 rounded-full bg-gradient-to-br from-primary to-accent shadow-lg flex items-center justify-center text-white')}
         title="Idea Pad"
       >
         {open ? <X className="w-6 h-6" /> : <Lightbulb className="w-6 h-6" />}
@@ -148,7 +148,7 @@ Respond as the assistant:`,
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
             transition={{ type: 'spring', stiffness: 300, damping: 28 }}
-            className="fixed bottom-44 right-4 lg:bottom-24 lg:right-6 z-50 w-[360px] max-w-[calc(100vw-24px)] h-[520px] bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+            className={cn('fixed bottom-44 right-4 lg:bottom-24 lg:right-6 z-50 w-[360px] max-w-[calc(100vw-24px)] h-[520px] max-h-[calc(100dvh-14rem)] bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden')}
           >
             {/* Header */}
             <div className="flex items-center gap-3 px-4 py-3 bg-gradient-to-r from-primary to-accent text-white flex-shrink-0">

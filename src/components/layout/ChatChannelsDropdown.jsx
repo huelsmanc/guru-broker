@@ -91,7 +91,7 @@ export default function ChatChannelsDropdown({ brokerageId, isAdmin, isSuperAdmi
               e.stopPropagation();
               setShowAddDialog(true);
             }}
-            className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-sidebar-primary/20 text-sidebar-foreground/50 hover:text-sidebar-primary transition-all"
+            className="md:opacity-0 md:group-hover:opacity-100 p-1 rounded hover:bg-sidebar-primary/20 text-sidebar-foreground/50 hover:text-sidebar-primary transition-all"
             title="Add channel"
           >
             <Plus className="w-4 h-4" />

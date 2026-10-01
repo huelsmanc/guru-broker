@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { cn } from '@/lib/utils';
 import { base44 } from '@/api/base44Client';
 import Sidebar from './Sidebar';
 import NotificationBell from './NotificationBell';
@@ -16,6 +17,12 @@ export default function AppLayout() {
   const [user, setUser] = useState(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const navigate = useNavigate();
+  const { pathname, search } = useLocation();
+  // Messaging screens fill the screen like a phone messaging app: the page itself never scrolls,
+  // only the message list does. Inside an open conversation the bottom tabs step aside for the composer.
+  const chatScreen = pathname === '/DirectMessages' || pathname === '/SocialChat';
+  const inConversation = (pathname === '/DirectMessages' && /[?&](dm|group)=/.test(search)) || pathname === '/SocialChat';
+  useEffect(() => { setMobileOpen(false); }, [pathname, search]);
 
   // Pick up profile changes (e.g. a new name saved on My Profile).
   useEffect(() => {
@@ -56,9 +63,9 @@ export default function AppLayout() {
 
       {/* Mobile sidebar overlay */}
       {mobileOpen && (
-        <div className="md:hidden fixed inset-0 z-40 bg-black/50" onClick={() => setMobileOpen(false)}>
-          <div onClick={(e) => e.stopPropagation()}>
-            <Sidebar user={user} brokerageId={user?.brokerage_id} onChannelClick={() => setMobileOpen(false)} />
+        <div className="md:hidden fixed inset-x-0 top-16 bottom-0 z-[60] bg-black/50" onClick={() => setMobileOpen(false)}>
+          <div className="h-full w-72 max-w-[85vw]" onClick={(e) => e.stopPropagation()}>
+            <Sidebar mobile user={user} brokerageId={user?.brokerage_id} onChannelClick={() => setMobileOpen(false)} />
           </div>
         </div>
       )}
@@ -69,17 +76,18 @@ export default function AppLayout() {
       </div>
 
       {/* Main content */}
-      <main className="md:ml-64 pt-16 md:pt-0 pb-20 min-h-screen">
+      <main className={cn('md:ml-64 pt-16 md:pt-0', chatScreen ? cn('h-[100dvh] overflow-hidden', !inConversation && 'pb-20 lg:pb-0') : 'pb-20 min-h-screen')}>
         <Outlet context={{ user, brokerageId: user?.brokerage_id }} />
       </main>
 
       {/* Mobile Bottom Tab Bar */}
-      <MobileTabBar />
+      <MobileTabBar hidden={inConversation} />
 
       {user && !(user.display_name || user.full_name) && <NamePrompt user={user} onSaved={setUser} />}
 
       {/* Floating Idea Pad */}
-      <IdeaPadBubble user={user} />
+      {/* Kept off messaging screens, where it sat on top of the send button. */}
+      {!chatScreen && <IdeaPadBubble user={user} />}
     </div>
     </CallProvider>
     </ChatProvider>

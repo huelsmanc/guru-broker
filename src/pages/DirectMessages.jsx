@@ -69,12 +69,12 @@ export default function DirectMessages() {
   const hasOpen = !!dm || !!groupId;
 
   return (
-    <div className="h-[calc(100dvh-4rem)] md:h-[100dvh] flex overflow-hidden bg-background">
+    <div className="h-full flex overflow-hidden bg-background">
       <aside className={cn('w-full md:w-80 border-r flex-col flex-shrink-0', hasOpen ? 'hidden md:flex' : 'flex')}>
         <div className="px-4 pt-4 pb-3 border-b space-y-3">
           <div className="flex items-center justify-between"><h1 className="text-xl font-bold">Chats</h1>
-            <button onClick={() => setComposing(true)} className="p-2 rounded-full hover:bg-muted" title="New message"><PenSquare className="w-5 h-5" /></button></div>
-          <div className="flex items-center gap-2 rounded-full bg-muted px-3 py-2"><Search className="w-4 h-4 text-muted-foreground" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search chats" className="bg-transparent outline-none text-sm flex-1" /></div>
+            <button onClick={() => setComposing(true)} className="p-2 rounded-full bg-primary/10 text-primary hover:bg-primary/15" title="New message" aria-label="New message"><PenSquare className="w-5 h-5" /></button></div>
+          <div className="flex items-center gap-2 rounded-full bg-muted px-3 py-2"><Search className="w-4 h-4 text-muted-foreground" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search chats" className="bg-transparent outline-none text-base sm:text-sm flex-1 min-w-0" /></div>
           <OnlineRow chat={chat} onOpen={(e) => open('dm', e)} />
         </div>
         <div className="flex-1 overflow-y-auto">
@@ -183,20 +183,31 @@ export function Conversation({ kind, convKey, group, chat, onBack, embedded }) {
 
   return (
     <div className="flex-1 min-h-0 flex flex-col relative">
-      <header className="flex items-center gap-3 px-3 sm:px-4 py-2.5 border-b">
-        {!embedded && <button onClick={onBack} className="md:hidden p-2 -ml-1 rounded-full hover:bg-muted"><ArrowLeft className="w-5 h-5" /></button>}
-        {kind === 'dm' ? <Avatar person={chat.personOf(convKey)} size={40} online={online} /> : <span className="w-10 h-10 rounded-full bg-gradient-to-br from-violet-200 to-sky-200 dark:from-violet-900 dark:to-sky-900 flex items-center justify-center"><Users className="w-5 h-5 text-violet-700 dark:text-violet-200" /></span>}
+      <header className="flex items-center gap-2.5 sm:gap-3 pl-1 pr-1.5 sm:px-4 py-2 border-b bg-card/95 backdrop-blur flex-shrink-0">
+        {!embedded && <button onClick={onBack} className="md:hidden p-2 rounded-full hover:bg-muted" aria-label="Back to chats"><ArrowLeft className="w-5 h-5" /></button>}
+        {kind === 'dm' ? <Avatar person={chat.personOf(convKey)} size={38} online={online} /> : <span className="w-[38px] h-[38px] rounded-full bg-gradient-to-br from-violet-200 to-sky-200 dark:from-violet-900 dark:to-sky-900 flex items-center justify-center flex-shrink-0"><Users className="w-5 h-5 text-violet-700 dark:text-violet-200" /></span>}
         <div className="flex-1 min-w-0">
-          <p className="font-semibold truncate">{title}</p>
+          <p className="font-semibold text-[15px] leading-tight truncate">{title}</p>
           <p className="text-xs text-muted-foreground truncate">{kind === 'dm' ? (online ? <span className="text-emerald-600">Active now</span> : chat.people.get(convKey)?.role ? 'Offline' : '') : group.transaction_id ? `Deal chat · ${people.map((p) => p.name.split(' ')[0]).join(', ')}` : `${members.length} people${online ? ' · some online' : ''}`}</p>
         </div>
-        <CatchUp kind={kind} convKey={convKey} since={lastRead || undefined} />
-        <CallButtons kind={kind} convKey={convKey} />
+        <div className="flex items-center flex-shrink-0">
+          <CatchUp kind={kind} convKey={convKey} since={lastRead || undefined} />
+          <CallButtons kind={kind} convKey={convKey} className="gap-0" />
+        </div>
         {kind === 'group' && group.transaction_id && !embedded && <a href={`/Transactions/${group.transaction_id}`} className="text-xs text-primary hover:underline px-2">Open deal</a>}
         {kind === 'group' && !group.transaction_id && <button onClick={() => setManage(true)} className="p-2 rounded-lg hover:bg-muted text-muted-foreground" title="Group settings"><Users className="w-4 h-4" /></button>}
       </header>
       <MessageList key={`${kind}:${convKey}`} conv={conv} kind={kind} chat={chat} variant="bubble" renderCall={renderCall} seenBy={seenBy} typers={room.typers}
-        emptyText={kind === 'dm' ? `This is the start of your conversation with ${title}.` : 'Say hi to the group!'} />
+        emptyText={kind === 'dm' ? 'No messages yet. Say hi!' : 'Say hi to the group!'}
+        intro={(
+          <div className="flex flex-col items-center text-center px-6 pt-8 pb-4">
+            {kind === 'dm' ? <Avatar person={chat.personOf(convKey)} size={72} online={online} />
+              : <span className="w-[72px] h-[72px] rounded-full bg-gradient-to-br from-violet-200 to-sky-200 dark:from-violet-900 dark:to-sky-900 flex items-center justify-center"><Users className="w-8 h-8 text-violet-700 dark:text-violet-200" /></span>}
+            <p className="mt-3 font-semibold text-lg leading-tight">{title}</p>
+            <p className="text-xs text-muted-foreground mt-1">{kind === 'dm' ? convKey : `${members.length} people`}</p>
+            <p className="text-[11px] text-muted-foreground/80 mt-3">{kind === 'dm' ? 'Private conversation. Only the two of you can see it.' : 'Only members can see this group.'}</p>
+          </div>
+        )} />
       <Composer draftKey={`${kind}:${convKey}`} fileScope={kind === 'dm' ? { kind: 'dm', emails: [chat.me, convKey] } : { kind: 'group', id: convKey }} people={kind === 'group' ? people : []} placeholder="Aa" onSend={(t, extra) => conv.send(t, kind === 'group' ? extra : {})}
         onTyping={room.typing} onStopTyping={room.stopTyping} />
       {manage && group && <GroupSettings group={group} chat={chat} onClose={() => setManage(false)} onLeft={onBack} />}
@@ -213,7 +224,7 @@ function PeoplePicker({ chat, exclude = [], picked, setPicked }) {
       <div className="flex flex-wrap gap-1.5 items-center rounded-lg border px-2 py-1.5">
         <span className="text-sm text-muted-foreground">To:</span>
         {picked.map((e) => <span key={e} className="flex items-center gap-1 rounded-full bg-primary/10 text-primary text-xs px-2 py-1">{chat.personOf(e).name}<button onClick={() => setPicked(picked.filter((x) => x !== e))}><X className="w-3 h-3" /></button></span>)}
-        <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search people" className="flex-1 min-w-[120px] bg-transparent outline-none text-sm py-1" />
+        <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search people" className="flex-1 min-w-[120px] bg-transparent outline-none text-base sm:text-sm py-1" />
       </div>
       <ul className="max-h-72 overflow-y-auto divide-y">
         {options.map((p) => {

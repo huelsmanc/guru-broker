@@ -72,15 +72,24 @@ function LinkCard({ url }) {
 
 export function MessageBody({ msg, personOf, renderCall, bubble, own }) {
   const c = String(msg.content || '');
-  if (c.startsWith('[voice_memo]')) return <audio controls preload="metadata" src={c.slice(12)} className="h-10 max-w-[260px]" />;
+  if (c.startsWith('[voice_memo]')) return <audio controls preload="metadata" src={c.slice(12)} className="h-10 w-60 max-w-full" />;
   if (c.startsWith('[call]')) { const [id, kind] = c.slice(6).split('|'); return renderCall ? renderCall(id, kind, msg) : <span>📞 Call</span>; }
   if (c.startsWith('[file]')) {
     const [url, type, name] = c.slice(6).split('|');
-    if (type?.startsWith('image/')) return <FilePreview fileUrl={url} fileName={name} fileType={type} maxWidth="320px" showCaption={false} />;
-    if (type?.startsWith('video/')) return <video src={url} controls className="rounded-lg max-w-[320px] max-h-72" />;
+    if (type?.startsWith('image/')) return <FilePreview fileUrl={url} fileName={name} fileType={type} maxWidth="min(320px, 100%)" showCaption={false} />;
+    if (type?.startsWith('video/')) return <video src={url} controls className="rounded-2xl w-80 max-w-full max-h-72 bg-black" />;
+    const ext = /\.([a-z0-9]{1,5})$/i.exec(name || '')?.[1]?.toUpperCase();
+    const mine = bubble && own;
     return (
-      <a href={url} target="_blank" rel="noopener noreferrer" className={cn('flex items-center gap-2 rounded-lg border px-3 py-2 max-w-xs', bubble && own ? 'border-white/30' : 'bg-background/60')}>
-        <FileText className="w-5 h-5 flex-shrink-0" /><span className="text-sm truncate">{name || 'File'}</span>
+      <a href={url} target="_blank" rel="noopener noreferrer"
+        className={cn('flex items-center gap-3 w-64 max-w-full px-3 py-2.5 transition-colors',
+          bubble ? 'rounded-2xl' : 'rounded-xl border bg-background/60 hover:bg-muted/60',
+          mine ? 'bg-primary text-primary-foreground rounded-br-md hover:bg-primary/90' : bubble && 'bg-muted text-foreground rounded-bl-md hover:bg-muted/80')}>
+        <span className={cn('w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0', mine ? 'bg-white/20' : 'bg-primary/10 text-primary')}><FileText className="w-5 h-5" /></span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-medium truncate">{name || 'File'}</span>
+          <span className={cn('block text-xs', mine ? 'text-primary-foreground/75' : 'text-muted-foreground')}>{ext ? `${ext} · ` : ''}Tap to open</span>
+        </span>
       </a>
     );
   }
@@ -144,7 +153,7 @@ function EditBox({ msg, onSave, onCancel }) {
  * Render with key={conversation} so scroll state starts fresh per conversation.
  * variant 'slack' (channels: rows, names, hover toolbar) or 'bubble' (DMs/groups: Messenger bubbles).
  */
-export default function MessageList({ conv, kind, chat, variant = 'slack', canModerate, onThread, threadCounts = {}, renderCall, seenBy, emptyText, firstUnreadAt, typers = [] }) {
+export default function MessageList({ conv, kind, chat, variant = 'slack', canModerate, onThread, threadCounts = {}, renderCall, seenBy, emptyText, intro, firstUnreadAt, typers = [] }) {
   const { messages, loading, hasMore, loadOlder, retry, edit, remove, react, setPinned } = conv;
   const me = chat.me;
   const box = useRef(null);
@@ -225,9 +234,9 @@ export default function MessageList({ conv, kind, chat, variant = 'slack', canMo
           <div className="mt-auto" />
           <div ref={topRef} className="h-1" />
           {loadingOlder && <div className="py-3 flex justify-center"><Loader2 className="w-4 h-4 animate-spin text-muted-foreground" /></div>}
-          {!hasMore && !loading && messages.length > 0 && <p className="text-center text-xs text-muted-foreground py-4">This is the beginning of the conversation.</p>}
+          {!hasMore && !loading && (intro || (messages.length > 0 && <p className="text-center text-xs text-muted-foreground py-4">This is the beginning of the conversation.</p>))}
           {loading ? <div className="flex-1 flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
-            : !messages.length ? <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground py-16 px-6 text-center">{emptyText || 'No messages yet. Say hi!'}</div>
+            : !messages.length ? <div className={cn('flex items-center justify-center text-sm text-muted-foreground px-6 text-center', intro ? 'pb-6' : 'flex-1 py-16')}>{emptyText || 'No messages yet. Say hi!'}</div>
               : rows.map((r) => {
                 if (r.type === 'day') return <div key={r.key} className="flex items-center gap-3 px-4 my-3"><div className="flex-1 h-px bg-border/60" /><span className="text-[11px] font-medium text-muted-foreground">{r.label}</span><div className="flex-1 h-px bg-border/60" /></div>;
                 if (r.type === 'new') return <div key={r.key} className="flex items-center gap-3 px-4 my-2"><div className="flex-1 h-px bg-red-400/70" /><span className="text-[11px] font-semibold text-red-500">New</span></div>;
@@ -243,10 +252,10 @@ export default function MessageList({ conv, kind, chat, variant = 'slack', canMo
 
                 if (variant === 'bubble') {
                   return (
-                    <div key={r.key} className={cn('group relative flex gap-2 px-3 sm:px-4', r.compact ? 'mt-0.5' : 'mt-3', own && 'flex-row-reverse')}
+                    <div key={r.key} className={cn('group relative flex gap-2 px-3 sm:px-4', r.compact ? 'mt-0.5' : 'mt-3', own && 'justify-end')}
                       onMouseEnter={() => setHover(m.id)} onMouseLeave={() => setHover(null)} onClick={(e) => { e.stopPropagation(); setHover(m.id); }}>
-                      <div className="w-8 flex-shrink-0">{!own && !r.compact && <Avatar person={person} size={32} online={chat.online.has(lc(m.sender_email))} />}</div>
-                      <div className={cn('flex flex-col max-w-[78%] sm:max-w-[65%]', own && 'items-end')}>
+                      {!own && <div className="w-8 flex-shrink-0 self-start">{!r.compact && <Avatar person={person} size={32} online={chat.online.has(lc(m.sender_email))} />}</div>}
+                      <div className={cn('flex flex-col min-w-0 max-w-[80%] sm:max-w-[65%]', own && 'items-end')}>
                         {!own && !r.compact && kind === 'group' && <span className="text-[11px] text-muted-foreground ml-1 mb-0.5">{person.name}</span>}
                         {editing?.id === m.id ? <EditBox msg={m} onCancel={() => setEditing(null)} onSave={(v) => { edit(m.id, v); setEditing(null); }} /> : (
                           <div title={time} className={cn('rounded-2xl px-3.5 py-2 text-sm leading-relaxed', own ? 'bg-primary text-primary-foreground rounded-br-md' : 'bg-muted text-foreground rounded-bl-md', m._pending && 'opacity-70', String(m.content).startsWith('[file]') && 'bg-transparent p-0')}>
