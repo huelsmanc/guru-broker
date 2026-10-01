@@ -109,9 +109,10 @@ export default function SuperAdmin() {
   const handleInvite = async () => {
     if (!inviteForm.email || !inviteDialog) return;
     setInviting(true);
-    await base44.users.inviteUser(inviteForm.email, inviteForm.role, {
-      nextUrl: `/JoinBrokerage?brokerage_id=${inviteDialog.id}`
-    });
+    try {
+      await base44.users.inviteUser(inviteForm.email, inviteForm.role, { brokerage_id: inviteDialog.id, nextUrl: '/Dashboard' });
+      window.alert(`Invite sent to ${inviteForm.email}. Ask them to check spam if it doesn't arrive.`);
+    } catch (err) { window.alert(err.message || 'The invite could not be sent.'); setInviting(false); return; }
     setInviting(false);
     setInviteDialog(null);
     setInviteForm({ email: '', role: 'user' });
@@ -511,9 +512,10 @@ function BrokerageManagement({ brokerage, allUsers, currentUser, onBack, onUpdat
   const handleInvite = async () => {
     if (!inviteForm.email) return;
     setInviting(true);
-    await base44.users.inviteUser(inviteForm.email, inviteForm.role, {
-      nextUrl: `/JoinBrokerage?brokerage_id=${brokerage.id}`
-    });
+    try {
+      await base44.users.inviteUser(inviteForm.email, inviteForm.role, { brokerage_id: brokerage.id, nextUrl: '/Dashboard' });
+      window.alert(`Invite sent to ${inviteForm.email}. Ask them to check spam if it doesn't arrive.`);
+    } catch (err) { window.alert(err.message || 'The invite could not be sent.'); setInviting(false); return; }
     setInviting(false);
     setShowInvite(false);
     setInviteForm({ email: '', role: 'user' });

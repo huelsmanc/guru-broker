@@ -103,8 +103,18 @@ function buildClient({ token, asService }) {
       const { data, error } = await admin.auth.admin.inviteUserByEmail(addr, { redirectTo });
       if (error && !/already been registered|already exists/i.test(error.message)) throw new Error(error.message);
       const userId = data?.user?.id;
-      if (userId) await admin.from('profiles').update({ role, brokerage_id: brokerageId }).eq('id', userId);
-      return { success: true, already_registered: !userId };
+      if (userId) {
+        await admin.from('profiles').update({ role, brokerage_id: brokerageId }).eq('id', userId);
+        return { success: true, already_registered: false };
+      }
+      // Already has a login: place them if they don't belong to a brokerage yet (e.g. invited
+      // before), and send a sign-in link instead of an invite.
+      const { data: prof } = await admin.from('profiles').select('id, brokerage_id, role').eq('email', addr).maybeSingle();
+      if (prof && !prof.brokerage_id && brokerageId && prof.role !== 'super_admin') {
+        await admin.from('profiles').update({ role, brokerage_id: brokerageId }).eq('id', prof.id);
+      }
+      await admin.auth.signInWithOtp({ email: addr, options: { shouldCreateUser: false, emailRedirectTo: `${appUrl()}${opts.nextUrl || '/Dashboard'}` } }).catch(() => {});
+      return { success: true, already_registered: true };
     },
   };
 

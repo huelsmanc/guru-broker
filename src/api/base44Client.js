@@ -170,7 +170,7 @@ export const base44 = {
     invoke: (name, payload) => callApi(`/api/fn/${encodeURIComponent(name)}`, payload),
   },
   users: {
-    inviteUser: async (email, role) => (await callApi('/api/fn/inviteUser', { email, role })).data,
+    inviteUser: async (email, role, opts = {}) => (await callApi('/api/fn/inviteUser', { email, role, brokerage_id: opts.brokerage_id, nextUrl: opts.nextUrl })).data,
   },
 };
 
