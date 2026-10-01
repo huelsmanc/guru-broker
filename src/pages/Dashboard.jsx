@@ -129,19 +129,17 @@ export default function Dashboard() {
         </div>
       </motion.div>
 
-      <MyDay />
-
-      <div className="mb-10">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+      {/* Announcements first: what the brokerage wants everyone to see. */}
+      <div className="mb-6 space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <AnnouncementBoard brokerageId={brokerageId} user={user} isAdmin={isAdmin} />
           <AudioAnnouncement brokerageId={brokerageId} user={user} isAdmin={isAdmin} />
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
-          <div className="lg:col-span-3">
-            <SocialFeedWidget brokerageId={brokerageId} user={user} />
-          </div>
-        </div>
+        <SocialFeedWidget brokerageId={brokerageId} user={user} />
       </div>
+
+      <MyDay />
+
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
         <StatsCard title="Active Chats" value={activeConvos.length} icon={MessageSquare} color="bg-primary" />
