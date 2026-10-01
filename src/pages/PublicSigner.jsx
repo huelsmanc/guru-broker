@@ -263,7 +263,8 @@ export default function PublicSigner() {
 
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           <PDFPageRenderer url={doc.document_url} onLayout={setLayout}>
-            {layout && allFields.filter((f) => (isPrefilled(f) || fieldSignerIndex(f) === signerIndex) && fieldVisible(f, seen)).map((field) => {
+            {layout && allFields.filter((f) => (isPrefilled(f) || fieldSignerIndex(f) === signerIndex) && fieldVisible(f, seen))
+              .filter((f) => !(isPrefilled(f) && f.type !== 'strike' && !String(f.value || '').trim())).map((field) => {
               const style = fieldStyle(field, layout.ratio);
               const val = isPrefilled(field) ? field.value : values[field.id];
               const mine = !isPrefilled(field);

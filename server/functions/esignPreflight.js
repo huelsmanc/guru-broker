@@ -36,6 +36,8 @@ export function ruleChecks(doc, signers) {
     if (f.type === 'dropdown' && !(f.options || []).filter(Boolean).length) add('critical', 'Empty dropdown', 'A dropdown has no choices to pick from.');
     if (f.show_if && !fields.some((g) => g.id === (f.show_if.field_id || f.show_if))) add('warning', 'A condition points at a deleted box', 'A box only shows when another box is filled, but that box is gone.');
   });
+  const blankForSender = fields.filter((f) => f.sender_fill && !String(f.value || '').trim());
+  if (blankForSender.length) add('warning', `${blankForSender.length} box${blankForSender.length === 1 ? '' : 'es'} for you to fill ${blankForSender.length === 1 ? 'is' : 'are'} empty`, `${blankForSender.map((f) => f.label || 'Text').slice(0, 5).join(', ')}. Go back to Fields and type in them, or they'll print blank.`);
   if (!fields.length) add('info', 'No boxes placed', 'Signers will get one signature box at the end of the document.');
   return issues;
 }

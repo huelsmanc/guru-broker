@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AlertCircle, Loader2, Upload, Edit2, Users, Send, FileText, LayoutTemplate, X, ShieldCheck, Bell, ListOrdered, Sparkles, CheckCircle2, AlertTriangle, Info } from 'lucide-react';
 import { motion } from 'framer-motion';
-import ESignFieldEditor from './ESignFieldEditor';
+import ESignFieldEditor, { fillFromDeal } from './ESignFieldEditor';
+import { fieldSignerIndex } from '../../../shared/esignGeometry.js';
 import SignerManagementDashboard from './SignerManagementDashboard';
 
 const STEPS = [
@@ -115,8 +116,21 @@ export default function UnifiedESignCreator({
     setParts((p) => [...p, { kind: 'template', id: t.id, name: t.title, roles: t.roles || [], url: t.document_url }]);
     if (!title.trim()) setTitle(t.title || '');
     // Template roles become empty signer rows to fill in (Buyer 1, Buyer 2...).
-    if (!signers.length && (t.roles || []).length) setSigners(t.roles.map((r, i) => ({ id: `role-${i}-${Date.now()}`, role: r, name: '', email: '' })));
+    if (!signers.length && (t.roles || []).length) setSigners(t.roles.map((r, i) => ({ id: `role-${i}-${Date.now()}`, role: r, role_index: i, name: '', email: '' })));
   };
+  // A library form with boxes already set up (by an admin) is used as its template automatically.
+  const autoTemplated = React.useRef(new Set());
+  useEffect(() => {
+    if (!templates.length) return;
+    parts.forEach((p, i) => {
+      if (p.kind !== 'file' || autoTemplated.current.has(p.url)) return;
+      const t = templates.find((x) => x.document_url === p.url && (x.fields || []).length);
+      autoTemplated.current.add(p.url);
+      if (!t) return;
+      setParts((list) => list.map((x, j) => (j === i ? { kind: 'template', id: t.id, name: p.name || t.title, roles: t.roles || [], url: t.document_url, auto: true } : x)));
+      if ((t.roles || []).length) setSigners((cur) => (cur.length ? cur : t.roles.map((r, k) => ({ id: `role-${k}-${Date.now()}`, role: r, role_index: k, name: '', email: '' }))));
+    });
+  }, [templates, parts]);
   const removePart = (i) => setParts((p) => p.filter((_, j) => j !== i));
 
   // One file: used as is. One template: its file and boxes. Several: merged into one packet.
@@ -192,6 +206,11 @@ export default function UnifiedESignCreator({
           return;
         }
         const built = await buildDocument();
+        // Boxes tied to deal facts fill themselves in from this deal.
+        if (built.fields && dealId) {
+          const d = deal || await base44.entities.Transaction.get(dealId).catch(() => null);
+          built.fields = fillFromDeal(built.fields, d);
+        }
         setDocumentUrl(built.document_url);
         setBuiltKey(key);
         if (currentDoc) {
@@ -221,8 +240,21 @@ export default function UnifiedESignCreator({
     } else if (step === 'signers') {
       // Save signers to document
       try {
+        // Template roles: boxes follow their role to its row; roles removed (e.g. no Buyer 2) lose their boxes.
+        let fields = null;
+        let rows = signers;
+        if (signers.some((x) => Number.isInteger(x.role_index)) && (currentDoc.fields || []).length) {
+          const map = new Map();
+          signers.forEach((x, i) => { if (Number.isInteger(x.role_index)) map.set(x.role_index, i); });
+          fields = currentDoc.fields
+            .filter((f) => f.sender_fill || f.type === 'strike' || map.has(fieldSignerIndex(f)))
+            .map((f) => (map.has(fieldSignerIndex(f)) ? { ...f, signer_index: map.get(fieldSignerIndex(f)) } : { ...f, signer_index: 0 }));
+          rows = signers.map((x, i) => (Number.isInteger(x.role_index) ? { ...x, role_index: i } : x));
+          setSigners(rows);
+        }
         const updated = await base44.entities.ESignDocument.update(currentDoc.id, {
-          signers: signers.map(({ id, ...rest }) => ({ ...rest, email: (rest.email || '').trim().toLowerCase() })),
+          signers: rows.map(({ id, ...rest }) => ({ ...rest, email: (rest.email || '').trim().toLowerCase() })),
+          ...(fields ? { fields } : {}),
         });
         setCurrentDoc(updated);
         setStep('fields');
@@ -341,7 +373,7 @@ export default function UnifiedESignCreator({
                   <div key={`${p.id || p.url}-${i}`} className="flex items-center gap-2 px-3 py-2 text-sm">
                     {p.kind === 'template' ? <LayoutTemplate className="w-4 h-4 text-purple-600" /> : <FileText className="w-4 h-4 text-blue-600" />}
                     <span className="flex-1 truncate">{p.name}</span>
-                    {p.kind === 'template' && <span className="text-[10px] uppercase text-purple-600">template</span>}
+                    {p.kind === 'template' && <span className="text-[10px] uppercase text-purple-600">{p.auto ? 'fields ready' : 'template'}</span>}
                     <button type="button" onClick={() => removePart(i)} className="p-1 rounded hover:bg-muted" aria-label="Remove"><X className="w-4 h-4" /></button>
                   </div>
                 ))}

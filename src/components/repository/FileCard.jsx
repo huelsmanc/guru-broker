@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Download, Trash2, Star, Eye } from 'lucide-react';
+import { Download, Trash2, Star, Eye, PenTool, LayoutTemplate } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
@@ -24,7 +24,7 @@ const CATEGORY_COLORS = {
   other: 'bg-gray-100 text-gray-700',
 };
 
-export default function FileCard({ file, isAdmin, onDownload, onDelete, onToggleFeatured, index }) {
+export default function FileCard({ file, isAdmin, onDownload, onDelete, onToggleFeatured, index, fieldsCount = 0, onSetupFields, onFillSign }) {
   const [showPreview, setShowPreview] = useState(false);
 
   const getFileType = (fileName) => {
@@ -101,6 +101,9 @@ export default function FileCard({ file, isAdmin, onDownload, onDelete, onToggle
           </Badge>
         </div>
 
+        {fieldsCount > 0 && (
+          <p className="text-xs text-emerald-700 mb-2 flex items-center gap-1"><PenTool className="w-3 h-3" /> Fillable: {fieldsCount} box{fieldsCount === 1 ? '' : 'es'} ready to sign</p>
+        )}
         {file.description && (
           <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{file.description}</p>
         )}
@@ -161,6 +164,12 @@ export default function FileCard({ file, isAdmin, onDownload, onDelete, onToggle
             </>
           )}
         </div>
+        {(onFillSign || (isAdmin && onSetupFields)) && (
+          <div className="flex gap-2 mt-2">
+            {onFillSign && <Button onClick={onFillSign} variant="outline" className="flex-1 rounded-lg h-9 text-sm gap-1"><PenTool className="w-4 h-4" /> Fill &amp; eSign</Button>}
+            {isAdmin && onSetupFields && <Button onClick={onSetupFields} variant="outline" className="flex-1 rounded-lg h-9 text-sm gap-1"><LayoutTemplate className="w-4 h-4" /> {fieldsCount ? 'Edit fields' : 'Set up fields'}</Button>}
+          </div>
+        )}
       </div>
 
       {/* Preview Lightbox */}

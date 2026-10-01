@@ -32,6 +32,7 @@ globalThis.__db = {
       { id: 'lender', type: 'text', x: 30, y: 45, width: 20, hPct: 1, signer_index: 0, show_if: { field_id: 'r2' } },
       { id: 'dd', type: 'dropdown', options: ['30 days', '45 days'], x: 10, y: 50, width: 15, hPct: 1, signer_index: 0 },
       { id: 'pof', type: 'attachment', x: 10, y: 55, width: 20, hPct: 1, signer_index: 0, required: false },
+      { id: 'addr', type: 'text', sender_fill: true, deal_key: 'property_address', label: 'Property address', x: 10, y: 20, width: 30, hPct: 1, signer_index: 0, value: '' },
     ] }],
   transaction: [{ id: 'tx1', brokerage_id: 'B1', agent_email: 'ann@x.com', documents: [], extra: {} }],
 };
@@ -48,6 +49,7 @@ let r = await call('esignPreflight', { documentId: 'doc2', signers: [{ name: 'Bo
 assert.equal(r.status, 200);
 assert.ok(r.body.issues.some((i) => i.severity === 'critical' && /email/.test(i.title)), 'bad email flagged');
 assert.ok(r.body.issues.some((i) => /Nothing for sue/.test(i.title)), 'signer with no boxes flagged');
+assert.ok(r.body.issues.some((i) => /for you to fill/.test(i.title)), 'blank agent-filled box flagged');
 r = await call('esignPreflight', { documentId: 'doc2', signers: [{ name: 'Bob', email: 'bob@x.com' }], skipAi: true }, { authorization: 'Bearer otherTok' });
 assert.equal(r.status, 403, 'other brokerage cannot preflight');
 
@@ -74,7 +76,7 @@ assert.equal(r.status, 200); const proof = r.body.proof; assert.ok(proof);
 r = await call('getSubmissionByToken', { token, proof: 'forged' });
 assert.equal(r.body.needsCode, true, 'forged proof rejected');
 r = await call('getSubmissionByToken', { token, proof });
-assert.equal(r.status, 200); assert.equal(r.body.document.fields.length, 7);
+assert.equal(r.status, 200); assert.equal(r.body.document.fields.length, 8);
 assert.deepEqual(r.body.people, [{ name: 'Bob', signed: false, me: true }]);
 
 // Attachment upload slot, inside the deal's folder

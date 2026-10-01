@@ -9,6 +9,10 @@ import { motion } from 'framer-motion';
 import { format } from 'date-fns';
 import UploadDocumentDialog from '@/components/repository/UploadDocumentDialog';
 import FileCard from '@/components/repository/FileCard';
+import FormFieldsDialog from '@/components/repository/FormFieldsDialog';
+import UnifiedESignCreator from '@/components/esign/UnifiedESignCreator';
+import { isPdfUrl } from '@/components/esign/PDFPageRenderer';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { isAdminRole, normalizeRole, can } from '../../shared/permissions.generated.js';
 
 const CATEGORIES = [
@@ -27,6 +31,22 @@ export default function FileRepository() {
   const [showUpload, setShowUpload] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [fieldsFor, setFieldsFor] = useState(null);
+  const [signFile, setSignFile] = useState(null);
+
+  // Forms with boxes set up (e-sign templates tied to the file by its link).
+  const { data: templates = [] } = useQuery({
+    queryKey: ['library-templates', brokerageId],
+    queryFn: () => base44.entities.ESignTemplate.filter({ brokerage_id: brokerageId }, '-created_date', 500),
+    enabled: !!brokerageId,
+  });
+  const templateFor = (file) => templates.find((t) => t.id === file.esign_template_id) || templates.find((t) => t.document_url === file.file_url);
+  const signable = (file) => isPdfUrl(file.file_url) || /\.(png|jpe?g)$/i.test(file.file_name || '');
+  const cardProps = (file) => ({
+    fieldsCount: (templateFor(file)?.fields || []).length,
+    onSetupFields: signable(file) ? () => setFieldsFor(file) : undefined,
+    onFillSign: signable(file) ? () => setSignFile(file) : undefined,
+  });
 
   const { data: files = [] } = useQuery({
     queryKey: ['file-repository', brokerageId],
@@ -143,6 +163,7 @@ export default function FileRepository() {
                 onDelete={() => deleteFile.mutate(file.id)}
                 onToggleFeatured={() => toggleFeatured.mutate({ id: file.id, isFeatured: file.is_featured })}
                 index={i}
+                {...cardProps(file)}
               />
             ))}
           </div>
@@ -176,11 +197,21 @@ export default function FileRepository() {
                 onDelete={() => deleteFile.mutate(file.id)}
                 onToggleFeatured={() => toggleFeatured.mutate({ id: file.id, isFeatured: file.is_featured })}
                 index={i}
+                {...cardProps(file)}
               />
             ))}
           </div>
         )}
       </div>
+
+      {fieldsFor && <FormFieldsDialog file={fieldsFor} template={templateFor(fieldsFor)} brokerageId={brokerageId} user={user} onClose={() => setFieldsFor(null)} />}
+      <Dialog open={!!signFile} onOpenChange={(o) => !o && setSignFile(null)}>
+        <DialogContent className="w-[95vw] max-w-[95vw] h-[95vh] max-h-[95vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Fill &amp; eSign: {signFile?.file_name}</DialogTitle></DialogHeader>
+          {signFile && <UnifiedESignCreator initialTitle={signFile.file_name.replace(/\.[^.]+$/, '')} initialDocumentUrl={signFile.file_url}
+            onCancel={() => setSignFile(null)} onComplete={() => setSignFile(null)} />}
+        </DialogContent>
+      </Dialog>
 
       <UploadDocumentDialog
         open={showUpload}

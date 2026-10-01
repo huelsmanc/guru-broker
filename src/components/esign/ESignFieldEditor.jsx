@@ -21,20 +21,35 @@ const money = (v) => (v == null || v === '' ? '' : `$${Number(v).toLocaleString(
 const usDate = (d) => { if (!d) return ''; const [y, m, day] = String(d).slice(0, 10).split('-'); return y && m && day ? `${m}/${day}/${y}` : String(d); };
 const listOf = (v) => (Array.isArray(v) ? v.filter(Boolean).join(', ') : v || '');
 
+// Deal facts a box can be tied to. On a template the box stays blank and fills itself in
+// from whichever deal the form is used on.
+export const DEAL_KEYS = [
+  { key: 'property_address', label: 'Property address', get: (d) => d.property_address },
+  { key: 'sale_price', label: 'Price', get: (d) => money(d.sale_price) },
+  { key: 'buyers', label: 'Buyer(s)', get: (d) => listOf(d.buyers) || d.buyer_name },
+  { key: 'sellers', label: 'Seller(s)', get: (d) => listOf(d.sellers) || d.seller_name },
+  { key: 'closing_date', label: 'Closing date', get: (d) => usDate(d.closing_date) },
+  { key: 'acceptance_date', label: 'Acceptance date', get: (d) => usDate(d.acceptance_date) },
+  { key: 'inspection_date', label: 'Inspection deadline', get: (d) => usDate(d.inspection_contingency_date || d.inspection_date) },
+  { key: 'agent_name', label: 'Agent', get: (d) => d.agent_name },
+  { key: 'earnest_money', label: 'Earnest money', get: (d) => money(d.earnest_money) },
+];
+
 /** Facts from the deal that can be dropped onto the document as pre-filled text. */
 export function dealFacts(deal) {
   if (!deal) return [];
-  return [
-    ['Property address', deal.property_address],
-    ['Price', money(deal.sale_price)],
-    ['Buyer(s)', listOf(deal.buyers) || deal.buyer_name],
-    ['Seller(s)', listOf(deal.sellers) || deal.seller_name],
-    ['Closing date', usDate(deal.closing_date)],
-    ['Acceptance date', usDate(deal.acceptance_date)],
-    ['Inspection deadline', usDate(deal.inspection_contingency_date || deal.inspection_date)],
-    ['Agent', deal.agent_name],
-    ['Earnest money', money(deal.earnest_money)],
-  ].filter(([, v]) => v).map(([label, value]) => ({ label, value: String(value) }));
+  return DEAL_KEYS.map((k) => ({ key: k.key, label: k.label, value: String(k.get(deal) || '') })).filter((f) => f.value);
+}
+
+/** Fills boxes tied to a deal fact (from a template) with this deal's values. */
+export function fillFromDeal(fields, deal) {
+  if (!deal) return fields;
+  return (fields || []).map((f) => {
+    if (!f.deal_key || String(f.value || '').trim()) return f;
+    const k = DEAL_KEYS.find((x) => x.key === f.deal_key);
+    const v = k ? String(k.get(deal) || '') : '';
+    return v ? { ...f, value: v, from_deal: true } : f;
+  });
 }
 
 // A small preview of each field type inside its box.
@@ -69,7 +84,7 @@ function FieldText({ field, layout, color, editing, onChange, onGrow, onDone }) 
   }
   return field.value?.trim()
     ? <div ref={ref} className="absolute inset-x-0 top-0 whitespace-pre-wrap break-words pointer-events-none" style={style}>{field.value}</div>
-    : <span className="text-[11px] font-semibold truncate px-1 pointer-events-none" style={{ color }}>Text</span>;
+    : <span className="text-[11px] font-semibold truncate px-1 pointer-events-none" style={{ color }}>{field.sender_fill ? '✎ ' : ''}{field.label || 'Text'}</span>;
 }
 
 export const SIGNER_COLORS = ['#2563eb', '#16a34a', '#9333ea', '#ea580c', '#db2777', '#0891b2'];
@@ -81,7 +96,8 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
  * Works with mouse and touch. Every field is assigned to a signer; the sidebar
  * shows which signers still have nothing to sign.
  */
-export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChange, deal }) {
+// templateMode: setting up a library form (no deal yet); `persist(fields)` saves instead of the document.
+export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChange, deal, persist, templateMode }) {
   const signers = doc.signers || [];
   const [fields, setFields] = useState(() => (doc.fields || []).map((f, i) => ({ ...f, id: f.id || `field-${i}-${Date.now()}` })));
   const [layout, setLayout] = useState(null); // { width, height, ratio }
@@ -115,7 +131,7 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChan
     if (firstSave.current) { firstSave.current = false; return; }
     onChange?.(fields);
     const t = setTimeout(() => {
-      base44.entities.ESignDocument.update(doc.id, { fields }).catch((err) => console.error('Auto-save failed:', err));
+      (persist ? persist(fields) : base44.entities.ESignDocument.update(doc.id, { fields })).catch((err) => console.error('Auto-save failed:', err));
     }, 700);
     return () => clearTimeout(t);
   }, [fields, doc.id]);
@@ -143,8 +159,8 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChan
       width: wPct,
       hPct,
       required: placing !== 'checkbox' && placing !== 'attachment',
-      value: placingValue || '',
-      ...(placingValue ? { from_deal: true } : {}),
+      value: placingValue?.value || '',
+      ...(placingValue ? { from_deal: true, deal_key: placingValue.key, label: placingValue.label, sender_fill: true } : {}),
       signer_index: activeSigner,
     };
     if (placing === 'dropdown') field.options = ['Option 1', 'Option 2'];
@@ -169,10 +185,10 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChan
 
   // Drop a deal fact: into the selected text box, or as a new pre-filled text box.
   const applyFact = (fact) => {
-    if (selected?.type === 'text') { updateField(selected.id, { value: fact.value, from_deal: true }); return; }
+    if (selected?.type === 'text' && !String(selected.value || '').trim() && !selected.deal_key) { updateField(selected.id, { value: fact.value, from_deal: true, deal_key: fact.key, label: fact.label, sender_fill: true }); return; }
     setRadioGroup(null);
     setPlacing('text');
-    setPlacingValue(fact.value);
+    setPlacingValue(fact);
   };
 
   // An initials box near the bottom right of every page for the chosen signer.
@@ -253,7 +269,7 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChan
     setSaving(true);
     setError(null);
     try {
-      await base44.entities.ESignDocument.update(doc.id, { fields });
+      if (persist) await persist(fields); else await base44.entities.ESignDocument.update(doc.id, { fields });
       onComplete?.(fields);
     } catch (err) {
       setError('Could not save fields: ' + (err.message || err));
@@ -307,7 +323,7 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChan
           <div className="rounded-lg bg-blue-50 border border-blue-200 px-3 py-2 text-sm text-blue-800 flex justify-between items-center">
             <span>{placing === 'strike' ? 'Tap the text you want to strike out, then drag the corner to cover it.'
               : placing === 'radio' ? 'Tap each choice on the document. The signer can pick only one of them.'
-              : placingValue ? `Tap where "${placingValue.slice(0, 40)}" should go.`
+              : placingValue ? `Tap where the ${placingValue.label.toLowerCase()} should go.`
               : `Tap the document where the ${FIELD_TYPES.find((t) => t.id === placing)?.label.toLowerCase()} should go.`}</span>
             <button type="button" className="text-blue-700 underline text-xs" onClick={stopPlacing}>{placing === 'radio' ? 'Done' : 'Cancel'}</button>
           </div>
@@ -420,12 +436,14 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChan
           )}
         </div>
 
-        {dealFacts(deal).length > 0 && (
+        {(templateMode || dealFacts(deal).length > 0) && (
           <div>
             <p className="text-sm font-medium mb-1 flex items-center gap-1.5"><Home className="w-4 h-4" /> Fill from the deal</p>
-            <p className="text-xs text-muted-foreground mb-2">{selected?.type === 'text' ? 'Tap to put it in the selected text box.' : 'Tap one, then tap the document.'}</p>
+            <p className="text-xs text-muted-foreground mb-2">
+              {templateMode ? 'Place a box that fills itself in from whichever deal this form is used on.' : selected?.type === 'text' && !String(selected.value || '').trim() && !selected.deal_key ? 'Tap to put it in the selected empty text box.' : 'Tap one, then tap the document.'}
+            </p>
             <div className="flex flex-wrap gap-1.5">
-              {dealFacts(deal).map((f) => (
+              {(templateMode ? DEAL_KEYS.map((k) => ({ key: k.key, label: k.label, value: '' })) : dealFacts(deal)).map((f) => (
                 <button key={f.label} type="button" disabled={!layout} onClick={() => applyFact(f)} title={f.value}
                   className="rounded-full border border-border bg-background px-2.5 py-1 text-xs hover:border-primary hover:text-primary disabled:opacity-40">
                   {f.label}
@@ -457,8 +475,14 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChan
               </select>
             </label>
             {selected.type === 'text' && (
+              <label className="flex items-start gap-2 text-sm">
+                <input type="checkbox" className="mt-1" checked={!!selected.sender_fill} onChange={(e) => updateField(selected.id, { sender_fill: e.target.checked })} />
+                <span>Filled in by the agent before sending<span className="block text-xs text-muted-foreground">{selected.deal_key ? `Fills itself from the deal (${DEAL_KEYS.find((k) => k.key === selected.deal_key)?.label}). The agent can change it.` : 'Signers see it but can\'t change it.'}</span></span>
+              </label>
+            )}
+            {selected.type === 'text' && (
               <label className="block text-xs text-muted-foreground">
-                Pre-fill (signer can't change it)
+                {templateMode ? 'Default text (optional)' : 'Pre-fill (signer can\'t change it)'}
                 <textarea rows={3} className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm text-foreground resize-y"
                   value={selected.value || ''} placeholder="Leave empty for the signer to fill. You can also double-click the box to type in it."
                   onChange={(e) => updateField(selected.id, { value: e.target.value })} />
@@ -539,7 +563,7 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChan
           <Button onClick={save} disabled={saving} className="gap-2">
             {saving && <Loader2 className="w-4 h-4 animate-spin" />} Done
           </Button>
-          <Button variant="outline" onClick={saveAsTemplate} disabled={saving || fields.length === 0}>Save as template</Button>
+          {!templateMode && <Button variant="outline" onClick={saveAsTemplate} disabled={saving || fields.length === 0}>Save as template</Button>}
           {templateMsg && <p className="text-xs text-green-700">{templateMsg}</p>}
         </div>
       </div>

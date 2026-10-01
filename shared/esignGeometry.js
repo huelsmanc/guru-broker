@@ -75,6 +75,7 @@ export function fieldSignerIndex(field) {
 /** Fields the signer must complete (not pre-filled by the sender). */
 export function isPrefilled(field) {
   if (field.type === 'strike') return true; // sender's strike-out line, nothing to fill
+  if (field.sender_fill) return true; // the sender types this before sending (blank boxes are skipped)
   return typeof field.value === 'string' && field.value.trim() !== '';
 }
 
