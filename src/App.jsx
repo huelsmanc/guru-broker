@@ -38,11 +38,9 @@ const EventBoard = lazy(() => import('@/pages/EventBoard'));
 const FileRepository = lazy(() => import('@/pages/FileRepository'));
 const Culture = lazy(() => import('@/pages/Culture'));
 const TechLinks = lazy(() => import('@/pages/TechLinks'));
-const ListingGenerator = lazy(() => import('@/pages/ListingGenerator'));
-const NetSheetCalculator = lazy(() => import('@/pages/NetSheetCalculator'));
 const SalesCoach = lazy(() => import('@/pages/SalesCoach'));
 const Onboarding = lazy(() => import('@/pages/Onboarding'));
-const CMABuilder = lazy(() => import('@/pages/CMABuilder'));
+const MarketingHub = lazy(() => import('@/pages/MarketingHub'));
 const ClientAppreciation = lazy(() => import('@/pages/ClientAppreciation'));
 const PublicReview = lazy(() => import('@/pages/PublicReview'));
 const Reviews = lazy(() => import('@/pages/Reviews'));
@@ -55,7 +53,6 @@ const TransactionWorkspace = lazy(() => import('@/pages/TransactionWorkspace'));
 const ClientStatus = lazy(() => import('@/pages/ClientStatus'));
 const ResetPassword = lazy(() => import('@/pages/ResetPassword'));
 const MyCommissions = lazy(() => import('@/pages/MyCommissions'));
-const Marketing = lazy(() => import('@/pages/Marketing'));
 const Payouts = lazy(() => import('@/pages/Payouts'));
 const CommissionPlans = lazy(() => import('@/pages/CommissionPlans'));
 const Reports = lazy(() => import('@/pages/Reports'));
@@ -64,6 +61,14 @@ const ApproveDocs = lazy(() => import('@/pages/ApproveDocs'));
 const ChecklistTemplates = lazy(() => import('@/pages/ChecklistTemplates'));
 const Import = lazy(() => import('@/pages/Import'));
 
+
+// Old page addresses that moved into a tab: keep their query (e.g. ?tab=saved) and add the tab.
+function KeepQuery({ to, add }) {
+  const { search } = useLocation();
+  const q = new URLSearchParams(search);
+  for (const [k, v] of new URLSearchParams(add)) q.set(k, v);
+  return <Navigate to={`${to}?${q.toString()}`} replace />;
+}
 
 // Loading fallback component
 const PageLoader = () => (
@@ -154,22 +159,22 @@ const AuthenticatedApp = () => {
             <Route path="/CultureCalendar" element={<Navigate to="/Culture?tab=calendar" replace />} />
             <Route path="/Culture" element={<Culture />} />
             <Route path="/TechLinks" element={<TechLinks />} />
-            <Route path="/ListingGenerator" element={<ListingGenerator />} />
-            <Route path="/NetSheetCalculator" element={<NetSheetCalculator />} />
+            <Route path="/ListingGenerator" element={<Navigate to="/Marketing?tool=listing" replace />} />
+            <Route path="/NetSheetCalculator" element={<Navigate to="/Marketing?tool=netsheet" replace />} />
             <Route path="/SalesCoach" element={<SalesCoach />} />
             <Route path="/ContractGenerator" element={<Navigate to="/Offers?tab=forms" replace />} />
             <Route path="/Offers" element={<Offers />} />
             <Route path="/Transactions/:id" element={<TransactionWorkspace />} />
             <Route path="/Onboarding" element={<Onboarding />} />
-            <Route path="/CMABuilder" element={<CMABuilder />} />
-            <Route path="/MyReports" element={<Navigate to="/CMABuilder?tab=saved" replace />} />
+            <Route path="/CMABuilder" element={<KeepQuery to="/Marketing" add="tool=cma" />} />
+            <Route path="/MyReports" element={<Navigate to="/Marketing?tool=cma&tab=saved" replace />} />
             <Route path="/ClientAppreciation" element={<ClientAppreciation />} />
             <Route path="/Reviews" element={<Reviews />} />
             <Route path="/Transactions" element={<Transactions />} />
             <Route path="/Contacts" element={<Contacts />} />
             <Route path="/ClientPortal" element={<ClientPortal />} />
             <Route path="/MyCommissions" element={<MyCommissions />} />
-            <Route path="/Marketing" element={<Marketing />} />
+            <Route path="/Marketing" element={<MarketingHub />} />
             <Route path="/Payouts" element={<Payouts />} />
             <Route path="/CommissionPlans" element={<CommissionPlans />} />
             <Route path="/Reports" element={<Reports />} />

@@ -121,7 +121,8 @@ export default function CMABuilder() {
   const [savedId, setSavedId] = useState(null); // the saved copy of the report on screen
   const [params, setParams] = useSearchParams();
   const tab = params.get('tab') === 'saved' ? 'saved' : 'new';
-  const setTab = (t) => setParams(t === 'saved' ? { tab: 'saved' } : {}, { replace: true });
+  // Keep other query params (this page also lives inside Marketing as ?tool=cma).
+  const setTab = (t) => setParams((p) => { const n = new URLSearchParams(p); if (t === 'saved') n.set('tab', 'saved'); else n.delete('tab'); return n; }, { replace: true });
   const queryClient = useQueryClient();
 
   // Saves the report on screen (first time: a new saved report; after that: updates it).
