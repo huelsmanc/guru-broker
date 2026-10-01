@@ -12,6 +12,7 @@ import AudioAnnouncement from '@/components/dashboard/AudioAnnouncement';
 import SocialFeedWidget from '@/components/dashboard/SocialFeedWidget';
 import NotificationsDropdown from '@/components/dashboard/NotificationsDropdown';
 import MobileSafeScroll from '@/components/layout/MobileSafeScroll';
+import MyDay from '@/components/dashboard/MyDay';
 
 import { motion } from 'framer-motion';
 import { isAdminRole, normalizeRole, can } from '../../shared/permissions.generated.js';
@@ -106,7 +107,7 @@ export default function Dashboard() {
         <div className="flex-1">
           <div className="flex items-center gap-3">
             <h1 className="text-2xl lg:text-3xl font-bold text-foreground tracking-tight">
-              {isAdmin ? 'Broker Dashboard' : `Welcome back, ${user?.full_name?.split(' ')[0] || 'Agent'}`}
+              {`${new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 17 ? 'Good afternoon' : 'Good evening'}, ${user?.full_name?.split(' ')[0] || ''}`}
             </h1>
             <NotificationsDropdown user={user} brokerageId={brokerageId} />
           </div>
@@ -128,7 +129,9 @@ export default function Dashboard() {
         </div>
       </motion.div>
 
-      <div className="mb-10 -mt-4 lg:mt-0">
+      <MyDay />
+
+      <div className="mb-10">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <AnnouncementBoard brokerageId={brokerageId} user={user} isAdmin={isAdmin} />
           <AudioAnnouncement brokerageId={brokerageId} user={user} isAdmin={isAdmin} />

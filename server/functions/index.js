@@ -65,6 +65,7 @@ export const FUNCTIONS = {
   mlsSync: () => import('./mlsSync.js'),
   monthlyStatements: () => import('./monthlyStatements.js'),
   myCommission: () => import('./myCommission.js'),
+  myDay: () => import('./myDay.js'),
   myStatements: () => import('./myStatements.js'),
   notifyAgentsNewTraining: () => import('./notifyAgentsNewTraining.js'),
   notifyDocumentActivity: () => import('./notifyDocumentActivity.js'),

@@ -192,4 +192,20 @@ r = await svc('applyDefaultChecklists', { event: { entity_name: 'User', data: { 
 assert.equal(r.body.added, 1);
 assert.ok(globalThis.__db.checklist.some((c) => c.subject_type === 'onboarding' && c.subject_id === 'new@x.com'));
 
+// My day: open deals, pending commission from the real plan, deadlines, to-dos, admin queues.
+globalThis.__db.transaction.find((t) => t.id === 't2').inspection_contingency_date = new Date(Date.now() + 3 * 864e5).toISOString().slice(0, 10);
+globalThis.__db.transaction.find((t) => t.id === 't2').closing_date = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+r = await as('ann')('checklistAction', { action: 'apply', subject_type: 'transaction', subject_id: 't2', template_id: buyerTpl.id });
+r = await as('ann')('myDay', {});
+assert.equal(r.status, 200, JSON.stringify(r.body));
+assert.equal(r.body.deals, 1);
+assert.ok(r.body.pending_net > 0, `pending ${r.body.pending_net}`);
+assert.ok(r.body.deadlines.some((d) => d.label === 'Closing' && d.overdue), 'overdue closing flagged');
+assert.ok(r.body.deadlines.some((d) => d.label === 'Inspection contingency' && !d.overdue));
+assert.ok(r.body.todo.length > 0 && r.body.todo.every((t) => t.where === '3905 Aquilla Dr'), JSON.stringify(r.body.todo.slice(0, 2)));
+assert.equal(r.body.cap.amount, 18000);
+assert.equal(r.body.waiting, undefined, 'agents have no admin queues');
+r = await as('boss')('myDay', {});
+assert.ok(r.body.waiting && typeof r.body.waiting.payouts === 'number' && typeof r.body.waiting.docs === 'number', JSON.stringify(r.body.waiting));
+
 console.log('Back office: all checks passed');
