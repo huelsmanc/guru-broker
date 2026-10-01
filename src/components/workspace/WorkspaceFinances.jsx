@@ -100,7 +100,12 @@ export default function WorkspaceFinances({ tx, user, refresh }) {
                   </label>
                   <span className="text-xs text-muted-foreground">or flat</span>
                   <Input className="h-8 w-28" inputMode="decimal" placeholder="$" value={s.flat ?? ''} onChange={(e) => setSides((x) => x.map((y, j) => (j === i ? { ...y, flat: e.target.value } : y)))} />
-                  <span className="ml-auto font-semibold">{money(s.flat ? Number(s.flat) : (Number(tx.sale_price) || 0) * (Number(s.pct) || 0) / 100)}</span>
+                  {(() => {
+                    const counted = (s.agents || []).some((a) => a.email) || !sides.some((o) => (o.agents || []).some((a) => a.email));
+                    const amt = money(s.flat ? Number(s.flat) : (Number(tx.sale_price) || 0) * (Number(s.pct) || 0) / 100);
+                    return counted ? <span className="ml-auto font-semibold">{amt}</span>
+                      : <span className="ml-auto text-right"><span className="font-semibold text-muted-foreground line-through">{amt}</span><span className="block text-[11px] text-muted-foreground">Other brokerage's side, not counted. Add an agent if it's yours.</span></span>;
+                  })()}
                 </div>
                 {(s.agents || []).map((a, k) => (
                   <div key={k} className="flex items-center gap-2 mb-2">

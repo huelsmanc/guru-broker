@@ -80,7 +80,11 @@ export async function calculateForTransaction(entities, tx, input = {}) {
   let agentList;
   const sides = input.sides ?? tx.sides;
   if (Array.isArray(sides) && sides.length) {
-    const sideGross = sides.map((sd) => (sd.flat != null && sd.flat !== '' ? num(sd.flat) : salePrice * num(sd.pct) / 100));
+    // A side with none of our agents on it is the other brokerage's side: it isn't ours to
+    // count or split (e.g. we represent only the buyer, but the listing side's 2% was typed in).
+    const ours = sides.map((sd) => (sd.agents || []).some((a) => a.email));
+    const anyOurs = ours.some(Boolean);
+    const sideGross = sides.map((sd, i) => (anyOurs && !ours[i] ? 0 : sd.flat != null && sd.flat !== '' ? num(sd.flat) : salePrice * num(sd.pct) / 100));
     if (input.gross_commission == null) gross = sideGross.reduce((a, b) => a + b, 0);
     const total = sideGross.reduce((a, b) => a + b, 0) || 1;
     const shares = new Map();

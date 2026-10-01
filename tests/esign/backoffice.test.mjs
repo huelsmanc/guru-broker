@@ -167,6 +167,11 @@ r = await as('boss')('commissionPreview', { transactionId: 't2' });
 assert.equal(r.body.result.totals.gross, 20000);
 assert.deepEqual(r.body.result.agents.map((a) => [a.email, a.share]), [['ann@x.com', 10000], ['sam@x.com', 10000]]);
 
+// Listing side has 2% typed in but no agent of ours on it: it's the other brokerage's, not counted.
+r = await as('boss')('commissionPreview', { transactionId: 't2', input: { sides: [{ side: 'listing', pct: 2, agents: [] }, { side: 'buying', pct: 2, agents: [{ email: 'ann@x.com', pct: 100 }] }] } });
+assert.equal(r.body.result.totals.gross, 16000, 'only our side counts');
+assert.deepEqual(r.body.result.agents.map((a) => [a.email, a.share]), [['ann@x.com', 16000]]);
+
 // My Commissions: agent sees own cap progress; can't look at someone else's
 r = await as('ann')('myCommission', {});
 assert.equal(r.status, 200, JSON.stringify(r.body));
