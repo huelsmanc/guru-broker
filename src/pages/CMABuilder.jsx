@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { base44 } from '@/api/base44Client';
+import { base44, supabase } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -22,22 +22,43 @@ const streetPhoto = (addr, subject) => {
   return a ? `/api/fn/streetView?address=${encodeURIComponent(a)}` : null;
 };
 
-// The comp's photo: its MLS photo, else a street-level photo, else a placeholder.
+// The comp's photo: its MLS photo, else a street-level photo, else a placeholder (with the reason
+// when the street photo service itself isn't working, so setup problems are visible).
 function CompPhoto({ comp, subjectAddress }) {
   const street = streetPhoto(comp.address, subjectAddress);
-  const [src, setSrc] = useState(comp.photoUrl || street);
+  const [src, setSrc] = useState(comp.photoUrl && !String(comp.photoUrl).startsWith('/api/fn/streetView') ? comp.photoUrl : null);
+  const [problem, setProblem] = useState('');
   const [failed, setFailed] = useState(false);
-  if (!src || failed) {
+  const loadStreet = React.useCallback(async () => {
+    if (!street) return setFailed(true);
+    try {
+      const { data } = await supabase.auth.getSession();
+      const res = await fetch(street, { headers: data.session ? { Authorization: `Bearer ${data.session.access_token}` } : {} });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        setProblem(j.problem || '');
+        return setFailed(true);
+      }
+      const blob = await res.blob();
+      const reader = new FileReader(); // a data URL also prints in the PDF export
+      reader.onload = () => setSrc(reader.result);
+      reader.readAsDataURL(blob);
+    } catch { setFailed(true); }
+  }, [street]);
+  React.useEffect(() => { if (!src) loadStreet(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  if (failed) {
     return (
-      <div className="w-full h-full bg-gradient-to-br from-primary/10 to-accent/10 flex flex-col items-center justify-center absolute inset-0">
+      <div className="w-full h-full bg-gradient-to-br from-primary/10 to-accent/10 flex flex-col items-center justify-center absolute inset-0 px-4 text-center">
         <Home className="w-8 h-8 text-muted-foreground/40 mb-2" />
         <p className="text-xs text-muted-foreground/60">Photo Unavailable</p>
+        {problem && <p className="text-[11px] text-amber-700 mt-1">{problem}</p>}
       </div>
     );
   }
+  if (!src) return <div className="absolute inset-0 animate-pulse bg-muted" />;
   return (
     <img src={src} alt={comp.address} className="w-full h-full object-cover" loading="lazy"
-      onError={() => (street && src !== street ? setSrc(street) : setFailed(true))} />
+      onError={() => { setSrc(null); loadStreet(); }} />
   );
 }
 
@@ -427,7 +448,7 @@ export default function CMABuilder() {
                           </div>
                           <div className="bg-muted/40 rounded-lg p-2 text-center">
                             <p className="text-muted-foreground">DOM</p>
-                            <p className="font-bold text-foreground mt-0.5">{comp.daysOnMarket}d</p>
+                            <p className="font-bold text-foreground mt-0.5">{comp.daysOnMarket != null && comp.daysOnMarket !== '' ? `${comp.daysOnMarket}d` : '—'}</p>
                           </div>
                         </div>
 
@@ -439,7 +460,7 @@ export default function CMABuilder() {
                           </div>
                           <div className="flex items-center justify-between text-sm">
                             <span className="text-muted-foreground">List:</span>
-                            <span className="font-medium text-foreground">${comp.listPrice?.toLocaleString()}</span>
+                            <span className="font-medium text-foreground">{comp.listPrice ? `$${Number(comp.listPrice).toLocaleString()}` : '—'}</span>
                           </div>
                           {comp.soldDate && (
                             <div className="flex items-center justify-between text-sm">

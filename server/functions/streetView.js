@@ -37,14 +37,18 @@ export default async (req) => {
     return Response.json({ ok: meta.status === 'OK', key_ends_with: key.slice(-4), google_status: meta.status, google_message: meta.error_message || null, meaning: meta.status === 'OK' ? 'Working. CMA comps will show street photos.' : hints[meta.status] || 'See google_message.' });
   }
 
-  if (!key || address.length < 5) return none();
-  if (!signedIn) return none(401);
+  const problem = (status, text) => Response.json({ problem: text }, { status, headers: { 'cache-control': 'no-store' } });
+  if (!key) return problem(404, 'Street photos need GOOGLE_MAPS_API_KEY in Vercel (then Redeploy).');
+  if (address.length < 5) return none();
+  if (!signedIn) return problem(401, 'Not signed in. Refresh the page.');
   const u = new URL('https://maps.googleapis.com/maps/api/streetview');
   u.search = new URLSearchParams({ size: '640x400', location: address, fov: '80', source: 'outdoor', return_error_code: 'true', key }).toString();
   const res = await fetch(u);
   if (!res.ok || !(res.headers.get('content-type') || '').startsWith('image/')) {
-    if (res.status !== 404) console.error('streetView: Google said', res.status, (await res.text().catch(() => '')).slice(0, 200));
-    return none(); // no street imagery here (or the key isn't working: see ?check=1)
+    if (res.status === 404) return none(); // Google has no street imagery for this address
+    const said = (await res.text().catch(() => '')).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200);
+    console.error('streetView: Google said', res.status, said);
+    return problem(502, `Google refused the photo (${res.status}): ${said || 'check billing, that Street View Static API is enabled, and that the key has no website restriction.'}`);
   }
   return new Response(await res.arrayBuffer(), {
     headers: { 'content-type': res.headers.get('content-type'), 'cache-control': 'private, max-age=604800' },

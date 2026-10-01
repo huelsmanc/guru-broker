@@ -9,7 +9,7 @@ globalThis.__db = { profiles: [{ id: 'u1', email: 'ann@x.com', role: 'user', bro
 const { GET } = await import('./fn.mjs');
 const get = (q, cookie) => GET(new Request(`https://gurubroker.app/api/fn/streetView?address=${encodeURIComponent(q)}`, { headers: cookie ? { cookie } : {} }));
 let r = await get('12 Elm St, Chester, CT', 'gbh_at=ann');
-assert.equal(r.status, 404, 'no key: nothing');
+assert.equal(r.status, 404, 'no key'); assert.match((await r.json()).problem, /GOOGLE_MAPS_API_KEY/);
 process.env.GOOGLE_MAPS_API_KEY = 'gk';
 r = await get('12 Elm St, Chester, CT');
 assert.equal(r.status, 401, 'signed in only');
