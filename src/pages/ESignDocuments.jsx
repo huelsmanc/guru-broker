@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import SignedDownload from '@/components/esign/SignedDownload';
 import { isPdfUrl } from '@/components/esign/PDFPageRenderer';
 import { autoDetectFields } from '@/components/esign/autoDetectFields';
@@ -7,9 +7,10 @@ import MobilePageHeader from '@/components/layout/MobilePageHeader';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { FileText, Plus, Clock, Eye, Edit2, Trash2, Loader2, ChevronDown, Archive, CheckCircle, ExternalLink, Users, KanbanSquare } from 'lucide-react';
+import { FileText, Plus, Clock, Eye, Edit2, Trash2, Loader2, ChevronDown, Archive, CheckCircle, ExternalLink, Users, KanbanSquare, Search, X } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { format } from 'date-fns';
 import UnifiedESignCreator from '@/components/esign/UnifiedESignCreator.jsx';
@@ -41,7 +42,7 @@ export default function ESignDocuments() {
   const { data: documents = [], isLoading } = useQuery({
     queryKey: ['esign-documents', brokerageId],
     queryFn: async () => {
-      return await base44.entities.ESignDocument.filter({ brokerage_id: brokerageId }, '-created_date', 100);
+      return await base44.entities.ESignDocument.filter({ brokerage_id: brokerageId }, '-created_date', 500);
     },
     enabled: !!brokerageId,
   });
@@ -49,7 +50,7 @@ export default function ESignDocuments() {
   const { data: submissions = [] } = useQuery({
     queryKey: ['esign-submissions', brokerageId],
     queryFn: async () => {
-      return await base44.entities.ESignSubmission.list('-created_date', 200);
+      return await base44.entities.ESignSubmission.list('-created_date', 500);
     },
     enabled: !!brokerageId,
   });
@@ -57,7 +58,7 @@ export default function ESignDocuments() {
   const { data: templates = [] } = useQuery({
     queryKey: ['esign-templates', brokerageId],
     queryFn: async () => {
-      return await base44.entities.ESignTemplate.filter({ brokerage_id: brokerageId }, '-created_date', 100);
+      return await base44.entities.ESignTemplate.filter({ brokerage_id: brokerageId }, '-created_date', 300);
     },
     enabled: !!brokerageId,
   });
@@ -65,6 +66,24 @@ export default function ESignDocuments() {
   // Live: the board and statuses update as signers open and sign.
   useLiveTable('ESignSubmission', () => queryClient.invalidateQueries({ queryKey: ['esign-submissions', brokerageId] }));
   useLiveTable('ESignDocument', () => queryClient.invalidateQueries({ queryKey: ['esign-documents', brokerageId] }));
+
+  // Search: document name, signers (names and emails), the deal's address, who sent it.
+  const [search, setSearch] = useState('');
+  const words = search.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const hay = (...parts) => parts.flat(3).filter((x) => x != null && typeof x !== 'object').join(' ').toLowerCase();
+  const shownDocs = useMemo(() => {
+    if (!words.length) return documents;
+    return documents.filter((d) => {
+      const subs = submissions.filter((x) => x.document_id === d.id);
+      const text = hay(d.title, d.description, d.property_address, d.created_by_name, d.created_by_email, d.status,
+        (d.signers || []).map((x) => [x.name, x.email, x.role]),
+        subs.map((x) => (x.signers || []).map((y) => [y.name, y.email])));
+      return words.every((w) => text.includes(w));
+    });
+  }, [documents, submissions, search]); // eslint-disable-line react-hooks/exhaustive-deps
+  const shownTemplates = useMemo(() => (words.length
+    ? templates.filter((t) => { const text = hay(t.name, t.title, t.description, (t.signers || t.roles || []).map((x) => (typeof x === 'object' ? [x.name, x.role, x.email] : x))); return words.every((w) => text.includes(w)); })
+    : templates), [templates, search]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const deleteDoc = useMutation({
     mutationFn: async (doc) => {
@@ -116,9 +135,21 @@ export default function ESignDocuments() {
             </TabsTrigger>
           </TabsList>
 
+          <div className="relative mt-4">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={activeTab === 'templates' ? 'Search templates' : 'Search by document, signer, email or address'}
+              className="pl-9 pr-9 h-10 rounded-xl" aria-label="Search e-sign documents" />
+            {search && (
+              <button type="button" onClick={() => setSearch('')} aria-label="Clear search" className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-muted text-muted-foreground"><X className="w-4 h-4" /></button>
+            )}
+          </div>
+          {words.length > 0 && activeTab !== 'templates' && (
+            <p className="text-xs text-muted-foreground mt-2">{shownDocs.length} of {documents.length} documents match</p>
+          )}
+
           <TabsContent value="board" className="mt-6">
             {isLoading ? <Loader2 className="w-6 h-6 animate-spin text-muted-foreground mx-auto" /> : (
-              <ESignBoard documents={documents} submissions={submissions} brokerageId={brokerageId}
+              <ESignBoard documents={shownDocs} submissions={submissions} brokerageId={brokerageId}
                 canManage={(doc) => doc.created_by_email === user?.email || isAdmin}
                 onOpenDraft={(doc) => { setSelectedDoc(doc); setShowFieldEditor(true); }} />
             )}
@@ -132,13 +163,13 @@ export default function ESignDocuments() {
               <Loader2 className="w-8 h-8 text-muted-foreground/30 mx-auto mb-3 animate-spin" />
               <p className="text-muted-foreground">Loading documents...</p>
             </div>
-          ) : documents.length === 0 ? (
+          ) : shownDocs.length === 0 ? (
             <div className="text-center py-16">
               <FileText className="w-12 h-12 text-muted-foreground/20 mx-auto mb-3" />
-              <p className="text-muted-foreground">No documents yet</p>
+              <p className="text-muted-foreground">{documents.length ? 'No documents match your search' : 'No documents yet'}</p>
             </div>
           ) : (
-            documents.map((doc, i) => {
+            shownDocs.map((doc, i) => {
               const isCreator = doc.created_by_email === user?.email;
 
               return (
@@ -260,7 +291,7 @@ export default function ESignDocuments() {
 
           <TabsContent value="templates" className="mt-6">
             <ESignTemplateManager
-              templates={templates}
+              templates={shownTemplates}
               onClose={() => {
                 queryClient.invalidateQueries({ queryKey: ['esign-documents', brokerageId] });
               }}
