@@ -69,7 +69,7 @@ Do these in order. Budget about an hour.
 
    Phone and desktop notifications (messages, mentions, calls, approvals) need no setup: the app makes its own keys the first time and keeps them in the database. On iPhone, people add the app to their Home Screen (Share → Add to Home Screen) and turn notifications on from there; the app shows them how.
 
-   For house photos on CMA comps that don't have MLS photos, add `GOOGLE_MAPS_API_KEY` (Google Cloud → enable "Street View Static API" → Credentials → API key; restrict it to that API). Without it those comps show "Photo Unavailable".
+   For house photos on CMA comps that don't have MLS photos, add `GOOGLE_MAPS_API_KEY` (Google Cloud → enable "Street View Static API" → Credentials → API key; restrict it to that API). Without it those comps show "Photo Unavailable". Also enable "Places API (New)" on the same key for address suggestions while typing.
    For voice and video calls add `DAILY_API_KEY`: sign up at daily.co, then Developers → API keys. Free for the first 10,000 call minutes each month. Without it everything else works and the call buttons explain what's missing. AI call notes also need Daily's transcription add-on turned on in your Daily account (billed by Daily per minute transcribed); without it the notes button says so.
 
 3. Deploy, then open the preview URL and check that the sign-in page loads.

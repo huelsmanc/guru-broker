@@ -14,6 +14,7 @@ import { motion } from 'framer-motion';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import CMAMap from '@/components/cma/CMAMap';
+import AddressAutocomplete from '@/components/AddressAutocomplete';
 import CMAEmailDialog from '@/components/cma/CMAEmailDialog';
 
 // Street-level photo of an address (our server asks Google Street View; nothing if there's no imagery).
@@ -303,13 +304,11 @@ export default function CMABuilder() {
             <div className="space-y-4">
               <div>
                 <Label className="text-sm">Property Address *</Label>
-                <Input
+                <AddressAutocomplete
                   value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  placeholder="123 Main St, New York, NY"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleGenerateCMA();
-                  }}
+                  onChange={setAddress}
+                  onEnter={handleGenerateCMA}
+                  placeholder="Start typing an address"
                   className="mt-1.5"
                 />
               </div>

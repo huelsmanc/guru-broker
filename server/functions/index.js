@@ -99,6 +99,7 @@ export const FUNCTIONS = {
   offerSend: () => import('./offerSend.js'),
   payoutAction: () => import('./payoutAction.js'),
   payoutSync: () => import('./payoutSync.js'),
+  placesAutocomplete: () => import('./placesAutocomplete.js'),
   pushKey: () => import('./pushKey.js'),
   pushOnMessage: () => import('./pushOnMessage.js'),
   reportsQuery: () => import('./reportsQuery.js'),
