@@ -104,6 +104,7 @@ export const FUNCTIONS = {
   pushOnMessage: () => import('./pushOnMessage.js'),
   reportsQuery: () => import('./reportsQuery.js'),
   salesLeaderboard: () => import('./salesLeaderboard.js'),
+  salesRoleplay: () => import('./salesRoleplay.js'),
   secureFiles: () => import('./secureFiles.js'),
   sendCMAEmail: () => import('./sendCMAEmail.js'),
   sendCommissionStatement: () => import('./sendCommissionStatement.js'),

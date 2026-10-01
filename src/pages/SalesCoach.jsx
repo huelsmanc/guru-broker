@@ -6,6 +6,7 @@ import { Mic, MicOff, Send, RotateCcw, Loader2, Volume2, VolumeX } from 'lucide-
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import ReactMarkdown from 'react-markdown';
+import RolePlay from '@/components/coach/RolePlay';
 
 const SYSTEM_PROMPT = `You are an elite real estate sales coach with 20+ years of experience. You specialize in:
 - Handling buyer and seller objections (price, timing, loyalty to other agents, market fears, etc.)
@@ -32,8 +33,7 @@ const STARTER_PROMPTS = [
   { emoji: '⏳', text: 'Prospect says "we\'re just looking for now"' },
 ];
 
-export default function SalesCoach() {
-  const { user } = useOutletContext();
+function CoachChat({ user }) {
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
@@ -126,7 +126,7 @@ export default function SalesCoach() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-background">
+    <div className="flex flex-col h-full bg-background">
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-card flex-shrink-0">
         <div className="flex items-center gap-3">
@@ -293,6 +293,22 @@ export default function SalesCoach() {
           </p>
         )}
       </div>
+    </div>
+  );
+}
+// Two ways to train: talk it out with a character (voice role-play) or ask the coach.
+export default function SalesCoach() {
+  const { user } = useOutletContext();
+  const [tab, setTab] = useState('roleplay');
+  return (
+    <div className="flex flex-col h-[100dvh]">
+      <div className="flex-shrink-0 border-b bg-card px-4 py-2 flex items-center gap-1">
+        {[['roleplay', 'Voice role-play'], ['chat', 'Ask the coach']].map(([k, l]) => (
+          <button key={k} type="button" onClick={() => setTab(k)}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium ${tab === k ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}>{l}</button>
+        ))}
+      </div>
+      <div className="flex-1 min-h-0">{tab === 'roleplay' ? <RolePlay user={user} /> : <CoachChat user={user} />}</div>
     </div>
   );
 }

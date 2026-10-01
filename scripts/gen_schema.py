@@ -72,6 +72,7 @@ ENTITIES = {
     "MarketingDesign": "brokerage_id owner_email title kind format template data thumbnail_url transaction_id listing_id",
     "PushSubscription": "brokerage_id user_email endpoint p256dh auth user_agent",
     "ChatReadState": "brokerage_id user_email kind conv_key last_read_at",
+    "RoleplaySession": "brokerage_id agent_email agent_name scenario scenario_title difficulty status started_at ended_at duration_seconds transcript score scorecard",
 }
 
 # User lives in `profiles`, linked 1:1 to Supabase auth.users.
@@ -79,9 +80,9 @@ USER_FIELDS = "email full_name display_name role brokerage_id suspended headshot
 
 JSON_FIELDS = set("""co_agents referral deductions commission_calc config calc items changed mls_ids answers buyers checklist completed_dates details documents encryption_metadata esign_docs fields items
 data members invitees mentions messages options reactions read_by sellers signatories signature_fields signers tags tech_links updates
-versions cma_report roles states""".split())
+versions cma_report roles states transcript scorecard""".split())
 BOOL_FIELDS = set("auto_name is_private is_client is_default active appraisal_contingency read pinned encrypted suspended submitted checked_in is_active is_anonymous is_featured signed passed require_sequential_signing".split())
-INT_FIELDS = set("level inspection_days financing_days bathrooms bedrooms downloads_count downvotes upvotes guests_count order passing_score rating signer_index version file_size score".split())
+INT_FIELDS = set("level inspection_days financing_days bathrooms bedrooms downloads_count downvotes upvotes guests_count order passing_score rating signer_index version file_size score duration_seconds".split())
 NUM_FIELDS = set("""lead_pct gross_share company_dollar agent_net fees team_lead revshare_total amount list_price offer_price earnest_money down_payment_percent loan_amount seller_concessions agent_net agent_split_percentage brokerage_fee brokerage_fee_flat brokerage_fee_percentage commission_amount
 commission_flat commission_percentage commission_sale_price sale_price sales_amount transaction_fee transaction_fee_flat
 transaction_fee_percentage purchase_price""".split())
@@ -374,6 +375,10 @@ for ent, fields in sorted(ENTITIES.items()):
         pw(f"create policy {t}_insert on public.{t} for insert with check {cond};")
         pw(f"create policy {t}_update on public.{t} for update using {cond} with check {cond};")
         pw(f"create policy {t}_delete on public.{t} for delete using {cond};")
+    elif ent == "RoleplaySession":
+        # Sales coach practice calls: the agent's own, plus admins (and anyone with company reports).
+        pw(f"create policy {t}_access on public.{t} for select using (lower(agent_email) = public.auth_email() or (brokerage_id = public.auth_brokerage_id() and (public.is_brokerage_admin() or public.has_perm('reports.company'))) or public.is_super_admin());")
+        pw(f"-- {t}: written only by the salesRoleplay server route.")
     elif ent == "Contact":
         # Each agent's own contact book: theirs alone, plus brokerage admins (and anyone given contacts.private_all).
         pw(f"create policy {t}_access on public.{t} for all using (lower(owner_email) = public.auth_email() or (brokerage_id = public.auth_brokerage_id() and (public.is_brokerage_admin() or public.has_perm('contacts.private_all'))) or public.is_super_admin()) with check ((brokerage_id = public.auth_brokerage_id() and (lower(owner_email) = public.auth_email() or public.is_brokerage_admin())) or public.is_super_admin());")

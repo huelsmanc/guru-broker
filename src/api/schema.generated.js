@@ -1174,6 +1174,36 @@ export const SCHEMA = {
       "reactions"
     ]
   },
+  "RoleplaySession": {
+    "table": "roleplay_session",
+    "columns": [
+      "agent_email",
+      "agent_name",
+      "brokerage_id",
+      "difficulty",
+      "duration_seconds",
+      "ended_at",
+      "scenario",
+      "scenario_title",
+      "score",
+      "scorecard",
+      "started_at",
+      "status",
+      "transcript",
+      "id",
+      "created_date",
+      "updated_date",
+      "created_by"
+    ],
+    "typed": [
+      "duration_seconds",
+      "ended_at",
+      "score",
+      "scorecard",
+      "started_at",
+      "transcript"
+    ]
+  },
   "ScheduledCall": {
     "table": "scheduled_call",
     "columns": [
