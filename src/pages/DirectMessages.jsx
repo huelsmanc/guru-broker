@@ -204,7 +204,7 @@ export function Conversation({ kind, convKey, group, chat, onBack, embedded }) {
             {kind === 'dm' ? <Avatar person={chat.personOf(convKey)} size={72} online={online} />
               : <span className="w-[72px] h-[72px] rounded-full bg-gradient-to-br from-violet-200 to-sky-200 dark:from-violet-900 dark:to-sky-900 flex items-center justify-center"><Users className="w-8 h-8 text-violet-700 dark:text-violet-200" /></span>}
             <p className="mt-3 font-semibold text-lg leading-tight">{title}</p>
-            <p className="text-xs text-muted-foreground mt-1">{kind === 'dm' ? convKey : `${members.length} people`}</p>
+            <p className="text-xs text-muted-foreground mt-1">{kind === 'dm' ? convKey : `${members.length} ${members.length === 1 ? 'person' : 'people'}`}</p>
             <p className="text-[11px] text-muted-foreground/80 mt-3">{kind === 'dm' ? 'Private conversation. Only the two of you can see it.' : 'Only members can see this group.'}</p>
           </div>
         )} />
