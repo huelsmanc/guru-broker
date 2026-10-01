@@ -29,7 +29,13 @@ const SCHEMA = {
   required: ['template', 'palette', 'ribbon', 'headline', 'body', 'bullets', 'cta', 'social_caption', 'hashtags', 'email_subject'],
 };
 
-const money = (n) => (n ? `$${Number(n).toLocaleString('en-US')}` : null);
+// Prices may be typed as "450,000", "$450,000" or "450k".
+const money = (n) => {
+  const m = String(n ?? '').trim().toLowerCase().replace(/[$,\s]/g, '').match(/^(\d+(?:\.\d+)?)([km])?$/);
+  if (!m) return null;
+  const v = Number(m[1]) * (m[2] === 'm' ? 1e6 : m[2] === 'k' ? 1e3 : 1);
+  return v > 0 ? `$${Math.round(v).toLocaleString('en-US')}` : null;
+};
 
 export default async (req) => {
   try {

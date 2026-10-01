@@ -39,7 +39,13 @@ export const KINDS = {
   under_contract: 'Under contract', just_sold: 'Just sold', agent_intro: 'Agent intro', recruiting: 'Join our team', custom: 'Something else',
 };
 
-const money = (n) => (n ? `$${Number(n).toLocaleString('en-US')}` : '');
+// Prices may be typed as "450,000", "$450,000" or "450k".
+const money = (n) => {
+  const m = String(n ?? '').trim().toLowerCase().replace(/[$,\s]/g, '').match(/^(\d+(?:\.\d+)?)([km])?$/);
+  if (!m) return '';
+  const v = Number(m[1]) * (m[2] === 'm' ? 1e6 : m[2] === 'k' ? 1e3 : 1);
+  return v > 0 ? `$${Math.round(v).toLocaleString('en-US')}` : '';
+};
 const shade = (hex, amt) => {
   const h = String(hex || '#1f2937').replace('#', '');
   const n = parseInt(h.length === 3 ? h.split('').map((c) => c + c).join('') : h, 16);
