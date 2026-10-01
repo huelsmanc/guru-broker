@@ -51,6 +51,7 @@ const ClientAppreciation = lazy(() => import('@/pages/ClientAppreciation'));
 const PublicReview = lazy(() => import('@/pages/PublicReview'));
 const Reviews = lazy(() => import('@/pages/Reviews'));
 const Transactions = lazy(() => import('@/pages/Transactions'));
+const Contacts = lazy(() => import('@/pages/Contacts'));
 const ClientPortal = lazy(() => import('@/pages/ClientPortal'));
 const Login = lazy(() => import('@/pages/Login'));
 const Offers = lazy(() => import('@/pages/Offers'));
@@ -166,6 +167,7 @@ const AuthenticatedApp = () => {
             <Route path="/ClientAppreciation" element={<ClientAppreciation />} />
             <Route path="/Reviews" element={<Reviews />} />
             <Route path="/Transactions" element={<Transactions />} />
+            <Route path="/Contacts" element={<Contacts />} />
             <Route path="/ClientPortal" element={<ClientPortal />} />
             <Route path="/MyCommissions" element={<MyCommissions />} />
             <Route path="/Marketing" element={<Marketing />} />

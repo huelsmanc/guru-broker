@@ -5,9 +5,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Plus, Trash2, Pencil, Mail, Phone, UserPlus, Lock } from 'lucide-react';
+import { Plus, Trash2, Pencil, Mail, Phone, UserPlus, Lock, Users, Save } from 'lucide-react';
 import { can } from '../../../shared/permissions.generated.js';
 import { Section, Empty } from './ui';
+import ContactPicker from '@/components/contacts/ContactPicker';
+import { saveToContactBook, roleFor } from '@/lib/contacts';
 
 const ROLES = ['buyer', 'seller', 'tenant', 'landlord', "buyer's agent", "listing agent", 'lender', 'title / closing attorney', 'inspector', 'appraiser', 'attorney', 'other'];
 
@@ -19,11 +21,30 @@ export default function WorkspaceContacts({ tx, user, refresh, canEdit, admin, i
   const [sharing, setSharing] = useState(false);
   const canShare = admin || (isOwner && can(user, 'tx.share'));
 
+  const [picking, setPicking] = useState(false);
   const save = async (c) => {
-    const data = { ...c, transaction_id: tx.id, brokerage_id: tx.brokerage_id, agent_email: String(tx.agent_email || '').toLowerCase(), email: c.email?.trim().toLowerCase() || null };
+    const { saveToBook, ...rest } = c;
+    const data = { ...rest, transaction_id: tx.id, brokerage_id: tx.brokerage_id, agent_email: String(tx.agent_email || '').toLowerCase(), email: c.email?.trim().toLowerCase() || null };
+    // Also keep them in the agent's own contact book (filled in, not duplicated).
+    if (saveToBook) {
+      const book = await saveToContactBook(user, { ...data, type: data.role, source: 'deal' }).catch(() => null);
+      if (book?.id) data.contact_id = book.id;
+    }
     if (c.id) await base44.entities.TransactionContact.update(c.id, data); else await base44.entities.TransactionContact.create(data);
     setEditing(null);
     queryClient.invalidateQueries({ queryKey: key });
+    queryClient.invalidateQueries({ queryKey: ['my-contacts'] });
+  };
+  const fromBook = (b) => {
+    setPicking(false);
+    const role = roleFor(b.type);
+    setEditing({ name: b.name, email: b.email, phone: b.phone, company: b.company, role, is_client: ['buyer', 'seller', 'tenant', 'landlord'].includes(role), contact_id: b.id });
+  };
+  const keep = async (c) => {
+    const book = await saveToContactBook(user, { ...c, type: c.role, source: 'deal' });
+    if (book?.id) await base44.entities.TransactionContact.update(c.id, { contact_id: book.id });
+    queryClient.invalidateQueries({ queryKey: key });
+    queryClient.invalidateQueries({ queryKey: ['my-contacts'] });
   };
   const remove = async (c) => {
     if (!window.confirm(`Remove ${c.name}?`)) return;
@@ -52,7 +73,16 @@ export default function WorkspaceContacts({ tx, user, refresh, canEdit, admin, i
       </Section>
 
       <Section title={`Contacts (${contacts.length})`} subtitle={<span className="flex items-center gap-1"><Lock className="w-3 h-3" /> Private to the agents on this deal, its TC and admins.</span>}
-        actions={canEdit && <Button className="gap-1.5" onClick={() => setEditing({ role: 'buyer', is_client: true })}><Plus className="w-4 h-4" /> Add contact</Button>}>
+        actions={canEdit && <div className="flex gap-2">
+          <Button variant="outline" className="gap-1.5" onClick={() => setPicking((p) => !p)}><Users className="w-4 h-4" /> From my contacts</Button>
+          <Button className="gap-1.5" onClick={() => setEditing({ role: 'buyer', is_client: true, saveToBook: true })}><Plus className="w-4 h-4" /> Add contact</Button>
+        </div>}>
+        {picking && (
+          <div className="mb-3 max-w-md">
+            <ContactPicker user={user} autoFocus exclude={contacts.map((c) => c.email)} onPick={fromBook}
+              onCreateNew={(name) => { setPicking(false); setEditing({ name, role: 'buyer', is_client: true, saveToBook: true }); }} />
+          </div>
+        )}
         {!contacts.length ? <Empty>No contacts yet. Add the clients, lender, title company and anyone else on the deal.</Empty> : (
           <ul className="divide-y rounded-xl border bg-card">
             {contacts.map((c) => (
@@ -63,6 +93,7 @@ export default function WorkspaceContacts({ tx, user, refresh, canEdit, admin, i
                 </div>
                 {c.email && <a href={`mailto:${c.email}`} className="text-xs flex items-center gap-1 text-primary"><Mail className="w-3 h-3" />{c.email}</a>}
                 {c.phone && <a href={`tel:${c.phone}`} className="text-xs flex items-center gap-1"><Phone className="w-3 h-3" />{c.phone}</a>}
+                {canEdit && !c.contact_id && <Button size="sm" variant="ghost" className="gap-1 text-xs" title="Save to my contacts" onClick={() => keep(c)}><Save className="w-3.5 h-3.5" /> Save</Button>}
                 {canEdit && <><Button size="icon" variant="ghost" onClick={() => setEditing(c)}><Pencil className="w-4 h-4" /></Button><Button size="icon" variant="ghost" onClick={() => remove(c)}><Trash2 className="w-4 h-4" /></Button></>}
               </li>
             ))}
@@ -96,6 +127,7 @@ function ContactForm({ contact, onClose, onSave }) {
           <div className="col-span-2"><Label>Company</Label><Input className="mt-1" value={c.company || ''} onChange={set('company')} /></div>
           <div className="col-span-2"><Label>Notes</Label><Input className="mt-1" value={c.notes || ''} onChange={set('notes')} /></div>
           <label className="col-span-2 flex items-center gap-2 text-sm"><input type="checkbox" checked={!!c.is_client} onChange={set('is_client')} /> Client (gets the CEO thank-you at closing)</label>
+          {!c.contact_id && <label className="col-span-2 flex items-center gap-2 text-sm"><input type="checkbox" checked={!!c.saveToBook} onChange={set('saveToBook')} /> Also save to my contacts</label>}
         </div>
         <div className="flex justify-end gap-2"><Button variant="outline" onClick={onClose}>Cancel</Button><Button disabled={!c.name?.trim()} onClick={() => onSave(c)}>Save</Button></div>
       </DialogContent>

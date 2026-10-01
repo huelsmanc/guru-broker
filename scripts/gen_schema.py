@@ -55,7 +55,8 @@ ENTITIES = {
     "ChecklistTemplate": "brokerage_id name deal_type kind items active is_default",
     "Team": "brokerage_id name leader_email lead_pct",
     "Checklist": "brokerage_id subject_type subject_id subject_email template_id name items status",
-    "TransactionContact": "brokerage_id transaction_id agent_email role name email phone company notes is_client",
+    "TransactionContact": "brokerage_id transaction_id agent_email role name email phone company notes is_client contact_id",
+    "Contact": "brokerage_id owner_email owner_name name email phone company type tags notes address birthday source",
     "ActivityEvent": "brokerage_id actor_email table_name op record_id transaction_id summary changed",
     "Offer": "brokerage_id agent_email agent_name property_address city state zip mls_number list_price offer_price earnest_money financing_type down_payment_percent loan_amount closing_date offer_expiration inspection_days financing_days appraisal_contingency seller_concessions included_items special_terms buyers sellers listing_agent_name listing_agent_email status offer_text document_url esign_document_id submission_id transaction_id accepted_at acceptance_date",
     "Onboarding": "agent_email agent_name brokerage_id items status",
@@ -363,6 +364,9 @@ for ent, fields in sorted(ENTITIES.items()):
         pw(f"create policy {t}_access on public.{t} for select using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());")
         pw(f"drop policy if exists {t}_admin on public.{t};")
         pw(f"create policy {t}_admin on public.{t} for all using ((brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin()) with check ((brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin());")
+    elif ent == "Contact":
+        # Each agent's own contact book: theirs alone, plus brokerage admins (and anyone given contacts.private_all).
+        pw(f"create policy {t}_access on public.{t} for all using (lower(owner_email) = public.auth_email() or (brokerage_id = public.auth_brokerage_id() and (public.is_brokerage_admin() or public.has_perm('contacts.private_all'))) or public.is_super_admin()) with check ((brokerage_id = public.auth_brokerage_id() and (lower(owner_email) = public.auth_email() or public.is_brokerage_admin())) or public.is_super_admin());")
     elif ent == "TransactionContact":
         # Private to the agent on the deal (and its TC); admins see everything.
         cond = (f"(lower({t}.agent_email) = public.auth_email()"
@@ -411,7 +415,7 @@ for ent, fields in sorted(ENTITIES.items()):
         w(f"create index if not exists {t}_signers_gin on public.{t} using gin (signers jsonb_path_ops);")
     if ent == "ActivityEvent":
         w(f"create index if not exists {t}_recent_idx on public.{t} (brokerage_id, created_date desc);")
-    for idx in ("brokerage_id", "agent_email", "payee_email", "transaction_id", "user_email", "document_id", "conversation_id", "submission_id", "channel", "group_id", "review_token", "slug"):
+    for idx in ("owner_email", "contact_id", "brokerage_id", "agent_email", "payee_email", "transaction_id", "user_email", "document_id", "conversation_id", "submission_id", "channel", "group_id", "review_token", "slug"):
         if idx in fl:
             w(f"create index if not exists {t}_{idx}_idx on public.{t} ({idx});")
     w("")

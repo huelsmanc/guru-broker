@@ -491,6 +491,31 @@ export const SCHEMA = {
       "passing_score"
     ]
   },
+  "Contact": {
+    "table": "contact",
+    "columns": [
+      "address",
+      "birthday",
+      "brokerage_id",
+      "company",
+      "email",
+      "name",
+      "notes",
+      "owner_email",
+      "owner_name",
+      "phone",
+      "source",
+      "tags",
+      "type",
+      "id",
+      "created_date",
+      "updated_date",
+      "created_by"
+    ],
+    "typed": [
+      "tags"
+    ]
+  },
   "Conversation": {
     "table": "conversation",
     "columns": [
@@ -1322,6 +1347,7 @@ export const SCHEMA = {
       "agent_email",
       "brokerage_id",
       "company",
+      "contact_id",
       "email",
       "is_client",
       "name",

@@ -17,6 +17,8 @@ import CommissionBreakdown from '@/components/transactions/CommissionBreakdown';
 import ClosingReviewPrompt from '@/components/transactions/ClosingReviewPrompt';
 import ScanContractButton from '@/components/transactions/ScanContractButton';
 import FileCheck from '@/components/transactions/FileCheck';
+import ContactPicker from '@/components/contacts/ContactPicker';
+import { saveToContactBook } from '@/lib/contacts';
 import { isAdminRole, normalizeRole, can } from '../../shared/permissions.generated.js';
 
 
@@ -142,14 +144,31 @@ export default function Transactions() {
   });
 
   const createTransaction = useMutation({
-    mutationFn: (data) => base44.entities.Transaction.create({
-      ...data,
-      brokerage_id: brokerageId,
-      sale_price: data.sale_price ? parseFloat(data.sale_price) : null,
-      buyers: data.buyers.filter(b => b.trim()),
-      sellers: data.sellers.filter(s => s.trim()),
-      updates: [],
-    }),
+    mutationFn: async ({ picked = [], ...data }) => {
+      const tx = await base44.entities.Transaction.create({
+        ...data,
+        brokerage_id: brokerageId,
+        sale_price: data.sale_price ? parseFloat(data.sale_price) : null,
+        buyers: data.buyers.filter(b => b.trim()),
+        sellers: data.sellers.filter(s => s.trim()),
+        updates: [],
+      });
+      // Buyers/sellers picked from the contact book go on the deal's contacts, linked back.
+      const names = new Set([...data.buyers, ...data.sellers].map((n) => n.trim().toLowerCase()));
+      for (const p of picked.filter((x) => names.has(String(x.contact.name || '').trim().toLowerCase()))) {
+        await base44.entities.TransactionContact.create({
+          transaction_id: tx.id, brokerage_id: tx.brokerage_id || brokerageId, agent_email: String(tx.agent_email || user.email).toLowerCase(),
+          name: p.contact.name, email: p.contact.email || null, phone: p.contact.phone || null, company: p.contact.company || null,
+          role: p.role, is_client: true, contact_id: p.contact.id,
+        }).catch(() => {});
+      }
+      // Typed-in buyers/sellers become contacts too, so they're there next time.
+      const pickedNames = new Set(picked.map((p) => String(p.contact.name || '').trim().toLowerCase()));
+      for (const [list, type] of [[data.buyers, 'buyer'], [data.sellers, 'seller']]) {
+        for (const n of list.map((x) => x.trim()).filter(Boolean)) if (!pickedNames.has(n.toLowerCase())) saveToContactBook(user, { name: n, type, source: 'deal' }).catch(() => {});
+      }
+      return tx;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions', brokerageId] });
       setShowCreate(false);
@@ -726,6 +745,10 @@ export default function Transactions() {
                 <Label>Buyer(s)</Label>
                 <button type="button" onClick={() => setForm(f => ({ ...f, buyers: [...f.buyers, ''] }))} className="text-xs text-primary hover:underline">+ Add buyer</button>
               </div>
+              <div className="mb-1.5">
+                <ContactPicker user={user} placeholder="Pick a buyer from your contacts"
+                  onPick={(c) => setForm(f => { const list = f.buyers.filter((x) => x.trim()); return { ...f, buyers: [...list, c.name], picked: [...(f.picked || []), { contact: c, role: 'buyer' }] }; })} />
+              </div>
               {form.buyers.map((b, i) => (
                 <div key={i} className="flex gap-2 mb-1.5">
                   <Input value={b} onChange={e => setForm(f => ({ ...f, buyers: f.buyers.map((x, j) => j === i ? e.target.value : x) }))} placeholder="Buyer full name" className="flex-1" />
@@ -739,6 +762,10 @@ export default function Transactions() {
               <div className="flex items-center justify-between mb-1.5">
                 <Label>Seller(s)</Label>
                 <button type="button" onClick={() => setForm(f => ({ ...f, sellers: [...f.sellers, ''] }))} className="text-xs text-primary hover:underline">+ Add seller</button>
+              </div>
+              <div className="mb-1.5">
+                <ContactPicker user={user} placeholder="Pick a seller from your contacts"
+                  onPick={(c) => setForm(f => { const list = f.sellers.filter((x) => x.trim()); return { ...f, sellers: [...list, c.name], picked: [...(f.picked || []), { contact: c, role: 'seller' }] }; })} />
               </div>
               {form.sellers.map((s, i) => (
                 <div key={i} className="flex gap-2 mb-1.5">

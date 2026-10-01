@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Plus, Trash2, ArrowUp, ArrowDown, UserPlus, CheckCircle2, Clock } from 'lucide-react';
 import { SIGNER_COLORS } from './ESignFieldEditor';
+import ContactPicker from '@/components/contacts/ContactPicker';
+import { saveToContactBook } from '@/lib/contacts';
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const newId = () => `signer-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -60,7 +62,9 @@ export default function SignerManagementDashboard({ document, submissions = [], 
   };
   const addDraft = () => {
     if (!EMAIL.test(draft.email.trim())) return;
-    add({ email: draft.email.trim(), name: draft.name.trim() || draft.email.split('@')[0] });
+    const person = { email: draft.email.trim(), name: draft.name.trim() || draft.email.split('@')[0] };
+    add(person);
+    if (me?.email) saveToContactBook(me, { ...person, source: 'e-sign' }).catch(() => {});
     setDraft({ email: '', name: '' });
   };
   const update = (id, patch) => setSigners((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
@@ -101,6 +105,12 @@ export default function SignerManagementDashboard({ document, submissions = [], 
       {!readOnly && (
         <div className="bg-muted/50 rounded-lg p-3 space-y-2">
           <p className="text-sm font-semibold">Add someone</p>
+          {me?.email && (
+            <ContactPicker user={me} placeholder="Search your contacts" exclude={signers.map((s) => s.email)}
+              onPick={(c) => (c.email ? add({ name: c.name, email: c.email }) : setDraft({ name: c.name, email: '' }))}
+              onCreateNew={(text) => setDraft(text.includes('@') ? { name: '', email: text } : { name: text, email: '' })} />
+          )}
+          <p className="text-xs text-muted-foreground">Or type a new person (they're saved to your contacts):</p>
           <div className="grid sm:grid-cols-[1fr_1fr_auto] gap-2">
             <Input placeholder="Name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })}
               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addDraft(); } }} className="h-9" />
