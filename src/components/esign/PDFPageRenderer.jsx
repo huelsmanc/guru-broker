@@ -97,28 +97,50 @@ export default function PDFPageRenderer({ url, children, onLayout, onHeightReady
   }, [pages, width]);
 
   // Draw PDF pages at the current width (sharp on high-DPI screens).
+  // Each page is drawn on its own off-screen canvas and copied over when finished, and an
+  // older drawing is cancelled first: two drawings into one canvas at once (e.g. while a
+  // dialog is still opening and the width changes) used to leave pages small and upside down.
+  const activeRenders = useRef([]);
+  const [drawWidth, setDrawWidth] = useState(0);
   useEffect(() => {
-    if (!isPdf || !pages || !width || !pdfRef.current) return;
+    if (!width) return undefined;
+    const t = setTimeout(() => setDrawWidth(width), drawWidth ? 150 : 0); // wait for resizing to settle
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [width]);
+  useEffect(() => {
+    if (!isPdf || !pages || !drawWidth || !pdfRef.current) return undefined;
     const task = ++renderTask.current;
+    for (const r of activeRenders.current) { try { r.cancel(); } catch { /* already done */ } }
+    activeRenders.current = [];
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     (async () => {
       for (let i = 0; i < pages.length; i++) {
         if (task !== renderTask.current) return;
+        const page = await pdfRef.current.getPage(i + 1);
+        if (task !== renderTask.current) return;
+        const vp = page.getViewport({ scale: (drawWidth / pages[i].width) * dpr });
+        const off = document.createElement('canvas');
+        off.width = Math.floor(vp.width);
+        off.height = Math.floor(vp.height);
+        const job = page.render({ canvasContext: off.getContext('2d'), viewport: vp });
+        activeRenders.current.push(job);
+        try {
+          await job.promise;
+        } catch (err) {
+          if (task === renderTask.current && err?.name !== 'RenderingCancelledException') console.error('Page render error:', err);
+          continue;
+        }
+        if (task !== renderTask.current) return;
         const canvas = canvasRefs.current[i];
         if (!canvas) continue;
-        const page = await pdfRef.current.getPage(i + 1);
-        const scale = (width / pages[i].width) * dpr;
-        const vp = page.getViewport({ scale });
-        canvas.width = Math.floor(vp.width);
-        canvas.height = Math.floor(vp.height);
-        try {
-          await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
-        } catch (err) {
-          if (task === renderTask.current) console.error('Page render error:', err);
-        }
+        canvas.width = off.width;
+        canvas.height = off.height;
+        canvas.getContext('2d').drawImage(off, 0, 0);
       }
     })();
-  }, [isPdf, pages, width]);
+    return undefined;
+  }, [isPdf, pages, drawWidth]);
 
   let offset = 0;
   return (
