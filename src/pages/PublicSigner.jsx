@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { AlertCircle, Loader2, CheckCircle, FileText, Lock, PenTool, Check, X, ChevronDown, Clock } from 'lucide-react';
 import PDFPageRenderer from '@/components/esign/PDFPageRenderer';
 import SignatureCaptureModal from '@/components/esign/SignatureCaptureModal';
-import { fieldStyle, fieldSignerIndex, isPrefilled } from '../../shared/esignGeometry.js';
+import { fieldStyle, fieldSignerIndex, isPrefilled, textPx } from '../../shared/esignGeometry.js';
 
 // The page signers reach from their email link: /sign?token=...
 // Uses the same document layout as the field editor, so every box lines up.
@@ -136,6 +136,9 @@ export default function PublicSigner() {
               const val = isPrefilled(field) ? field.value : values[field.id];
               const mine = !isPrefilled(field);
               const isImage = val && (field.type === 'signature' || field.type === 'initial');
+              if (field.type === 'strike') {
+                return <div key={field.id} className="absolute z-10 pointer-events-none" style={style}><span className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-[2px] bg-gray-900" /></div>;
+              }
               return (
                 <div
                   key={field.id}
@@ -151,7 +154,7 @@ export default function PublicSigner() {
                   {isImage ? (
                     <img src={val} alt="" className="w-full h-full object-contain" />
                   ) : val ? (
-                    <span className="px-1 text-gray-900 truncate" style={{ fontSize: 'clamp(9px, 1.6vw, 14px)' }}>{val}</span>
+                    <span className="self-start w-full text-gray-900 whitespace-pre-wrap break-words" style={{ fontSize: textPx(layout.width), lineHeight: 1.2, padding: '1px 3px' }}>{val}</span>
                   ) : (
                     <span className="w-full text-center text-[11px] font-semibold text-blue-700 truncate px-1">
                       {field.type === 'initial' ? 'Initial' : field.type === 'date' ? 'Date' : field.type === 'text' ? 'Type here' : 'Sign here'}
@@ -253,8 +256,8 @@ function TextModal({ initial, onAccept, onCancel }) {
           <h3 className="font-semibold text-gray-900">Fill in this field</h3>
           <button onClick={onCancel} aria-label="Close"><X className="w-5 h-5 text-gray-400" /></button>
         </div>
-        <input autoFocus value={value} onChange={(e) => setValue(e.target.value)} maxLength={500}
-          className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        <textarea autoFocus rows={3} value={value} onChange={(e) => setValue(e.target.value)} maxLength={500}
+          className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base resize-y focus:outline-none focus:ring-2 focus:ring-blue-500" />
         <div className="flex gap-3">
           <Button variant="outline" onClick={onCancel} className="flex-1">Cancel</Button>
           <Button onClick={() => onAccept(value.trim())} disabled={!value.trim()} className="flex-1 bg-blue-600 hover:bg-blue-700">Done</Button>

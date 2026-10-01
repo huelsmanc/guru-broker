@@ -1,16 +1,42 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
-import { Loader2, AlertCircle, Trash2, PenTool, Calendar, Type, CaseSensitive, Sparkles } from 'lucide-react';
+import { Loader2, AlertCircle, Trash2, PenTool, Calendar, Type, CaseSensitive, Sparkles, Strikethrough } from 'lucide-react';
 import PDFPageRenderer from './PDFPageRenderer';
-import { fieldStyle, heightPct, fieldSignerIndex } from '../../../shared/esignGeometry.js';
+import { fieldStyle, heightPct, fieldSignerIndex, textPx } from '../../../shared/esignGeometry.js';
 
 export const FIELD_TYPES = [
   { id: 'signature', label: 'Signature', icon: PenTool, w: 0.30, h: 0.055 },
   { id: 'initial', label: 'Initials', icon: CaseSensitive, w: 0.09, h: 0.045 },
   { id: 'date', label: 'Date signed', icon: Calendar, w: 0.18, h: 0.03 },
   { id: 'text', label: 'Text', icon: Type, w: 0.30, h: 0.03 },
+  { id: 'strike', label: 'Strike out', icon: Strikethrough, w: 0.30, h: 0.012 },
 ];
+
+// Text typed into a field, shown at the size it will print. Grows the box downward when the
+// text needs more lines, so nothing is cut off.
+function FieldText({ field, layout, color, editing, onChange, onGrow, onDone }) {
+  const ref = useRef(null);
+  const fs = textPx(layout.width);
+  useLayoutEffect(() => {
+    const el = ref.current; if (!el) return;
+    const box = el.parentElement.getBoundingClientRect();
+    const need = el.scrollHeight + 2;
+    if (need > box.height + 1) onGrow((need / layout.height) * 100);
+  }, [field.value, field.width, layout.width, editing]);
+  const style = { fontSize: fs, lineHeight: 1.2, padding: '1px 3px', color: '#111827' };
+  if (editing) {
+    return (
+      <textarea ref={ref} autoFocus value={field.value || ''} onChange={(e) => onChange(e.target.value)} onBlur={onDone}
+        onPointerDown={(e) => e.stopPropagation()} onKeyDown={(e) => { if (e.key === 'Escape') onDone(); e.stopPropagation(); }}
+        placeholder="Type to pre-fill, or leave empty for the signer"
+        className="absolute inset-0 w-full resize-none bg-white/90 outline-none overflow-hidden" style={style} />
+    );
+  }
+  return field.value?.trim()
+    ? <div ref={ref} className="absolute inset-x-0 top-0 whitespace-pre-wrap break-words pointer-events-none" style={style}>{field.value}</div>
+    : <span className="text-[11px] font-semibold truncate px-1 pointer-events-none" style={{ color }}>Text</span>;
+}
 
 export const SIGNER_COLORS = ['#2563eb', '#16a34a', '#9333ea', '#ea580c', '#db2777', '#0891b2'];
 
@@ -21,13 +47,14 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
  * Works with mouse and touch. Every field is assigned to a signer; the sidebar
  * shows which signers still have nothing to sign.
  */
-export default function ESignFieldEditor({ doc, onComplete, onAutoDetect }) {
+export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChange }) {
   const signers = doc.signers || [];
   const [fields, setFields] = useState(() => (doc.fields || []).map((f, i) => ({ ...f, id: f.id || `field-${i}-${Date.now()}` })));
   const [layout, setLayout] = useState(null); // { width, height, ratio }
   const [placing, setPlacing] = useState(null); // field type id
   const [activeSigner, setActiveSigner] = useState(0);
   const [selectedId, setSelectedId] = useState(null);
+  const [editingId, setEditingId] = useState(null);
   const [saving, setSaving] = useState(false);
   const [detecting, setDetecting] = useState(false);
   const [error, setError] = useState(null);
@@ -49,6 +76,7 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect }) {
   const firstSave = useRef(true);
   useEffect(() => {
     if (firstSave.current) { firstSave.current = false; return; }
+    onChange?.(fields);
     const t = setTimeout(() => {
       base44.entities.ESignDocument.update(doc.id, { fields }).catch((err) => console.error('Auto-save failed:', err));
     }, 700);
@@ -190,7 +218,7 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect }) {
       <div className="lg:col-span-2 space-y-2">
         {placing && (
           <div className="rounded-lg bg-blue-50 border border-blue-200 px-3 py-2 text-sm text-blue-800 flex justify-between items-center">
-            <span>Tap the document where the {FIELD_TYPES.find((t) => t.id === placing)?.label.toLowerCase()} should go.</span>
+            <span>{placing === 'strike' ? 'Tap the text you want to strike out, then drag the corner to cover it.' : `Tap the document where the ${FIELD_TYPES.find((t) => t.id === placing)?.label.toLowerCase()} should go.`}</span>
             <button className="text-blue-700 underline text-xs" onClick={() => setPlacing(null)}>Cancel</button>
           </div>
         )}
@@ -210,19 +238,30 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect }) {
                   className="absolute z-20 rounded-[3px] flex items-center justify-center overflow-visible"
                   style={{
                     ...fieldStyle(field, layout.ratio),
-                    border: `2px ${isSel ? 'solid' : 'dashed'} ${color}`,
-                    background: `${color}1f`,
+                    border: field.type === 'strike' ? (isSel ? `1px dashed ${color}` : '1px solid transparent') : `2px ${isSel ? 'solid' : 'dashed'} ${color}`,
+                    background: field.type === 'strike' ? 'transparent' : field.type === 'text' && field.value?.trim() ? 'rgba(255,255,255,0.85)' : `${color}1f`,
                     touchAction: 'none',
-                    cursor: 'move',
+                    cursor: editingId === field.id ? 'text' : 'move',
                   }}
-                  onPointerDown={(e) => startDrag(e, field, 'move')}
+                  title={field.type === 'text' ? 'Double-click to type' : undefined}
+                  onDoubleClick={(e) => { if (field.type === 'text') { e.stopPropagation(); setSelectedId(field.id); setEditingId(field.id); } }}
+                  onPointerDown={(e) => { if (editingId === field.id) return; startDrag(e, field, 'move'); }}
                   onPointerMove={onDragMove}
                   onPointerUp={endDrag}
                   onPointerCancel={endDrag}
                 >
-                  <span className="text-[11px] font-semibold truncate px-1 pointer-events-none" style={{ color }}>
-                    {field.value?.trim() ? field.value : def?.label || field.type}
-                  </span>
+                  {field.type === 'strike' ? (
+                    <span className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-[2px] pointer-events-none" style={{ background: '#111827' }} />
+                  ) : field.type === 'text' ? (
+                    <FieldText field={field} layout={layout} color={color} editing={editingId === field.id}
+                      onChange={(v) => updateField(field.id, { value: v })}
+                      onGrow={(h) => updateField(field.id, { hPct: Math.min(h, 100 - field.y) })}
+                      onDone={() => setEditingId(null)} />
+                  ) : (
+                    <span className="text-[11px] font-semibold truncate px-1 pointer-events-none" style={{ color }}>
+                      {def?.label || field.type}
+                    </span>
+                  )}
                   {isSel && (
                     <>
                       <button
@@ -292,7 +331,8 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect }) {
         {selected && (
           <div className="rounded-lg border border-border/60 p-3 space-y-3">
             <p className="text-sm font-medium">Selected: {FIELD_TYPES.find((t) => t.id === selected.type)?.label}</p>
-            {signers.length > 0 && (
+            {selected.type === 'strike' && <p className="text-xs text-muted-foreground">A line through the text under it, printed on the signed copy. Drag to move; drag the corner to make it longer.</p>}
+            {signers.length > 0 && selected.type !== 'strike' && (
               <label className="block text-xs text-muted-foreground">
                 Signer
                 <select className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm text-foreground"
@@ -312,16 +352,16 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect }) {
             {selected.type === 'text' && (
               <label className="block text-xs text-muted-foreground">
                 Pre-fill (signer can't change it)
-                <input className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm text-foreground"
-                  value={selected.value || ''} placeholder="Leave empty for the signer to fill"
+                <textarea rows={3} className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm text-foreground resize-y"
+                  value={selected.value || ''} placeholder="Leave empty for the signer to fill. You can also double-click the box to type in it."
                   onChange={(e) => updateField(selected.id, { value: e.target.value })} />
               </label>
             )}
-            <label className="flex items-center gap-2 text-sm">
+            {selected.type !== 'strike' && <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={selected.required !== false}
                 onChange={(e) => updateField(selected.id, { required: e.target.checked })} />
               Required
-            </label>
+            </label>}
             <Button variant="outline" size="sm" className="w-full gap-2 text-destructive" onClick={() => removeField(selected.id)}>
               <Trash2 className="w-4 h-4" /> Remove field
             </Button>

@@ -266,6 +266,7 @@ export default function UnifiedESignCreator({
             <ESignFieldEditor
               onAutoDetect={isPdfUrl(currentDoc.document_url) ? autoDetectFields : undefined}
               doc={currentDoc}
+              onChange={(fields) => setCurrentDoc((d) => (d ? { ...d, fields } : d))}
               onComplete={handleFieldsComplete}
             />
           </motion.div>

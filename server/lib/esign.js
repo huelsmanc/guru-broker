@@ -12,7 +12,7 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { adminClient, appUrl } from './base44.js';
 import { SendEmail } from './integrations.js';
-import { fieldToPdfBox, fieldSignerIndex, isPrefilled } from '../../shared/esignGeometry.js';
+import { fieldToPdfBox, fieldSignerIndex, isPrefilled, TEXT_PT } from '../../shared/esignGeometry.js';
 import { readFileBytes } from './files.js';
 
 export const LINK_DAYS = 30;
@@ -372,6 +372,27 @@ async function embedImage(pdf, dataUrl) {
   return meta === 'image/jpeg' ? pdf.embedJpg(bytes) : pdf.embedPng(bytes);
 }
 
+function wrapText(font, text, size, maxWidth) {
+  const out = [];
+  for (const para of String(text).split(/\r?\n/)) {
+    let line = '';
+    for (const word of para.split(/\s+/).filter(Boolean)) {
+      let w = word;
+      // A single word wider than the box is broken up.
+      while (font.widthOfTextAtSize(w, size) > maxWidth && w.length > 1) {
+        let n = w.length - 1;
+        while (n > 1 && font.widthOfTextAtSize(w.slice(0, n), size) > maxWidth) n -= 1;
+        if (line) { out.push(line); line = ''; }
+        out.push(w.slice(0, n)); w = w.slice(n);
+      }
+      const test = line ? `${line} ${w}` : w;
+      if (font.widthOfTextAtSize(test, size) > maxWidth && line) { out.push(line); line = w; } else line = test;
+    }
+    out.push(line);
+  }
+  return out;
+}
+
 function fitText(font, text, maxWidth, maxHeight) {
   let size = Math.min(12, maxHeight * 0.7);
   while (size > 5 && font.widthOfTextAtSize(text, size) > maxWidth) size -= 0.5;
@@ -413,6 +434,14 @@ export async function buildSignedPdf({ originalBytes, doc, sub, signatureData, e
   }
 
   for (const field of doc.fields || []) {
+    if (field.type === 'strike') {
+      // The sender's strike-out: a line through the middle of the box.
+      const b = fieldToPdfBox(field, sizes);
+      const o = sizes[b.pageIndex];
+      const midY = o.y + b.y + b.height / 2;
+      docPages[b.pageIndex].drawLine({ start: { x: o.x + b.x, y: midY }, end: { x: o.x + b.x + b.width, y: midY }, thickness: 1.2, color: rgb(0.07, 0.09, 0.15) });
+      continue;
+    }
     const value = isPrefilled(field) ? field.value : values[field.id];
     if (!value) continue;
     const box = fieldToPdfBox(field, sizes);
@@ -427,6 +456,13 @@ export async function buildSignedPdf({ originalBytes, doc, sub, signatureData, e
       const w = img.width * scale;
       const h = img.height * scale;
       page.drawImage(img, { x: x + (box.width - w) / 2, y: y + (box.height - h) / 2, width: w, height: h });
+    } else if (field.type === 'text' && (String(value).includes('\n') || font.widthOfTextAtSize(ASCII(value), Math.min(TEXT_PT * (sizes[box.pageIndex].width / 612), box.height * 0.7)) > box.width - 4)) {
+      // Longer text wraps onto more lines, from the top of the box (the editor grows the box to fit).
+      let size = Math.min(TEXT_PT * (sizes[box.pageIndex].width / 612), 14);
+      const clean = String(value).split(/\r?\n/).map(ASCII).join('\n');
+      let lines = wrapText(font, clean, size, box.width - 6);
+      while (size > 5 && lines.length * size * 1.2 > box.height + size * 0.3) { size -= 0.5; lines = wrapText(font, clean, size, box.width - 6); }
+      lines.forEach((ln, i) => page.drawText(ln, { x: x + 3, y: y + box.height - size * (1 + i * 1.2) - 1, size, font, color: rgb(0.07, 0.09, 0.15) }));
     } else {
       const text = ASCII(value);
       const size = fitText(font, text, box.width - 4, box.height);

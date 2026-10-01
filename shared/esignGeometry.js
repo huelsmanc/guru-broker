@@ -74,5 +74,10 @@ export function fieldSignerIndex(field) {
 
 /** Fields the signer must complete (not pre-filled by the sender). */
 export function isPrefilled(field) {
+  if (field.type === 'strike') return true; // sender's strike-out line, nothing to fill
   return typeof field.value === 'string' && field.value.trim() !== '';
 }
+
+/** Typed text is drawn at 10pt on a 612pt-wide page; scale that to any width. */
+export const TEXT_PT = 10;
+export const textPx = (pageWidth) => (pageWidth * TEXT_PT) / 612;
