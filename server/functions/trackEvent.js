@@ -35,7 +35,7 @@ export default async (req) => {
         const people = [...wanted].filter((e) => allowed.has(e)).map((e) => allowed.get(e));
         if (people.length) await notifyPeople(base44.asServiceRole.entities, { brokerageId: me.brokerage_id, people, link: `/Transactions/${tx.id}?tab=activity`,
           referenceId: tx.id, referenceType: 'Transaction', title: `${me.full_name || me.email} mentioned you`, message: `${tx.property_address}: ${text.slice(0, 200)}`,
-          emailBody: `<p><b>${esc(me.full_name || me.email)}</b> mentioned you on <b>${esc(tx.property_address || 'a transaction')}</b>:</p><blockquote style="border-left:3px solid #10b981;margin:0;padding:6px 12px;color:#374151">${esc(text.slice(0, 1000))}</blockquote>` });
+          pushKind: 'mention', emailBody: `<p><b>${esc(me.full_name || me.email)}</b> mentioned you on <b>${esc(tx.property_address || 'a transaction')}</b>:</p><blockquote style="border-left:3px solid #10b981;margin:0;padding:6px 12px;color:#374151">${esc(text.slice(0, 1000))}</blockquote>` });
       }
     }
     return Response.json({ ok: true });

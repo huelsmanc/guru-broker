@@ -14,6 +14,7 @@ import { useConversation } from '@/lib/chat/useConversation';
 import { CallButtons, CallCard } from '@/lib/chat/CallProvider';
 import MessageList, { MessageBody, Avatar } from '@/components/messaging/MessageList';
 import Composer from '@/components/messaging/Composer';
+import CatchUp from '@/components/messaging/CatchUp';
 import ChannelMembersManageDialog from '@/components/chat/ChannelMembersManageDialog';
 
 const renderCall = (id, kind) => <CallCard id={id} kind={kind} />;
@@ -138,13 +139,14 @@ function ChannelView({ channel, admin, chat, panel, setPanel, openThread, onMemb
   const ringBell = () => conv.send(`🔔 ${chat.personOf(chat.me).name} just went under contract! 🎉🏆`, { mentions: [] });
 
   return (
-    <div className="flex-1 min-w-0 flex flex-col">
+    <div className="flex-1 min-w-0 flex flex-col relative">
       <header className="flex items-center gap-2 px-4 sm:px-5 py-3 border-b">
         <span className="text-lg">{channel.emoji || (channel.is_private ? '🔒' : '#')}</span>
         <div className="min-w-0 flex-1">
           <h1 className="font-bold truncate flex items-center gap-1">{channel.is_private ? <Lock className="w-3.5 h-3.5" /> : <Hash className="w-3.5 h-3.5 text-muted-foreground" />}{channel.label || channel.name}</h1>
           <p className="text-xs text-muted-foreground truncate">{channel.topic || (channel.is_private ? 'Private channel' : 'Everyone in the brokerage')} · <span className="text-emerald-600">{onlineHere} online</span></p>
         </div>
+        <CatchUp kind="channel" convKey={key} since={lastRead || undefined} />
         <CallButtons kind="channel" convKey={key} />
         <button className={cn('p-2 rounded-lg hover:bg-muted text-muted-foreground', panel === 'search' && 'bg-muted text-foreground')} title="Search this channel" onClick={() => setPanel(panel === 'search' ? null : 'search')}><Search className="w-4 h-4" /></button>
         <button className={cn('p-2 rounded-lg hover:bg-muted text-muted-foreground', panel === 'pins' && 'bg-muted text-foreground')} title="Pinned messages" onClick={() => setPanel(panel === 'pins' ? null : 'pins')}><Pin className="w-4 h-4" /></button>

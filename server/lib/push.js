@@ -63,10 +63,17 @@ export async function sendOne(sub, data, { ttl = 3600, urgency = 'normal' } = {}
   }
 }
 
-/** Push to everyone listed (by email). data: { title, body, url, tag, kind }. */
+const PREF = { message: 'push_messages', mention: 'push_mentions', call: 'push_calls' };
+
+/** Push to everyone listed (by email). data: { title, body, url, tag, kind }. Respects each person's settings. */
 export async function pushTo(entities, emails, data, opts = {}) {
   if (!pushConfigured() || !emails?.length) return 0;
-  const list = [...new Set(emails.map((e) => String(e || '').toLowerCase()).filter(Boolean))];
+  let list = [...new Set(emails.map((e) => String(e || '').toLowerCase()).filter(Boolean))];
+  const pref = PREF[data.kind] || 'push_updates';
+  const people = await entities.User.filter({ email: { $in: list } }, '-created_date', 500).catch(() => []);
+  const off = new Set(people.filter((u) => u.notify_prefs && u.notify_prefs[pref] === false).map((u) => String(u.email).toLowerCase()));
+  list = list.filter((e) => !off.has(e));
+  if (!list.length) return 0;
   const subs = await entities.PushSubscription.filter({ user_email: { $in: list } }, '-created_date', 500);
   let sent = 0;
   await Promise.all(subs.map(async (s) => {

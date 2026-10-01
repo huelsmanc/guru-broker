@@ -1,7 +1,7 @@
 // Messaging and calls: mention notifications go only to people who can see the message,
 // and calls (Daily.co, faked here) ring, answer, decline and end correctly.
 import assert from 'node:assert/strict';
-Object.assign(process.env, { SUPABASE_URL: 'http://sb', SUPABASE_SERVICE_ROLE_KEY: 'service', SUPABASE_ANON_KEY: 'anon', HOOK_SECRET: 'hs', RESEND_API_KEY: 're', APP_URL: 'https://gurubroker.app', DAILY_API_KEY: 'dk' });
+Object.assign(process.env, { SUPABASE_URL: 'http://sb', SUPABASE_SERVICE_ROLE_KEY: 'service', SUPABASE_ANON_KEY: 'anon', HOOK_SECRET: 'hs', RESEND_API_KEY: 're', APP_URL: 'https://gurubroker.app', DAILY_API_KEY: 'dk', ANTHROPIC_API_KEY: 'sk-ant', AI_PROVIDER: 'anthropic' });
 const calls = [];
 let roomN = 0;
 globalThis.fetch = async (url, init = {}) => {
@@ -10,6 +10,7 @@ globalThis.fetch = async (url, init = {}) => {
   if (url.endsWith('/v1/rooms') && init.method === 'POST') { roomN += 1; return new Response(JSON.stringify({ name: `room${roomN}`, url: `https://guru.daily.co/room${roomN}` })); }
   if (url.endsWith('/v1/meeting-tokens')) return new Response(JSON.stringify({ token: `tok-${JSON.parse(init.body).properties.user_name}` }));
   if (url.includes('/v1/rooms/') && init.method === 'DELETE') return new Response('{"deleted":true}');
+  if (url.includes('anthropic')) return new Response(JSON.stringify({ content: [{ type: 'tool_use', name: 'respond', input: { tldr: 'Team planning the open house.', for_me: ['Ann asked you to bring signs'], decisions: ['Open house Sat 1-3'], action_items: [{ who: 'Bob', what: 'Order flyers' }] } }] }));
   if (url.startsWith('https://push.example/')) return new Response('', { status: url.endsWith('gone') ? 410 : 201 });
   throw new Error('unexpected ' + url);
 };
@@ -154,5 +155,34 @@ assert.equal(r.status, 200, JSON.stringify(r.body));
 const ring = calls.filter((c) => c.url === 'https://push.example/cy');
 assert.equal(ring.length, before + 1, 'incoming call rings the phone');
 assert.equal(ring.at(-1).init.headers.Urgency, 'high');
+
+// Catch me up: summarizes only what's new since last read; nothing new -> no AI call.
+const old = new Date(Date.now() - 3 * 3600e3).toISOString();
+globalThis.__db.social_message.push(
+  { id: 'n1', brokerage_id: 'B1', channel: 'general', sender_email: 'bob@x.com', sender_name: 'Bob Buyer', content: 'Open house Sat 1-3?', mentions: [], created_date: new Date().toISOString(), extra: {} },
+  { id: 'n2', brokerage_id: 'B1', channel: 'general', sender_email: 'admin@x.com', sender_name: 'Ada Admin', content: '@Cy Closer bring the signs', mentions: ['cy@x.com'], created_date: new Date().toISOString(), extra: {} },
+);
+const aiBefore = calls.filter((c) => c.url.includes('anthropic')).length;
+r = await as('cy')('chatCatchUp', { kind: 'channel', key: 'general', since: old });
+assert.equal(r.status, 200, JSON.stringify(r.body));
+assert.equal(r.body.summary.tldr, 'Team planning the open house.');
+const aiReq = JSON.parse(calls.filter((c) => c.url.includes('anthropic')).at(-1).init.body);
+assert.match(JSON.stringify(aiReq.messages), /Bob Buyer: Open house Sat 1-3/);
+r = await as('cy')('chatCatchUp', { kind: 'channel', key: 'general', since: new Date().toISOString() });
+assert.equal(r.body.summary, null);
+assert.equal(calls.filter((c) => c.url.includes('anthropic')).length, aiBefore + 1, 'no AI call when nothing is new');
+
+// Morning digest: Cy has an unread @mention from over an hour ago; Bob turned the digest off.
+globalThis.__db.social_message.push({ id: 'n3', brokerage_id: 'B1', channel: 'general', sender_email: 'admin@x.com', sender_name: 'Ada Admin', content: '@Cy Closer call the lender', mentions: ['cy@x.com'], created_date: new Date(Date.now() - 2 * 3600e3).toISOString(), extra: {} });
+globalThis.__db.direct_message.push({ id: 'dd1', brokerage_id: 'B1', sender_email: 'ann@x.com', sender_name: 'Ann Agent', receiver_email: 'bob@x.com', content: 'ping', read: false, created_date: new Date(Date.now() - 2 * 3600e3).toISOString(), extra: {} });
+globalThis.__db.profiles.find((p) => p.email === 'bob@x.com').extra.notify_prefs = { daily_digest: false };
+const emailsBefore = calls.filter((c) => c.url.includes('resend')).length;
+r = await svc2('chatDigest', {});
+assert.equal(r.status, 200, JSON.stringify(r.body));
+const digests = calls.filter((c) => c.url.includes('resend')).slice(emailsBefore).map((c) => JSON.parse(c.init.body));
+assert.ok(digests.some((d) => d.to[0] === 'cy@x.com' && /call the lender/.test(d.html)), 'Cy gets a digest');
+assert.ok(!digests.some((d) => d.to[0] === 'bob@x.com'), 'Bob opted out');
+r = await as('ann')('chatDigest', {});
+assert.equal(r.status, 403, 'digest is scheduled-only');
 
 console.log('Messaging and calls: all checks passed');

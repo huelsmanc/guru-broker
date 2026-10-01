@@ -11,6 +11,7 @@ import { motion } from 'framer-motion';
 import { Badge } from '@/components/ui/badge';
 import ImageCropModal from '@/components/profile/ImageCropModal';
 import DeleteAccountDialog from '@/components/profile/DeleteAccountDialog';
+import NotificationSettings from '@/components/NotificationSettings';
 import { format, differenceInDays } from 'date-fns';
 import { isAdminRole, normalizeRole, can } from '../../shared/permissions.generated.js';
 
@@ -282,6 +283,8 @@ export default function Profile() {
              <p className="text-xs text-muted-foreground mt-2">Your status is visible to brokers. Messages are only routed to Available or Busy agents.</p>
            </div>
          )}
+
+        <div className="rounded-2xl border p-5"><NotificationSettings /></div>
 
         <div className="flex items-center justify-between gap-3">
           <Button

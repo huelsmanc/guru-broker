@@ -56,7 +56,7 @@ export default async (req) => {
 
     await E[ENTITY[kind]].update(id, { notified_at: new Date().toISOString() });
     const notified = await notifyPeople(E, { brokerageId: me.brokerage_id, people: audience.map((e) => ({ email: e })), title, message: snippet(msg.content),
-      link, referenceId: id, referenceType: 'Message', email: false });
+      link, referenceId: id, referenceType: 'Message', email: false, pushKind: 'mention' });
     return Response.json({ notified });
   } catch (error) {
     return Response.json({ error: error.message }, { status: error.status || 500 });

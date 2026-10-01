@@ -231,7 +231,7 @@ export default async (req) => {
       const text = String(body.text).slice(0, 300);
       await notifyPeople(E, { brokerageId: me.brokerage_id, people: mentioned, link: `${link}${link.includes('?') ? '&' : '?'}item=${item.id}`, referenceId: cl.id, referenceType: 'Checklist',
         title: `${me.full_name || me.email} mentioned you on ${item.title}`, message: `${label}: ${text}`,
-        emailBody: `<p><b>${esc(me.full_name || me.email)}</b> mentioned you on <b>${esc(item.title)}</b> (${esc(label)}):</p><blockquote style="border-left:3px solid #10b981;margin:0;padding:6px 12px;color:#374151">${esc(text)}</blockquote>` });
+        pushKind: 'mention', emailBody: `<p><b>${esc(me.full_name || me.email)}</b> mentioned you on <b>${esc(item.title)}</b> (${esc(label)}):</p><blockquote style="border-left:3px solid #10b981;margin:0;padding:6px 12px;color:#374151">${esc(text)}</blockquote>` });
     }
     return Response.json({ checklist: saved });
   } catch (error) {

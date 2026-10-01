@@ -165,3 +165,7 @@ drop trigger if exists automation_group_message on public.group_message;
 create trigger automation_group_message after insert on public.group_message
   for each row execute function private.on_row_change();
 create unique index if not exists push_subscription_endpoint on public.push_subscription (endpoint);
+
+-- Morning digest of unread messages and mentions (12:00 UTC = 8am Eastern).
+do $$ begin perform cron.unschedule(jobname) from cron.job where jobname = 'chat-digest'; end $$;
+select cron.schedule('chat-digest', '0 12 * * *', $$ select private.call_app('/api/fn/chatDigest') $$);

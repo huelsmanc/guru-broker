@@ -13,6 +13,7 @@ import { useConversation } from '@/lib/chat/useConversation';
 import { CallButtons, CallCard } from '@/lib/chat/CallProvider';
 import MessageList, { Avatar } from '@/components/messaging/MessageList';
 import Composer from '@/components/messaging/Composer';
+import CatchUp from '@/components/messaging/CatchUp';
 
 const renderCall = (id, kind) => <CallCard id={id} kind={kind} />;
 const when = (d) => { const x = new Date(d); return isToday(x) ? format(x, 'h:mm a') : isThisWeek(x) ? format(x, 'EEE') : format(x, 'MMM d'); };
@@ -144,6 +145,11 @@ export function Conversation({ kind, convKey, group, chat, onBack, embedded }) {
     },
   });
   useEffect(() => { chat.setActive({ kind, key: convKey }); return () => chat.setActive(null); }, [chat, kind, convKey]);
+  // Last read time before opening, for "Catch me up".
+  const [lastRead, setLastRead] = useState(null);
+  useEffect(() => {
+    supabase.from('chat_read_state').select('last_read_at').eq('kind', kind).eq('conv_key', convKey).maybeSingle().then(({ data }) => setLastRead(data?.last_read_at || ''));
+  }, [kind, convKey]);
   const lastId = conv.messages[conv.messages.length - 1]?.id;
   useEffect(() => {
     if (conv.loading) return undefined;
@@ -176,7 +182,7 @@ export function Conversation({ kind, convKey, group, chat, onBack, embedded }) {
   const online = kind === 'dm' ? chat.online.has(convKey) : people.some((p) => chat.online.has(p.email));
 
   return (
-    <>
+    <div className="flex-1 min-h-0 flex flex-col relative">
       <header className="flex items-center gap-3 px-3 sm:px-4 py-2.5 border-b">
         {!embedded && <button onClick={onBack} className="md:hidden p-2 -ml-1 rounded-full hover:bg-muted"><ArrowLeft className="w-5 h-5" /></button>}
         {kind === 'dm' ? <Avatar person={chat.personOf(convKey)} size={40} online={online} /> : <span className="w-10 h-10 rounded-full bg-gradient-to-br from-violet-200 to-sky-200 dark:from-violet-900 dark:to-sky-900 flex items-center justify-center"><Users className="w-5 h-5 text-violet-700 dark:text-violet-200" /></span>}
@@ -184,6 +190,7 @@ export function Conversation({ kind, convKey, group, chat, onBack, embedded }) {
           <p className="font-semibold truncate">{title}</p>
           <p className="text-xs text-muted-foreground truncate">{kind === 'dm' ? (online ? <span className="text-emerald-600">Active now</span> : chat.people.get(convKey)?.role ? 'Offline' : '') : group.transaction_id ? `Deal chat · ${people.map((p) => p.name.split(' ')[0]).join(', ')}` : `${members.length} people${online ? ' · some online' : ''}`}</p>
         </div>
+        <CatchUp kind={kind} convKey={convKey} since={lastRead || undefined} />
         <CallButtons kind={kind} convKey={convKey} />
         {kind === 'group' && group.transaction_id && !embedded && <a href={`/Transactions/${group.transaction_id}`} className="text-xs text-primary hover:underline px-2">Open deal</a>}
         {kind === 'group' && !group.transaction_id && <button onClick={() => setManage(true)} className="p-2 rounded-lg hover:bg-muted text-muted-foreground" title="Group settings"><Users className="w-4 h-4" /></button>}
@@ -193,7 +200,7 @@ export function Conversation({ kind, convKey, group, chat, onBack, embedded }) {
       <Composer draftKey={`${kind}:${convKey}`} people={kind === 'group' ? people : []} placeholder="Aa" onSend={(t, extra) => conv.send(t, kind === 'group' ? extra : {})}
         onTyping={room.typing} onStopTyping={room.stopTyping} />
       {manage && group && <GroupSettings group={group} chat={chat} onClose={() => setManage(false)} onLeft={onBack} />}
-    </>
+    </div>
   );
 }
 
