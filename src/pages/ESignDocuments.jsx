@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import SignedDownload from '@/components/esign/SignedDownload';
 import { isPdfUrl } from '@/components/esign/PDFPageRenderer';
 import { autoDetectFields } from '@/components/esign/autoDetectFields';
 import { useOutletContext } from 'react-router-dom';
@@ -175,6 +176,10 @@ export default function ESignDocuments() {
                           </Button>
                         </a>
                       ) : null;
+                    })()}
+                    {(() => {
+                      const completedSub = submissions.find(s => s.document_id === doc.id && s.status === 'completed' && s.signed_document_url);
+                      return completedSub ? <SignedDownload url={completedSub.signed_document_url} className="h-8 rounded-lg border-green-300 text-green-700 hover:bg-green-50" /> : null;
                     })()}
                     {(isCreator || isAdmin) && (
                       <Button

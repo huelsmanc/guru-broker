@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Upload, Loader2, FileText, Download, Trash2, ScanLine } from 'lucide-react';
 import { Section, Empty, Pill } from './ui';
 import ScanContractButton from '@/components/transactions/ScanContractButton';
+import SignedDownload, { isSignedLink } from '@/components/esign/SignedDownload';
 
 // Every document on the deal: checklist uploads plus "unsorted" files that aren't on a
 // checklist yet (assign them to an item from here).
@@ -77,7 +78,8 @@ export default function WorkspaceDocuments({ tx, user, refresh, canEdit }) {
                     {openItems.map(({ l, i }) => <option key={i.id} value={`${l.id}|${i.id}`}>{l.name}: {i.title}</option>)}
                   </select>
                 )}
-                <a href={d.url} download><Button size="icon" variant="ghost"><Download className="w-4 h-4" /></Button></a>
+                {isSignedLink(d.url) ? <SignedDownload url={d.url} iconOnly className="border-0 h-9 w-9 justify-center" />
+                  : <a href={d.url} download><Button size="icon" variant="ghost"><Download className="w-4 h-4" /></Button></a>}
                 {canEdit && <Button size="icon" variant="ghost" onClick={() => remove(d)}><Trash2 className="w-4 h-4" /></Button>}
               </li>
             ))}
@@ -94,6 +96,7 @@ export default function WorkspaceDocuments({ tx, user, refresh, canEdit }) {
                   <a href={d.document_url} target="_blank" rel="noreferrer" className="block truncate text-sm hover:underline">{d.title}</a>
                   <p className="text-xs text-muted-foreground truncate">{d.document_name} · {d.checklist.name}</p>
                 </div>
+                {isSignedLink(d.document_url) && <SignedDownload url={d.document_url} iconOnly className="border-0 h-9 w-9 justify-center" />}
                 <Pill status={d.status} />
               </li>
             ))}

@@ -434,6 +434,7 @@ export async function buildSignedPdf({ originalBytes, doc, sub, signatureData, e
     }
   }
 
+  const docPageCount = pdf.getPageCount();
   // Certificate of completion.
   let cert = pdf.addPage([612, 792]);
   let cy = 740;
@@ -482,7 +483,19 @@ export async function buildSignedPdf({ originalBytes, doc, sub, signatureData, e
   pdf.setTitle(`${doc.title || 'Document'} (signed)`);
   pdf.setProducer('Guru Broker E-Sign');
   const bytes = await pdf.save();
-  return { bytes, originalHash, finalHash: await sha256Hex(bytes) };
+  return { bytes, originalHash, finalHash: await sha256Hex(bytes), docPageCount };
+}
+
+/** The signed PDF without its certificate pages (the first `pages` pages only). */
+export async function withoutCertificate(bytes, pages, title) {
+  const src = await PDFDocument.load(bytes, { ignoreEncryption: true });
+  const keep = Math.max(1, Math.min(src.getPageCount(), Number(pages) || src.getPageCount()));
+  const out = await PDFDocument.create();
+  const copied = await out.copyPages(src, Array.from({ length: keep }, (_, i) => i));
+  copied.forEach((p) => out.addPage(p));
+  out.setTitle(`${title || 'Document'} (signed)`);
+  out.setProducer('Guru Broker E-Sign');
+  return out.save();
 }
 
 function fmt(iso) {
@@ -499,7 +512,7 @@ export async function finalize({ entities, sub, doc }) {
   const signatureData = await entities.SignatureData.filter({ submission_id: sub.id }, 'created_date', 100);
   const events = await entities.ESignAuditLog.filter({ document_id: doc.id }, 'created_date', 200).catch(() => []);
   const originalBytes = await fetchBytes(doc.original_document_url || doc.document_url);
-  const { bytes, originalHash, finalHash } = await buildSignedPdf({ originalBytes, doc, sub, signatureData, events });
+  const { bytes, originalHash, finalHash, docPageCount } = await buildSignedPdf({ originalBytes, doc, sub, signatureData, events });
 
   const path = `signed/${sub.id}.pdf`;
   const { error } = await adminClient().storage.from('private-files')
@@ -513,6 +526,7 @@ export async function finalize({ entities, sub, doc }) {
     signed_pdf_path: `private-files/${path}`,
     original_sha256: originalHash,
     final_sha256: finalHash,
+    doc_pages: docPageCount,
     access_key: accessKey,
   });
   await entities.ESignDocument.update(doc.id, {

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import SignedDownload, { isSignedLink } from '@/components/esign/SignedDownload';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
@@ -144,7 +145,9 @@ function ItemPanel({ checklistId, fileScope, item, tx, user, approver, admin, ma
             </Button>
             <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setPicking(true)}><Library className="w-3.5 h-3.5" /> Use forms</Button>
             {item.document_url && <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setSigning(item.document_url)}><PenTool className="w-3.5 h-3.5" /> eSign</Button>}
-            {item.document_url && <a href={item.document_url} target="_blank" rel="noreferrer"><Button size="sm" variant="outline" className="gap-1.5"><Download className="w-3.5 h-3.5" /> Download</Button></a>}
+            {item.document_url && (isSignedLink(item.document_url)
+              ? <SignedDownload url={item.document_url} className="h-9 px-3 text-sm" />
+              : <a href={item.document_url} target="_blank" rel="noreferrer"><Button size="sm" variant="outline" className="gap-1.5"><Download className="w-3.5 h-3.5" /> Download</Button></a>)}
             {['uploaded', 'rejected'].includes(item.status) && (
               <Button size="sm" className="gap-1.5" disabled={!!busy} onClick={() => go('submit', { action: 'submit', item_id: item.id })}><Send className="w-3.5 h-3.5" /> Submit for review</Button>
             )}

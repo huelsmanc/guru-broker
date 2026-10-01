@@ -191,6 +191,30 @@ export default (async (req) => {
       return new Response(renderError('This link is not valid.'), { headers: { 'Content-Type': 'text/html' }, status: 403 });
     }
 
+    if (submission.signed_pdf_path && url.searchParams.get('certificate') === '0') {
+      // The signed document alone, without the certificate pages.
+      const path = String(submission.signed_pdf_path).replace(/^private-files\//, '');
+      const { data: file, error: dlErr } = await adminClient().storage.from('private-files').download(path);
+      if (!dlErr && file) {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        const docs0 = await base44.asServiceRole.entities.ESignDocument.filter({ id: submission.document_id }, '-created_date', 1);
+        const title = docs0[0]?.title || 'Document';
+        let pages = Number(submission.doc_pages) || 0;
+        if (!pages) {
+          // Signed before page counts were saved: count the original document's pages.
+          try {
+            const { PDFDocument } = await import('pdf-lib');
+            const orig = await readFileBytes(docs0[0]?.original_document_url || docs0[0]?.document_url);
+            pages = (await PDFDocument.load(orig, { ignoreEncryption: true })).getPageCount();
+          } catch { pages = 0; }
+        }
+        const { withoutCertificate } = await import('../lib/esign.js');
+        const out = await withoutCertificate(bytes, pages, title);
+        const name = `${String(title).replace(/[^\w .-]+/g, '').trim() || 'signed'} (signed).pdf`;
+        return new Response(out, { headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': `${url.searchParams.get('download') ? 'attachment' : 'inline'}; filename="${name}"`, 'Cache-Control': 'private, no-store' } });
+      }
+    }
+
     if (submission.signed_pdf_path) {
       const path = String(submission.signed_pdf_path).replace(/^private-files\//, '');
       const { data, error } = await adminClient().storage.from('private-files').createSignedUrl(path, 600, {

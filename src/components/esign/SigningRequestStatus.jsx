@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import SignedDownload from './SignedDownload';
 import { useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { CheckCircle, Clock, Mail, XCircle, Loader2, Download, RefreshCw, Eye } from 'lucide-react';
@@ -49,9 +50,7 @@ export default function SigningRequestStatus({ sub, canManage }) {
               <a href={sub.signed_document_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-md border border-green-300 text-green-700 px-2 py-1 hover:bg-green-50">
                 <Eye className="w-3 h-3" /> Open
               </a>
-              <a href={`${sub.signed_document_url}&download=1`} className="inline-flex items-center gap-1 rounded-md border border-green-300 text-green-700 px-2 py-1 hover:bg-green-50">
-                <Download className="w-3 h-3" /> PDF
-              </a>
+              <SignedDownload url={sub.signed_document_url} label="PDF" className="border-green-300 text-green-700 hover:bg-green-50" />
             </>
           )}
           {canManage && sub.status === 'completed' && (sub.finalize_error || !sub.signed_pdf_path) && (
