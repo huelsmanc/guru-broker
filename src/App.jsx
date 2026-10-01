@@ -34,11 +34,9 @@ const CustomSign = lazy(() => import('@/pages/CustomSign'));
 const PublicSigner = lazy(() => import('@/pages/PublicSigner.jsx'));
 const VerifyDocument = lazy(() => import('@/pages/VerifyDocument.jsx'));
 const BulkSign = lazy(() => import('@/pages/BulkSign'));
-const Recognition = lazy(() => import('@/pages/Recognition'));
-const IdeaHub = lazy(() => import('@/pages/IdeaHub'));
 const EventBoard = lazy(() => import('@/pages/EventBoard'));
 const FileRepository = lazy(() => import('@/pages/FileRepository'));
-const CultureCalendar = lazy(() => import('@/pages/CultureCalendar'));
+const Culture = lazy(() => import('@/pages/Culture'));
 const TechLinks = lazy(() => import('@/pages/TechLinks'));
 const ListingGenerator = lazy(() => import('@/pages/ListingGenerator'));
 const NetSheetCalculator = lazy(() => import('@/pages/NetSheetCalculator'));
@@ -149,11 +147,12 @@ const AuthenticatedApp = () => {
             <Route path="/ESignDocuments" element={<ESignDocuments />} />
             <Route path="/ESignAdmin" element={<ESignAdmin />} />
             <Route path="/CustomESign" element={<CustomESign />} />
-            <Route path="/Recognition" element={<Recognition />} />
-            <Route path="/IdeaHub" element={<IdeaHub />} />
+            <Route path="/Recognition" element={<Navigate to="/Culture?tab=recognition" replace />} />
+            <Route path="/IdeaHub" element={<Navigate to="/Culture?tab=ideas" replace />} />
             <Route path="/EventBoard" element={<EventBoard />} />
             <Route path="/FileRepository" element={<FileRepository />} />
-            <Route path="/CultureCalendar" element={<CultureCalendar />} />
+            <Route path="/CultureCalendar" element={<Navigate to="/Culture?tab=calendar" replace />} />
+            <Route path="/Culture" element={<Culture />} />
             <Route path="/TechLinks" element={<TechLinks />} />
             <Route path="/ListingGenerator" element={<ListingGenerator />} />
             <Route path="/NetSheetCalculator" element={<NetSheetCalculator />} />
