@@ -12,7 +12,10 @@ export default async (req) => {
     const me = await base44.auth.me();
     const { scope, name, size } = await req.json();
     if (size && Number(size) > MAX) return Response.json({ error: 'Files can be up to 50 MB.' }, { status: 400 });
-    const folder = scopeFolder(me.brokerage_id, scope);
+    // The super admin may work outside any brokerage; their own files go in a platform folder.
+    const brokerage = me.brokerage_id || (me.role === 'super_admin' ? 'platform' : null);
+    if (!brokerage) return Response.json({ error: 'Join a brokerage before uploading files.' }, { status: 400 });
+    const folder = scopeFolder(brokerage, scope);
     const path = `${folder}/${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}-${safeName(name)}`;
     if (!(await canAccess(me, parsePath(path), base44.entities))) return Response.json({ error: 'Not allowed to add files here' }, { status: 403 });
     const { data, error } = await adminClient().storage.from(PRIVATE_BUCKET).createSignedUploadUrl(path);

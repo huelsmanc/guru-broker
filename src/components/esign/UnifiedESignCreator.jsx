@@ -43,6 +43,7 @@ export default function UnifiedESignCreator({
   const [signers, setSigners] = useState(initialSigners);
   const [error, setError] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [fileName, setFileName] = useState('');
   const [creating, setCreating] = useState(false);
 
   const [currentDoc, setCurrentDoc] = useState(null);
@@ -55,6 +56,9 @@ export default function UnifiedESignCreator({
 
     setUploading(true);
     setError(null);
+    // Name the document after the file unless a title was typed.
+    if (!title.trim()) setTitle(file.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim());
+    setFileName(file.name);
 
     try {
       // Private: to the deal when sent from one, otherwise to the sender (and admins).
@@ -241,7 +245,7 @@ export default function UnifiedESignCreator({
                   ) : documentUrl ? (
                     <>
                       <p className="text-sm font-medium text-foreground mb-1">Document uploaded ✓</p>
-                      <p className="text-xs text-muted-foreground">{documentUrl.split('/').pop()}</p>
+                      <p className="text-xs text-muted-foreground">{fileName || 'Click to replace it'}</p>
                     </>
                   ) : (
                     <>
@@ -354,6 +358,11 @@ export default function UnifiedESignCreator({
           {step === 'upload' ? 'Cancel' : 'Back'}
         </Button>
 
+        {step !== 'send' && !canProceed() && !uploading && (
+          <p className="text-xs text-muted-foreground self-center ml-auto">
+            {step === 'upload' ? (!documentUrl ? 'Upload the document to continue.' : 'Add a title to continue.') : step === 'signers' ? 'Add at least one signer.' : step === 'fields' ? 'Place at least one field.' : ''}
+          </p>
+        )}
         {step !== 'send' && (
           <Button
             onClick={handleNextStep}

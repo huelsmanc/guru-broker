@@ -76,6 +76,7 @@ export default function SignerManagementDashboard({ document, submissions = [], 
         <label className="text-sm font-semibold text-foreground block mb-3">Signing Sequence</label>
         <div className="flex gap-3">
           <button
+            type="button"
             onClick={() => updateSequenceType('all_at_once')}
             className={`flex-1 px-4 py-2.5 rounded-lg border-2 transition-all font-medium ${
               sequenceType === 'all_at_once'
@@ -86,6 +87,7 @@ export default function SignerManagementDashboard({ document, submissions = [], 
             All at Once
           </button>
           <button
+            type="button"
             onClick={() => updateSequenceType('sequential')}
             className={`flex-1 px-4 py-2.5 rounded-lg border-2 transition-all font-medium ${
               sequenceType === 'sequential'
@@ -112,15 +114,18 @@ export default function SignerManagementDashboard({ document, submissions = [], 
             placeholder="Email address"
             value={newSigner.email}
             onChange={(e) => setNewSigner({ ...newSigner, email: e.target.value })}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSigner(); } }}
             className="h-9"
           />
           <Input
             placeholder="Name (optional)"
             value={newSigner.name}
             onChange={(e) => setNewSigner({ ...newSigner, name: e.target.value })}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSigner(); } }}
             className="h-9"
           />
           <Button
+            type="button"
             onClick={addSigner}
             disabled={!newSigner.email.trim()}
             className="gap-2 h-9 rounded-lg"
