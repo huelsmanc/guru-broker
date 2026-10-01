@@ -162,6 +162,7 @@ export const SCHEMA = {
       "email",
       "name",
       "phone",
+      "states",
       "status",
       "welcome_message",
       "id",
@@ -169,7 +170,9 @@ export const SCHEMA = {
       "updated_date",
       "created_by"
     ],
-    "typed": []
+    "typed": [
+      "states"
+    ]
   },
   "BrokerageSettings": {
     "table": "brokerage_settings",

@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { isAdminRole, normalizeRole, can } from '../../shared/permissions.generated.js';
+import { US_STATES } from '@/components/contracts/FormsLibrary';
 
 export default function SuperAdmin() {
   const { user } = useOutletContext();
@@ -454,6 +455,8 @@ function BrokerageManagement({ brokerage, allUsers, currentUser, onBack, onUpdat
   });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  // States this brokerage works in: decides which state contract forms its agents get.
+  const [states, setStates] = useState(() => (Array.isArray(brokerage.states) ? brokerage.states : []));
 
   // Invite state
   const [showInvite, setShowInvite] = useState(false);
@@ -502,11 +505,12 @@ function BrokerageManagement({ brokerage, allUsers, currentUser, onBack, onUpdat
       phone: settingsForm.brokerage_phone,
       email: settingsForm.brokerage_email,
       welcome_message: settingsForm.welcome_message,
+      states,
     });
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
-    onUpdateBrokerage({ ...brokerage, name: settingsForm.brokerage_name, broker_name: settingsForm.broker_name });
+    onUpdateBrokerage({ ...brokerage, name: settingsForm.brokerage_name, broker_name: settingsForm.broker_name, states });
   };
 
   const handleInvite = async () => {
@@ -788,6 +792,16 @@ function BrokerageManagement({ brokerage, allUsers, currentUser, onBack, onUpdat
                 <div className="sm:col-span-2">
                   <Label>Brokerage Email</Label>
                   <Input value={settingsForm.brokerage_email} onChange={(e) => setSettingsForm({ ...settingsForm, brokerage_email: e.target.value })} placeholder="support@brokerage.com" className="mt-1.5" />
+                </div>
+                <div className="sm:col-span-2">
+                  <Label>States this brokerage works in</Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">Its agents get your contract forms for these states. Only you can change this.</p>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {US_STATES.map((st) => (
+                      <button key={st} type="button" onClick={() => setStates((x) => (x.includes(st) ? x.filter((y) => y !== st) : [...x, st].sort()))}
+                        className={`w-11 rounded-md border px-1 py-1 text-xs font-medium ${states.includes(st) ? 'bg-primary text-primary-foreground border-primary' : 'bg-background hover:border-primary'}`}>{st}</button>
+                    ))}
+                  </div>
                 </div>
                 <div className="sm:col-span-2">
                   <Label>Welcome Message for Agents</Label>

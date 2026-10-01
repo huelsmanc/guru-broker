@@ -12,7 +12,9 @@ insert into public.profiles (id,email,full_name,role,brokerage_id) values
  ('00000000-0000-0000-0000-00000000002a','fadmin@x.com','Admin','admin','B1'),('00000000-0000-0000-0000-00000000002b','fann@x.com','Ann','user','B1'),
  ('00000000-0000-0000-0000-00000000002d','feve@other.com','Eve','admin','B2'),('00000000-0000-0000-0000-00000000002e','fsuper@x.com','Super','super_admin',null)
  on conflict (id) do update set role = excluded.role, brokerage_id = excluded.brokerage_id;
+insert into public.brokerage (id,name,states) values ('B1','One','["CT"]'),('B2','Two','["NY"]') on conflict (id) do update set states = excluded.states;
 insert into public.contract_form (id,brokerage_id,state,form_type,name) values
+ ('cf4','platform','NY','purchase_agreement','NY Residential (platform)'),
  ('cf1','platform','CT','purchase_agreement','CT Standard Form'),('cf2','B1','CT','disclosure','B1 lead paint'),('cf3','B2','NY','purchase_agreement','B2 NY form');
 
 create or replace function pg_temp.as_user(uid text, email text) returns void language plpgsql as $$
@@ -24,7 +26,8 @@ end $$;
 select pg_temp.as_user('00000000-0000-0000-0000-00000000002b','fann@x.com');
 set role authenticated;
 do $$ begin
-  assert (select count(*) from public.contract_form) = 2, 'agent sees platform + own brokerage forms';
+  assert (select count(*) from public.contract_form) = 2, 'CT agent sees the CT platform form + own brokerage forms, not the NY platform form';
+  assert not exists (select 1 from public.contract_form where id = 'cf4'), 'no NY form for a CT brokerage';
   begin insert into public.contract_form (brokerage_id,name) values ('B1','agent form'); raise exception 'should fail';
   exception when insufficient_privilege then null; end;
   update public.contract_form set name = 'x' where id = 'cf1';
@@ -40,11 +43,13 @@ do $$ begin
   exception when insufficient_privilege then null; end;
   update public.contract_form set name = 'x' where id = 'cf1';
   update public.contract_form set name = 'x' where id = 'cf3';
+  update public.brokerage set states = '["CT","NY","FL"]' where id = 'B1';
 end $$;
 reset role;
 do $$ begin
   assert (select name from public.contract_form where id = 'cf1') = 'CT Standard Form', 'brokerage admin cannot edit platform form';
   assert (select name from public.contract_form where id = 'cf3') = 'B2 NY form', 'or another brokerage''s';
+  assert (select states from public.brokerage where id = 'B1') = '["CT"]'::jsonb, 'brokers cannot assign themselves states';
 end $$;
 
 select pg_temp.as_user('00000000-0000-0000-0000-00000000002e','fsuper@x.com');
@@ -52,7 +57,12 @@ set role authenticated;
 do $$ begin
   insert into public.contract_form (brokerage_id,name,state) values ('platform','NY Residential','NY');
   update public.contract_form set form_version = 'rev 9.24' where id = 'cf1';
+  update public.brokerage set states = '["CT","NY"]' where id = 'B1';
 end $$;
 reset role;
 do $$ begin assert (select form_version from public.contract_form where id = 'cf1') = 'rev 9.24', 'super admin manages platform forms'; end $$;
+select pg_temp.as_user('00000000-0000-0000-0000-00000000002b','fann@x.com');
+set role authenticated;
+do $$ begin assert exists (select 1 from public.contract_form where id = 'cf4'), 'once assigned NY, the brokerage sees NY platform forms'; end $$;
+reset role;
 select 'contract forms rules: all checks passed';

@@ -377,6 +377,7 @@ create table if not exists public.brokerage (
   email text,
   name text,
   phone text,
+  states jsonb,
   status text,
   welcome_message text,
   extra jsonb not null default '{}'::jsonb,
@@ -390,6 +391,7 @@ alter table public.brokerage add column if not exists broker_title text;
 alter table public.brokerage add column if not exists email text;
 alter table public.brokerage add column if not exists name text;
 alter table public.brokerage add column if not exists phone text;
+alter table public.brokerage add column if not exists states jsonb;
 alter table public.brokerage add column if not exists status text;
 alter table public.brokerage add column if not exists welcome_message text;
 drop trigger if exists brokerage_touch on public.brokerage;
@@ -2236,6 +2238,24 @@ alter table public.user_badge enable row level security;
 create index if not exists user_badge_brokerage_id_idx on public.user_badge (brokerage_id);
 create index if not exists user_badge_user_email_idx on public.user_badge (user_email);
 
+-- Contract forms: is the signed-in user's brokerage assigned to this state? -------
+create or replace function public.brokerage_in_state(p_state text) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.brokerage b where b.id = public.auth_brokerage_id()
+                 and coalesce(b.states, '[]'::jsonb) ? upper(coalesce(p_state, '')))
+$$;
+-- Only the platform owner assigns a brokerage's states (they decide which state forms it gets).
+create or replace function public.guard_brokerage_states() returns trigger language plpgsql as $$
+begin
+  if auth.uid() is null or public.is_super_admin() then return new; end if;
+  if tg_op = 'INSERT' then new.states := '[]'::jsonb;
+  elsif coalesce(new.states, '[]'::jsonb) is distinct from coalesce(old.states, '[]'::jsonb) then new.states := old.states;
+  end if;
+  return new;
+end $$;
+drop trigger if exists brokerage_states_guard on public.brokerage;
+create trigger brokerage_states_guard before insert or update on public.brokerage for each row execute function public.guard_brokerage_states();
+
 -- Messaging helpers (need the chat tables, so they come after them) ----------
 -- Can the signed-in user read this channel? Public channels: anyone in the brokerage.
 -- Private channels (and legacy messages whose channel row is gone): members and admins.
@@ -2316,7 +2336,7 @@ create policy compliance_training_access on public.compliance_training for all u
 drop policy if exists contact_access on public.contact;
 create policy contact_access on public.contact for all using (lower(owner_email) = public.auth_email() or (brokerage_id = public.auth_brokerage_id() and (public.is_brokerage_admin() or public.has_perm('contacts.private_all'))) or public.is_super_admin()) with check ((brokerage_id = public.auth_brokerage_id() and (lower(owner_email) = public.auth_email() or public.is_brokerage_admin())) or public.is_super_admin());
 drop policy if exists contract_form_access on public.contract_form;
-create policy contract_form_access on public.contract_form for select using (brokerage_id = 'platform' or brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+create policy contract_form_access on public.contract_form for select using ((brokerage_id = 'platform' and public.brokerage_in_state(contract_form.state)) or brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 drop policy if exists contract_form_insert on public.contract_form;
 drop policy if exists contract_form_update on public.contract_form;
 drop policy if exists contract_form_delete on public.contract_form;

@@ -434,7 +434,8 @@ function OfferEditor({ offer, user, brokerageId, onClose, onSaved }) {
 
 function SendOffer({ offer, user, brokerageId, brokerageName, onClose, onSent }) {
   const { data: forms = [], isLoading } = useContractForms(brokerageId);
-  const usable = forms.filter((f) => f.form_type === 'purchase_agreement' && (f.fields || []).length);
+  // Forms whose boxes aren't set up yet still work: the agent places the boxes before sending.
+  const usable = forms.filter((f) => f.form_type === 'purchase_agreement');
   const forState = usable.filter((f) => !offer.state || String(f.state).toUpperCase() === String(offer.state).toUpperCase());
   const [formId, setFormId] = useState('');
   const [withLetter, setWithLetter] = useState(!!offer.offer_text);
@@ -479,10 +480,14 @@ function SendOffer({ offer, user, brokerageId, brokerageName, onClose, onSent })
                   <span className="font-medium">Purchase agreement</span>
                   <select className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={formId} onChange={(e) => setFormId(e.target.value)} disabled={letterOnly}>
                     {!forState.length && <option value="">Choose a form</option>}
-                    {(forState.length ? forState : usable).map((f) => <option key={f.id} value={f.id}>{f.state} · {f.name}{f.form_version ? ` (${f.form_version})` : ''}</option>)}
+                    {(forState.length ? forState : usable).map((f) => <option key={f.id} value={f.id}>{f.state} · {f.name}{f.form_version ? ` (${f.form_version})` : ''}{(f.fields || []).length ? '' : ' (boxes not set up)'}</option>)}
                     {forState.length > 0 && usable.length > forState.length && <optgroup label="Other states">{usable.filter((f) => !forState.includes(f)).map((f) => <option key={f.id} value={f.id}>{f.state} · {f.name}</option>)}</optgroup>}
                   </select>
-                  <span className="block text-xs text-muted-foreground mt-1">Filled in from the offer terms. You'll see every box and can change anything before it goes out.</span>
+                  <span className="block text-xs text-muted-foreground mt-1">
+                    {(usable.find((f) => f.id === formId)?.fields || []).length
+                      ? 'Filled in from the offer terms. You\'ll see every box and can change anything before it goes out.'
+                      : 'This form\'s boxes aren\'t set up yet, so you\'ll place the signature and fill-in boxes yourself on the Fields step. Set them up once under Contract forms to have them ready next time.'}
+                  </span>
                 </label>
               ) : null}
               {!forState.length && (

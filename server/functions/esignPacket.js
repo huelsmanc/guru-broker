@@ -44,8 +44,9 @@ export default async (req) => {
       let fields = [];
       if (part?.formId) {
         // A contract form from the library (platform-wide or this brokerage's).
-        const [cf] = await base44.asServiceRole.entities.ContractForm.filter({ id: part.formId }, '-created_date', 1);
-        if (!cf || !(cf.brokerage_id === 'platform' || cf.brokerage_id === me.brokerage_id || me.role === 'super_admin')) return Response.json({ error: 'Form not found' }, { status: 404 });
+        // Through the person's own access: platform forms only for brokerages in that state.
+        const [cf] = await base44.entities.ContractForm.filter({ id: part.formId }, '-created_date', 1).catch(() => []);
+        if (!cf) return Response.json({ error: 'Form not found' }, { status: 404 });
         url = cf.document_url;
         fields = cf.fields || [];
       } else if (part?.templateId) {

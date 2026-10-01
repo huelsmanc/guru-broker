@@ -83,7 +83,7 @@ export default function FormsLibrary({ user, brokerageId, onUse }) {
 
       {isLoading ? <Loader2 className="w-6 h-6 animate-spin text-muted-foreground mx-auto" /> : !shown.length ? (
         <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
-          {forms.length ? 'No forms match.' : isAdmin ? 'No forms yet. Add your state\'s purchase agreement, listing agreement, buyer representation agreement and disclosures, then set up their boxes once.' : 'No forms yet. Ask your broker to add your state\'s forms.'}
+          {forms.length ? 'No forms match.' : isSuper ? 'No forms yet. Add each state\'s purchase agreement, listing agreement, buyer representation agreement and disclosures, then set up their boxes once. Brokerages see a state\'s forms once you assign them that state.' : isAdmin ? 'No forms yet. Your brokerage gets the platform\'s forms for the states it is set up in; you can also add your own.' : 'No forms yet. Ask your broker.'}
         </div>
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -101,14 +101,14 @@ export default function FormsLibrary({ user, brokerageId, onUse }) {
                 {f.description && <p className="text-xs text-muted-foreground line-clamp-2">{f.description}</p>}
                 <div className="flex flex-wrap gap-1.5 text-[11px]">
                   <span className={`rounded-full px-2 py-0.5 ${f.brokerage_id === 'platform' ? 'bg-indigo-100 text-indigo-800' : 'bg-slate-100 text-slate-700'}`}>
-                    {f.brokerage_id === 'platform' ? <><Globe className="w-3 h-3 inline -mt-0.5" /> All brokerages</> : <><Building2 className="w-3 h-3 inline -mt-0.5" /> Your brokerage</>}
+                    {f.brokerage_id === 'platform' ? <><Globe className="w-3 h-3 inline -mt-0.5" /> Brokerages in {f.state}</> : <><Building2 className="w-3 h-3 inline -mt-0.5" /> Your brokerage</>}
                   </span>
                   <span className={`rounded-full px-2 py-0.5 ${boxes ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>{boxes ? `${boxes} boxes ready` : 'Boxes not set up'}</span>
                   {(f.roles || []).length > 0 && <span className="rounded-full px-2 py-0.5 bg-muted">{f.roles.join(', ')}</span>}
                   {f.is_active === false && <span className="rounded-full px-2 py-0.5 bg-muted">Hidden</span>}
                 </div>
                 <div className="flex flex-wrap gap-2 mt-auto pt-2">
-                  {boxes > 0 && f.is_active !== false && onUse && <Button size="sm" className="gap-1.5" onClick={() => onUse(f)}><PenTool className="w-3.5 h-3.5" /> Use</Button>}
+                  {f.is_active !== false && onUse && <Button size="sm" className="gap-1.5" onClick={() => onUse(f)}><PenTool className="w-3.5 h-3.5" /> Use</Button>}
                   <a href={f.document_url} target="_blank" rel="noreferrer"><Button size="sm" variant="outline" className="gap-1.5"><Eye className="w-3.5 h-3.5" /> View</Button></a>
                   {canEdit(f) && (
                     <>
@@ -143,7 +143,7 @@ export default function FormsLibrary({ user, brokerageId, onUse }) {
 
 function FormDetails({ form, user, brokerageId, onClose, onSaved }) {
   const isSuper = user?.role === 'super_admin';
-  const [f, setF] = useState(() => form || { state: 'CT', form_type: 'purchase_agreement', name: '', form_version: '', description: '', platform: isSuper && !brokerageId });
+  const [f, setF] = useState(() => form || { state: 'CT', form_type: 'purchase_agreement', name: '', form_version: '', description: '', platform: isSuper });
   const [file, setFile] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -204,7 +204,7 @@ function FormDetails({ form, user, brokerageId, onClose, onSaved }) {
           {!form && isSuper && (
             <label className="col-span-2 flex items-start gap-2 text-sm">
               <input type="checkbox" className="mt-1" checked={!!f.platform} onChange={set('platform')} />
-              <span>Share with every brokerage<span className="block text-xs text-muted-foreground">Only you can change platform forms. Leave unticked to keep it to {brokerageId ? 'this brokerage' : 'your brokerage'}.</span></span>
+              <span>Platform form for every brokerage in {f.state}<span className="block text-xs text-muted-foreground">Brokerages get it when you assign them {f.state} (Super Admin, brokerage Settings, States). Only you can change it. Untick to make it just {brokerageId ? 'this brokerage\'s' : 'your brokerage\'s'} own form.</span></span>
             </label>
           )}
         </div>

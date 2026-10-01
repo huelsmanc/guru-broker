@@ -17,7 +17,7 @@ ENTITIES = {
     "ActivityLog": "action_type brokerage_id browser details document_id ip_address location os user_agent user_email user_name",
     "AdminMessage": "brokerage_id content sender_email sender_name",
     "AgentSales": "agent_email agent_id agent_name brokerage_id month sales_amount",
-    "Brokerage": "account_owner_id broker_name broker_title email name phone status welcome_message",
+    "Brokerage": "account_owner_id broker_name broker_title email name phone status welcome_message states",
     "BrokerageSettings": "brokerage_id brokerage_phone logo_url tech_links",
     "CMAsReport": "address bathrooms bedrooms brokerage_id cma_report notes status title user_email",
     "Channel": "brokerage_id emoji label name is_private topic created_by_email",
@@ -79,7 +79,7 @@ USER_FIELDS = "email full_name display_name role brokerage_id suspended headshot
 
 JSON_FIELDS = set("""co_agents referral deductions commission_calc config calc items changed mls_ids answers buyers checklist completed_dates details documents encryption_metadata esign_docs fields items
 data members invitees mentions messages options reactions read_by sellers signatories signature_fields signers tags tech_links updates
-versions cma_report roles""".split())
+versions cma_report roles states""".split())
 BOOL_FIELDS = set("auto_name is_private is_client is_default active appraisal_contingency read pinned encrypted suspended submitted checked_in is_active is_anonymous is_featured signed passed require_sequential_signing".split())
 INT_FIELDS = set("level inspection_days financing_days bathrooms bedrooms downloads_count downvotes upvotes guests_count order passing_score rating signer_index version file_size score".split())
 NUM_FIELDS = set("""lead_pct gross_share company_dollar agent_net fees team_lead revshare_total amount list_price offer_price earnest_money down_payment_percent loan_amount seller_concessions agent_net agent_split_percentage brokerage_fee brokerage_fee_flat brokerage_fee_percentage commission_amount
@@ -367,7 +367,7 @@ for ent, fields in sorted(ENTITIES.items()):
         pw(f"create policy {t}_admin on public.{t} for all using ((brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin()) with check ((brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin());")
     elif ent == "ContractForm":
         # Blank state forms. brokerage_id 'platform' = shared with every brokerage (super admin manages those).
-        pw(f"create policy {t}_access on public.{t} for select using (brokerage_id = 'platform' or brokerage_id = public.auth_brokerage_id() or public.is_super_admin());")
+        pw(f"create policy {t}_access on public.{t} for select using ((brokerage_id = 'platform' and public.brokerage_in_state({t}.state)) or brokerage_id = public.auth_brokerage_id() or public.is_super_admin());")
         for op in ("insert", "update", "delete"): pw(f"drop policy if exists {t}_{op} on public.{t};")
         cond = "((brokerage_id = public.auth_brokerage_id() and brokerage_id <> 'platform' and public.is_brokerage_admin()) or public.is_super_admin())"
         pw(f"create policy {t}_insert on public.{t} for insert with check {cond};")
@@ -431,6 +431,24 @@ for ent, fields in sorted(ENTITIES.items()):
     colmap[ent] = {"table": t, "columns": fl + ["id", "created_date", "updated_date", "created_by"],
                    "typed": [f for f in fl if coltype(f) != "text"]}
 
+w("""-- Contract forms: is the signed-in user's brokerage assigned to this state? -------
+create or replace function public.brokerage_in_state(p_state text) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.brokerage b where b.id = public.auth_brokerage_id()
+                 and coalesce(b.states, '[]'::jsonb) ? upper(coalesce(p_state, '')))
+$$;
+-- Only the platform owner assigns a brokerage's states (they decide which state forms it gets).
+create or replace function public.guard_brokerage_states() returns trigger language plpgsql as $$
+begin
+  if auth.uid() is null or public.is_super_admin() then return new; end if;
+  if tg_op = 'INSERT' then new.states := '[]'::jsonb;
+  elsif coalesce(new.states, '[]'::jsonb) is distinct from coalesce(old.states, '[]'::jsonb) then new.states := old.states;
+  end if;
+  return new;
+end $$;
+drop trigger if exists brokerage_states_guard on public.brokerage;
+create trigger brokerage_states_guard before insert or update on public.brokerage for each row execute function public.guard_brokerage_states();
+""")
 w("""-- Messaging helpers (need the chat tables, so they come after them) ----------
 -- Can the signed-in user read this channel? Public channels: anyone in the brokerage.
 -- Private channels (and legacy messages whose channel row is gone): members and admins.

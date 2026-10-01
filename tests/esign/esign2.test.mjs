@@ -181,8 +181,10 @@ globalThis.__db.contract_form = [
 r = await call('esignPacket', { title: 'Offer', parts: [{ url: '/api/file?p=scoped%2FB1%2Ftx%2Ftx1%2Fb.png' }, { formId: 'cfp' }] }, agent);
 assert.equal(r.status, 200, JSON.stringify(r.body));
 assert.equal(r.body.fields[0].id, 'p2_a'); assert.equal(r.body.fields[0].deal_key, 'property_address', 'deal-filled boxes keep their tie');
-r = await call('esignPacket', { parts: [{ formId: 'cfx' }] }, agent);
-assert.equal(r.status, 404, "another brokerage's form is not usable");
+// Which forms a brokerage can see is decided by the database rules (tests/sql/contract_forms_rules.sql);
+// this fake database has no rules, so here we only check an unknown form is refused.
+r = await call('esignPacket', { parts: [{ formId: 'nope' }] }, agent);
+assert.equal(r.status, 404, 'unknown form');
 // Uploading forms: agents can't; the platform owner's go in the shared folder
 r = await call('fileUpload', { scope: { kind: 'forms' }, name: 'x.pdf', size: 10 }, agent);
 assert.equal(r.status, 403, 'agents cannot add forms');

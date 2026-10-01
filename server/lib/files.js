@@ -93,8 +93,13 @@ export const isPrivateUrl = (url) => !!pathFromUrl(url);
 export async function canAccess(me, info, entities) {
   if (!me || !info || me.suspended) return false;
   if (me.role === 'super_admin') return true;
-  // Platform-wide blank forms: anyone in a brokerage can open them.
-  if (info.kind === 'forms' && info.brokerageId === 'platform') return !!me.brokerage_id;
+  // Platform state forms: only brokerages assigned to that form's state (the security rules
+  // on contract_form decide, through the person's own access).
+  if (info.kind === 'forms' && info.brokerageId === 'platform') {
+    if (!me.brokerage_id) return false;
+    const url = fileUrl(`scoped/platform/forms/${info.name}`);
+    return ((await entities.ContractForm.filter({ document_url: url }, '-created_date', 1).catch(() => [])) || []).length > 0;
+  }
   if (info.brokerageId !== me.brokerage_id) return false;
   const one = async (entity, query) => ((await entities[entity].filter(query, '-created_date', 1).catch(() => [])) || []).length > 0;
   switch (info.kind) {

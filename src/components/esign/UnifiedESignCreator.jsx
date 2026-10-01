@@ -80,7 +80,7 @@ export default function UnifiedESignCreator({
   // Contract forms library: platform-wide forms plus this brokerage's (security rules decide).
   const { data: contractForms = [] } = useQuery({
     queryKey: ['contract-forms', brokerageId],
-    queryFn: () => base44.entities.ContractForm.list('state', 500).then((l) => l.filter((f) => f.is_active !== false && (f.fields || []).length)).catch(() => []),
+    queryFn: () => base44.entities.ContractForm.list('state', 500).then((l) => l.filter((f) => f.is_active !== false)).catch(() => []),
   });
   const [formState, setFormState] = useState('');
   const { data: templates = [] } = useQuery({
