@@ -26,6 +26,7 @@ export default function Profile() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [headshot, setHeadshot] = useState(user?.headshot || '');
   const [cropSrc, setCropSrc] = useState(null);
+  const [fullName, setFullName] = useState(user?.full_name || '');
   const [phone, setPhone] = useState(user?.phone || '');
   const [title, setTitle] = useState(user?.title || '');
   const [birthday, setBirthday] = useState(user?.birthday || '');
@@ -50,6 +51,7 @@ export default function Profile() {
   useEffect(() => {
     base44.auth.me().then((u) => {
       setHeadshot(u?.headshot || '');
+      setFullName(u?.full_name || u?.display_name || '');
       setPhone(u?.phone || '');
       setTitle(u?.title || '');
       setBirthday(u?.birthday || '');
@@ -80,9 +82,11 @@ export default function Profile() {
 
   const handleSave = async () => {
     setSaving(true);
-    const updateData = { headshot, phone, title, birthday, work_anniversary: workAnniversary, timezone, google_review_url: googleReviewUrl };
+    const updateData = { headshot, phone, title, birthday: birthday || null, work_anniversary: workAnniversary || null, timezone, google_review_url: googleReviewUrl };
+    if (fullName.trim()) { updateData.full_name = fullName.trim(); updateData.display_name = fullName.trim(); }
     if (isAgent) updateData.agent_status = agentStatus;
     await base44.auth.updateMe(updateData);
+    window.dispatchEvent(new Event('profile-updated')); // sidebar and chat pick up the new name
 
     // Sync dates to culture calendar
     if (birthday || workAnniversary) {
@@ -174,7 +178,7 @@ export default function Profile() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <Label className="text-muted-foreground text-xs">Full Name</Label>
-            <p className="mt-1 text-sm font-medium text-foreground">{user?.full_name}</p>
+            <Input className="mt-1" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Your first and last name" />
           </div>
           <div>
             <Label className="text-muted-foreground text-xs">Email</Label>

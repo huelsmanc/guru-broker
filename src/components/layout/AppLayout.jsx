@@ -17,6 +17,13 @@ export default function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const navigate = useNavigate();
 
+  // Pick up profile changes (e.g. a new name saved on My Profile).
+  useEffect(() => {
+    const reload = () => base44.auth.me().then((u) => setUser(u)).catch(() => {});
+    window.addEventListener('profile-updated', reload);
+    return () => window.removeEventListener('profile-updated', reload);
+  }, []);
+
   useEffect(() => {
     base44.auth.me().then((u) => {
       setUser(u);
