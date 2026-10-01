@@ -14,6 +14,33 @@ import jsPDF from 'jspdf';
 import CMAMap from '@/components/cma/CMAMap';
 import CMAEmailDialog from '@/components/cma/CMAEmailDialog';
 
+// Street-level photo of an address (our server asks Google Street View; nothing if there's no imagery).
+const streetPhoto = (addr, subject) => {
+  let a = String(addr || '').trim();
+  const tail = String(subject || '').split(',').slice(1).join(',').trim();
+  if (a && tail && !a.includes(',')) a = `${a}, ${tail}`;
+  return a ? `/api/fn/streetView?address=${encodeURIComponent(a)}` : null;
+};
+
+// The comp's photo: its MLS photo, else a street-level photo, else a placeholder.
+function CompPhoto({ comp, subjectAddress }) {
+  const street = streetPhoto(comp.address, subjectAddress);
+  const [src, setSrc] = useState(comp.photoUrl || street);
+  const [failed, setFailed] = useState(false);
+  if (!src || failed) {
+    return (
+      <div className="w-full h-full bg-gradient-to-br from-primary/10 to-accent/10 flex flex-col items-center justify-center absolute inset-0">
+        <Home className="w-8 h-8 text-muted-foreground/40 mb-2" />
+        <p className="text-xs text-muted-foreground/60">Photo Unavailable</p>
+      </div>
+    );
+  }
+  return (
+    <img src={src} alt={comp.address} className="w-full h-full object-cover" loading="lazy"
+      onError={() => (street && src !== street ? setSrc(street) : setFailed(true))} />
+  );
+}
+
 export default function CMABuilder() {
   const { user, brokerageId } = useOutletContext();
   const [address, setAddress] = useState('');
@@ -377,28 +404,7 @@ export default function CMABuilder() {
                     >
                       {/* Property Photo */}
                       <div className="relative w-full h-48 bg-gradient-to-br from-muted to-muted/50 overflow-hidden">
-                        {comp.photoUrl ? (
-                          <img
-                            src={comp.photoUrl}
-                            alt={comp.address}
-                            className="w-full h-full object-cover"
-                            loading="lazy"
-                            onError={(e) => {
-                              e.currentTarget.style.display = 'none';
-                              if (e.currentTarget.parentElement?.querySelector('[data-fallback]')) {
-                                e.currentTarget.parentElement.querySelector('[data-fallback]').style.display = 'flex';
-                              }
-                            }}
-                          />
-                        ) : null}
-                        <div 
-                          data-fallback
-                          className="w-full h-full bg-gradient-to-br from-primary/10 to-accent/10 flex flex-col items-center justify-center absolute inset-0"
-                          style={{ display: comp.photoUrl ? 'none' : 'flex' }}
-                        >
-                          <Home className="w-8 h-8 text-muted-foreground/40 mb-2" />
-                          <p className="text-xs text-muted-foreground/60">Photo Unavailable</p>
-                        </div>
+                        <CompPhoto key={`${comp.address}|${comp.photoUrl || ""}`} comp={comp} subjectAddress={address} />
                         <div className="absolute top-3 right-3 bg-primary text-primary-foreground px-3 py-1 rounded-lg text-sm font-bold shadow-lg">
                           ${(comp.soldPrice / 1000).toFixed(0)}K
                         </div>

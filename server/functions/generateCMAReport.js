@@ -5,6 +5,16 @@ import { createClientFromRequest } from '../lib/base44.js';
 import { findSubject, findComps, compSummary } from '../lib/comps.js';
 import { InvokeLLM } from '../lib/integrations.js';
 
+// A photo for every comp: the MLS listing photo when there is one, otherwise a street-level
+// photo of the address (web-search comps never come with usable photos).
+function withPhoto(comp, subjectAddress) {
+  if (comp.photoUrl && comp.fromMls) return comp;
+  let addr = String(comp.address || '').trim();
+  const tail = String(subjectAddress || '').split(',').slice(1).join(',').trim(); // city, state zip
+  if (addr && tail && !addr.includes(',')) addr = `${addr}, ${tail}`;
+  return { ...comp, photoUrl: addr ? `/api/fn/streetView?address=${encodeURIComponent(addr)}` : null, photoSource: 'street' };
+}
+
 async function mlsCma({ address, propertyDetails }) {
   const subject = (await findSubject({ address, mls_number: propertyDetails?.mls_number })) || {};
   const zip = String(address).match(/\b\d{5}\b/)?.[0];
@@ -46,7 +56,7 @@ Pick the 4-6 most comparable sales, give each a net dollar adjustment toward the
   const byId = new Map(list.map((c) => [c.id, c]));
   const comparables = (ai.chosen || []).map((c) => {
     const base = byId.get(c.id);
-    return base ? { ...base, adjustment: c.adjustment, adjustedPrice: base.soldPrice + (c.adjustment || 0), notes: c.notes, condition: '', upgrades: [] } : null;
+    return base ? { ...withPhoto({ ...base, fromMls: !!base.photoUrl }, address), adjustment: c.adjustment, adjustedPrice: base.soldPrice + (c.adjustment || 0), notes: c.notes, condition: '', upgrades: [] } : null;
   }).filter(Boolean);
   if (comparables.length < 3) return null;
   return { comparables, marketAnalysis: ai.marketAnalysis, rehabAssessment: ai.rehabAssessment || '', summary: ai.summary, source: 'mls', subject: subject.id ? { mls_number: subject.mls_number, status: subject.status } : null };
@@ -100,7 +110,6 @@ Return JSON with:
                   condition: { type: 'string' },
                   upgrades: { type: 'array', items: { type: 'string' } },
                   notes: { type: 'string' },
-                  photoUrl: { type: 'string' },
                   soldDate: { type: 'string' }
                 }
               }
@@ -130,7 +139,7 @@ Return JSON with:
 
     // Build response with fallbacks
     const processedData = {
-      comparables: (cmaData?.comparables && Array.isArray(cmaData.comparables) && cmaData.comparables.length > 0) ? cmaData.comparables : [],
+      comparables: (Array.isArray(cmaData?.comparables) ? cmaData.comparables : []).map((c) => withPhoto({ ...c, photoUrl: null }, address)),
       marketAnalysis: cmaData?.marketAnalysis || {
         avgPricePerSqft: 0,
         avgDaysOnMarket: 0,
