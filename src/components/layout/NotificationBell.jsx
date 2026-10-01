@@ -80,10 +80,27 @@ export default function NotificationBell({ user, brokerageId }) {
     }
   };
 
+  // Open the panel inside the screen, next to wherever the bell is (sidebar bottom-left on
+  // desktop, top bar on phones).
+  const btnRef = React.useRef(null);
+  const [place, setPlace] = useState({});
+  const toggle = () => {
+    const r = btnRef.current?.getBoundingClientRect();
+    if (r) {
+      const vw = window.innerWidth; const vh = window.innerHeight;
+      const width = Math.min(380, vw - 16);
+      const left = Math.max(8, Math.min(r.left + r.width / 2 < vw / 2 ? r.left : r.right - width, vw - width - 8));
+      const below = r.top < vh / 2;
+      setPlace(below ? { left, width, top: r.bottom + 8, maxHeight: vh - r.bottom - 24 } : { left, width, bottom: vh - r.top + 8, maxHeight: r.top - 24 });
+    }
+    setIsOpen(!isOpen);
+  };
+
   return (
     <div className="relative">
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        ref={btnRef}
+        onClick={toggle}
         className="relative p-2 rounded-lg hover:bg-muted transition-colors"
         title="Notifications"
       >
@@ -113,7 +130,8 @@ export default function NotificationBell({ user, brokerageId }) {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 10 }}
-              className="absolute bottom-full right-0 mb-2 max-w-md max-h-80 bg-card border border-border rounded-xl shadow-xl overflow-hidden z-50 flex flex-col"
+              style={{ ...place, maxHeight: Math.min(place.maxHeight || 480, 480) }}
+              className="fixed bg-card border border-border rounded-xl shadow-xl overflow-hidden z-50 flex flex-col"
             >
               {/* Header */}
               <div className="flex items-center justify-between p-3 border-b border-border flex-shrink-0">

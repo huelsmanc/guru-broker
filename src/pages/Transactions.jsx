@@ -17,6 +17,8 @@ import CommissionBreakdown from '@/components/transactions/CommissionBreakdown';
 import ClosingReviewPrompt from '@/components/transactions/ClosingReviewPrompt';
 import ScanContractButton from '@/components/transactions/ScanContractButton';
 import FileCheck from '@/components/transactions/FileCheck';
+import DealPipeline from '@/components/transactions/DealPipeline';
+import NewDealFromContract from '@/components/transactions/NewDealFromContract';
 import ContactPicker from '@/components/contacts/ContactPicker';
 import { saveToContactBook } from '@/lib/contacts';
 import { isAdminRole, normalizeRole, can } from '../../shared/permissions.generated.js';
@@ -75,6 +77,10 @@ export default function Transactions() {
   const canEditTx = (tx) => (isAdmin || tx.agent_email === user?.email) && !isClosedOrCancelled(tx);
 
   const [showCreate, setShowCreate] = useState(false);
+  const [showNewDeal, setShowNewDeal] = useState(false);
+  const [view, setView] = useState(() => { try { return localStorage.getItem('gbh-deals-view') || 'board'; } catch { return 'board'; } });
+  const chooseView = (v) => { setView(v); try { localStorage.setItem('gbh-deals-view', v); } catch { /* private mode */ } };
+  const canCreate = isAdmin || can(user, 'tx.create');
   const [expandedId, setExpandedId] = useState(null);
   const [showUpdate, setShowUpdate] = useState(null);
   const [search, setSearch] = useState('');
@@ -293,17 +299,36 @@ export default function Transactions() {
             <ClipboardList className="w-7 h-7 text-primary" />
             <div>
               <h1 className="text-3xl font-bold text-foreground">Transactions</h1>
-              <p className="text-muted-foreground text-sm mt-0.5">Track files and milestones across your team</p>
+              <p className="text-muted-foreground text-sm mt-0.5">Every deal, where it stands, and what needs you today</p>
             </div>
           </div>
-          {isAdmin && (
-            <Button onClick={() => setShowCreate(true)} className="gap-2 rounded-xl h-10">
-              <Plus className="w-4 h-4" /> New File
+          {canCreate && (
+            <Button onClick={() => setShowNewDeal(true)} className="gap-2 rounded-xl h-10">
+              <Plus className="w-4 h-4" /> New deal
             </Button>
           )}
         </div>
       </motion.div>
 
+      <div className="flex items-center gap-1 rounded-xl bg-muted p-1 mb-5 w-fit">
+        {[['board', 'Pipeline'], ['list', 'List']].map(([v, l]) => (
+          <button key={v} type="button" onClick={() => chooseView(v)}
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium ${view === v ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{l}</button>
+        ))}
+      </div>
+
+      {view === 'board' && (
+        <>
+          <div className="flex items-center gap-2 bg-muted rounded-lg px-3 py-2 border border-border/40 mb-4 max-w-md">
+            <Search className="w-3.5 h-3.5 text-muted-foreground" />
+            <input type="text" placeholder="Search address, agent, buyer..." value={search} onChange={(e) => setSearch(e.target.value)}
+              className="bg-transparent outline-none text-sm w-full placeholder:text-muted-foreground/50" />
+          </div>
+          <DealPipeline transactions={filtered} checklistsByTx={checklistsByTx} />
+        </>
+      )}
+
+      {view === 'list' && <>
       {/* Filters */}
       <div className="flex flex-wrap gap-3 mb-6">
         <div className="flex items-center gap-2 bg-muted rounded-lg px-3 py-2 border border-border/40 flex-1 min-w-48">
@@ -692,6 +717,11 @@ export default function Transactions() {
           })}
         </div>
       )}
+      </>}
+
+      <NewDealFromContract open={showNewDeal} onClose={() => setShowNewDeal(false)} user={user} brokerageId={brokerageId}
+        brokerageUsers={brokerageUsers} isAdmin={isAdmin}
+        onCreated={(tx) => { setShowNewDeal(false); queryClient.invalidateQueries({ queryKey: ['transactions', brokerageId] }); navigate(`/Transactions/${tx.id}`); }} />
 
       {/* Create Transaction Dialog */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>

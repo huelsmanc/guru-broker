@@ -41,15 +41,41 @@ export async function createDoc() {
       }
       y -= size + 6;
     },
+    // Wrapped paragraph text.
+    para(t, { size = 10, isBold = false, indent = 0, color, gap = 4 } = {}) {
+      const f = isBold ? bold : font;
+      const max = W - indent;
+      for (const raw of ASCII(t).split('\n')) {
+        let line = '';
+        for (const word of raw.split(/\s+/).filter(Boolean)) {
+          const test = line ? `${line} ${word}` : word;
+          if (f.widthOfTextAtSize(test, size) > max && line) { ensure(size + 4); page.drawText(line, { x: M + indent, y, size, font: f, color: color || rgb(0.12, 0.14, 0.2) }); y -= size + 3; line = word; } else line = test;
+        }
+        ensure(size + 4);
+        if (line) page.drawText(line, { x: M + indent, y, size, font: f, color: color || rgb(0.12, 0.14, 0.2) });
+        y -= size + 3;
+      }
+      y -= gap;
+    },
+    checkbox(label, { size = 10, indent = 0 } = {}) {
+      ensure(size + 8);
+      page.drawRectangle({ x: M + indent, y: y - 1, width: 9, height: 9, borderWidth: 0.8, borderColor: rgb(0.2, 0.2, 0.2) });
+      page.drawText(ASCII(label), { x: M + indent + 15, y, size, font, color: rgb(0.12, 0.14, 0.2) });
+      y -= size + 8;
+    },
+    /** Where the next signature line will be: { pageIndex, top } (top in points from the page top). */
+    position() { return { pageIndex: pdf.getPageCount() - 1, top: 792 - y }; },
     signatureLine(label) {
       ensure(50);
       y -= 28;
+      const at = { pageIndex: pdf.getPageCount() - 1, lineY: y };
       page.drawLine({ start: { x: M, y }, end: { x: M + 240, y }, thickness: 0.8, color: rgb(0.2, 0.2, 0.2) });
       page.drawLine({ start: { x: M + 300, y }, end: { x: M + 440, y }, thickness: 0.8, color: rgb(0.2, 0.2, 0.2) });
       y -= 12;
       page.drawText(ASCII(label), { x: M, y, size: 9, font });
       page.drawText('Date', { x: M + 300, y, size: 9, font });
       y -= 10;
+      return at; // where the line is, so signing boxes can be placed on it
     },
     async save() { return pdf.save(); },
   };

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useParams, useSearchParams, useOutletContext, Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
@@ -13,6 +13,7 @@ import WorkspaceFinances from '@/components/workspace/WorkspaceFinances';
 import WorkspaceActivity from '@/components/workspace/WorkspaceActivity';
 import WorkspaceShared from '@/components/workspace/WorkspaceShared';
 import { useLiveTable } from '@/hooks/useLiveTable';
+import DealCopilot from '@/components/workspace/DealCopilot';
 
 const STATUS = {
   active: 'bg-blue-100 text-blue-800', pending: 'bg-amber-100 text-amber-800', clear_to_close: 'bg-emerald-100 text-emerald-800',
@@ -26,6 +27,7 @@ export default function TransactionWorkspace() {
   const { user } = useOutletContext();
   const queryClient = useQueryClient();
   const tab = params.get('tab') || 'overview';
+  const [copilotOpen, setCopilotOpen] = useState(false);
 
   const { data: tx, isLoading, error } = useQuery({
     queryKey: ['transaction', id],
@@ -45,7 +47,7 @@ export default function TransactionWorkspace() {
   const isOwner = [tx.agent_email, ...(tx.co_agents || []).map((a) => a.email)].map((e) => String(e || '').toLowerCase()).includes(email);
   const isTc = String(tx.tc_email || '').toLowerCase() === email;
   const admin = isAdminRole(user?.role);
-  const ctx = { tx, user, refresh, isOwner, isTc, admin, canEdit: admin || isOwner || isTc || can(user, 'tx.all') };
+  const ctx = { tx, user, refresh, isOwner, isTc, admin, canEdit: admin || isOwner || isTc || can(user, 'tx.all'), openCopilot: () => setCopilotOpen(true) };
 
   const sections = [
     ['overview', 'Overview', LayoutDashboard],
@@ -87,6 +89,7 @@ export default function TransactionWorkspace() {
         {tab === 'shared' && <WorkspaceShared {...ctx} />}
         {tab === 'activity' && <WorkspaceActivity {...ctx} />}
       </main>
+      <DealCopilot {...ctx} open={copilotOpen} onOpenChange={setCopilotOpen} />
     </div>
   );
 }

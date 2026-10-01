@@ -33,6 +33,7 @@ export default function UnifiedESignCreator({
   initialSigners = [],
   initialForm, // a contract form from the library ({ id, name, document_url, fields, roles })
   facts, // extra facts to fill boxes from (e.g. an offer's terms), merged over the deal
+  initialFields, // boxes already placed on initialDocumentUrl (e.g. a generated form's signature lines)
   onCancel,
 }) {
   const outlet = useOutletContext() || {};
@@ -164,7 +165,7 @@ export default function UnifiedESignCreator({
 
   // One file: used as is. One template: its file and boxes. Several: merged into one packet.
   const buildDocument = async () => {
-    if (parts.length === 1 && parts[0].kind === 'file') return { document_url: parts[0].url, fields: null };
+    if (parts.length === 1 && parts[0].kind === 'file') return { document_url: parts[0].url, fields: initialFields && parts[0].url === initialDocumentUrl ? initialFields : null };
     if (parts.length === 1 && parts[0].kind === 'form') {
       const f = parts[0].form || contractForms.find((x) => x.id === parts[0].id);
       return { document_url: f?.document_url || parts[0].url, fields: (f?.fields || []).map((x, i) => ({ ...x, id: x.id || `field-${i}-${Date.now()}` })) };

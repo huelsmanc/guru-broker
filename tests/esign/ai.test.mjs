@@ -14,6 +14,10 @@ globalThis.fetch = async (url, init) => {
       const schema = body.tools[0].input_schema;
       const input = schema.properties.assignments && JSON.stringify(body.messages).includes('Facts:') ? { assignments: [{ id: 'c0', type: 'fill', signer_index: 0, label: 'Purchase price', value: '$500,000.00' }, { id: 'c1', type: 'signature', signer_index: 0 }] }
         : schema.properties.assignments ? { assignments: [{ id: 'c0', type: 'signature', signer_index: 0 }] }
+        : schema.properties.next_steps ? { headline: 'Inspection contingency ends tomorrow', next_steps: [{ text: 'Get the inspection response signed', who: 'agent', due: '2026-10-02' }], risks: ['Closing in 5 weeks with no loan commitment date'] }
+        : schema.properties.reply ? { reply: 'Closing is 11/05/2026.', actions: [{ type: 'update_date', label: 'Move closing to 11/20', field: 'closing_date', date: '2026-11-20' }, { type: 'update_date', label: 'bad', field: 'agent_email', date: '2026-11-20' }, { type: 'draft_email', label: 'Email lender', to: 'lender@x.com', subject: 'Commitment', body: 'Hi, any update? Ann' }] }
+        : schema.properties.checklist_item_id ? { document_type: 'Addendum', summary: 'Moves closing.', checklist_item_id: 'it2', changes: [{ field: 'closing_date', to: '2026-11-20', reason: 'Addendum 1' }, { field: 'closing_date', to: '2026-11-05', reason: 'same' }, { field: 'agent_email', to: 'x', reason: 'no' }], issues: ['Seller initials missing on page 2'] }
+        : schema.properties.inspector ? { inspector: 'Ace Inspections', inspection_date: '2026-09-28', summary: 'Solid house; roof and water heater need work.', items: [{ title: 'Roof shingles at end of life', location: 'Roof', category: 'roof', severity: 'major', description: 'Granule loss, curling', reference: '3.1, p. 8', suggested_ask: 'replace' }, { title: 'Water heater TPR pipe missing', location: 'Basement', category: 'plumbing', severity: 'moderate', description: 'No discharge pipe', reference: '6.2, p. 15', suggested_ask: 'repair' }, { title: 'Loose cabinet hinge', category: 'interior', severity: 'minor', description: 'Kitchen', suggested_ask: 'none' }] }
         : schema.properties.term_tips ? { headline: 'Offer near list with a short inspection', suggested_price: 445000, price_low: 435000, price_high: 452000, confidence: 'medium', market_read: 'Moving fast', reasons: ['Comps support it'], term_tips: ['Shorten inspection to 7 days'], risks: ['Appraisal gap'] }
         : schema.properties.score ? { score: 72, headline: 'Two items need attention', items: [{ severity: 'critical', title: 'Inspection deadline passed', detail: 'Due yesterday', suggested_task: 'Get inspection waiver signed' }] }
         : { document_type: 'Purchase and Sale Agreement', summary: 'x', buyers: ['Bob'], sellers: ['Sue'], purchase_price: 450000, dates: { closing_date: '2026-11-15' }, contingencies: [], issues: [] };
@@ -147,5 +151,59 @@ assert.deepEqual(notes, ['comp@x.com', 'tc2@x.com']);
   assert.equal(r.body.assignments[0].type, 'fill'); assert.equal(r.body.assignments[0].value, '$500,000.00');
   const sent = JSON.stringify(calls.filter((c) => c.url.includes('anthropic')).at(-1).body.messages);
   assert.match(sent, /17 Debra Lane/); assert.match(sent, /Never guess/);
+}
+// Deal AI: brief (cached by the browser), chat with safe actions, document intake
+globalThis.__db.transaction = [...(globalThis.__db.transaction || []), { id: 'txA', brokerage_id: 'B1', agent_email: 'ann@x.com', agent_name: 'Ann Agent', property_address: '9 Oak St', status: 'active', sale_price: 470000, acceptance_date: '2026-09-20', closing_date: '2026-11-05', documents: [], extra: {} }];
+globalThis.__db.checklist = [...(globalThis.__db.checklist || []), { id: 'clA', brokerage_id: 'B1', subject_type: 'transaction', subject_id: 'txA', name: 'Buyer', items: [{ id: 'it1', title: 'Purchase agreement', requires_document: true, status: 'approved' }, { id: 'it2', title: 'Addendum', requires_document: true, status: 'open' }], extra: {} }];
+{
+  let r = await call('dealAssistant', { mode: 'brief', transactionId: 'txA' });
+  assert.equal(r.status, 200, JSON.stringify(r.body)); assert.match(r.body.brief.headline, /Inspection/); assert.ok(r.body.sig && r.body.health);
+  const n = calls.length;
+  r = await call('dealAssistant', { mode: 'brief', transactionId: 'txA', sig: r.body.sig });
+  assert.equal(r.body.unchanged, true); assert.equal(calls.length, n, 'no AI call when nothing changed');
+  r = await call('dealAssistant', { mode: 'chat', transactionId: 'txA', messages: [{ role: 'user', content: 'when do we close?' }] });
+  assert.equal(r.status, 200); assert.equal(r.body.actions.length, 2, 'unsafe action dropped'); assert.equal(r.body.actions[0].field, 'closing_date');
+  assert.match(JSON.stringify(calls.at(-1).body.messages), /9 Oak St/);
+  globalThis.__storage = globalThis.__storage || {};
+  globalThis.__storage['private-files/scoped/B1/tx/txA/add.pdf'] = new Uint8Array([37, 80, 68, 70]);
+  globalThis.__lenientSign = true;
+  r = await call('dealAssistant', { mode: 'intake', transactionId: 'txA', file_url: '/api/file?p=scoped%2FB1%2Ftx%2FtxA%2Fadd.pdf', name: 'Addendum 1.pdf' });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.file_to.item_id, 'it2');
+  assert.deepEqual(r.body.changes.map((c) => [c.field, c.from, c.to]), [['closing_date', '2026-11-05', '2026-11-20']], 'only real, allowed changes');
+  r = await call('dealAssistant', { mode: 'chat', transactionId: 'nope', messages: [{ role: 'user', content: 'x' }] });
+  assert.equal(r.status, 404);
+}
+// Inspection report -> inspection request -> listing agent
+{
+  globalThis.__db.transaction.push({ id: 'txI', brokerage_id: 'B1', agent_email: 'ann@x.com', property_address: '5 Elm St', buyers: ['Bob Buyer'], sellers: ['Sue Seller'], status: 'active', documents: [], extra: {} });
+  globalThis.__storage['private-files/scoped/B1/tx/txI/report.pdf'] = new Uint8Array([37, 80, 68, 70]);
+  let r = await call('inspectionRequest', { action: 'scan', transactionId: 'txI', file_urls: ['/api/file?p=scoped%2FB1%2Ftx%2FtxI%2Freport.pdf'], name: 'Report.pdf' });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  const req = r.body.request;
+  assert.equal(req.items.length, 3); assert.equal(req.items[0].severity, 'major'); assert.equal(req.inspector, 'Ace Inspections');
+  r = await call('inspectionRequest', { action: 'build', transactionId: 'txI', requestId: req.id, selected: [] });
+  assert.equal(r.status, 400, 'needs an item or a credit');
+  r = await call('inspectionRequest', { action: 'build', transactionId: 'txI', requestId: req.id, selected: [{ id: 'f1', ask: 'replace' }, { id: 'f2', ask: 'repair', note: 'licensed plumber' }], credit: 5000, response_by: '2026-10-05' });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.match(r.body.pdf_url, /scoped%2FB1%2Ftx%2FtxI/);
+  assert.equal(r.body.fields.filter((f) => f.type === 'signature').length, 1, 'one box per buyer');
+  assert.ok(r.body.fields.every((f) => f.y >= 0 && f.y <= 100 && f.hPct > 0));
+  const tx = globalThis.__db.transaction.find((t) => t.id === 'txI');
+  assert.equal(tx.extra.inspection_requests[0].status, 'ready');
+  assert.ok(tx.documents.some((d) => /Inspection request/.test(d.name)), 'PDF lands in the deal documents');
+  const pdfPath = decodeURIComponent(r.body.pdf_url.split('p=')[1]);
+  const { PDFDocument } = await import('pdf-lib');
+  const pdf = await PDFDocument.load(globalThis.__storage['private-files/' + pdfPath]);
+  assert.ok(pdf.getPageCount() >= 1);
+  r = await call('inspectionRequest', { action: 'send', transactionId: 'txI', requestId: req.id, to: 'list@agent.com' });
+  assert.equal(r.status, 409, 'warns that buyers have not signed');
+  const emailsSent = () => calls.filter((c) => c.url.includes('resend')).length;
+  const before = emailsSent();
+  r = await call('inspectionRequest', { action: 'send', transactionId: 'txI', requestId: req.id, to: 'list@agent.com', allowUnsigned: true });
+  assert.equal(r.status, 200, JSON.stringify(r.body)); assert.equal(r.body.signed, false);
+  assert.equal(emailsSent(), before + 1, 'emailed with the PDF');
+  r = await call('inspectionRequest', { action: 'build', transactionId: 'nope', requestId: req.id, selected: [{ id: 'f1' }] });
+  assert.equal(r.status, 404);
 }
 console.log('Roles, review and send: all checks passed');

@@ -29,4 +29,5 @@ node .build/files.test.mjs
 node .build/import.test.mjs
 node ../entities.test.mjs
 node ../commission.test.mjs
+node ../dealTimeline.test.mjs
 node ../push.test.mjs
