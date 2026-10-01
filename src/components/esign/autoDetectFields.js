@@ -10,7 +10,7 @@ import { stackRatio } from '../../../shared/esignGeometry.js';
 // 3. Turn them into fields in the editor's coordinate system.
 
 const SIZES = { signature: 0.30, initial: 0.09, date: 0.18, text: 0.30 }; // width, fraction of page width
-const HEIGHTS = { signature: 0.05, initial: 0.04, date: 0.028, text: 0.028 }; // height, fraction of page width
+const HEIGHTS = { signature: 0.045, initial: 0.035, date: 0.024, text: 0.024 }; // height, fraction of page width
 
 let libPromise;
 async function loadLib() {
@@ -187,8 +187,14 @@ export async function autoDetectFields({ doc, signers, facts, existing = [] }) {
       signer_index: Math.max(0, Math.min(Number(a.signer_index) || 0, Math.max((signers || []).length - 1, 0))),
       auto: true,
     };
-    // Don't stack a box on top of one that's already there.
-    const overlaps = [...existing, ...out].some((f) => Math.abs(Number(f.y) - box.y) < box.hPct * 1.2 && Number(f.x) < box.x + box.width && Number(f.x) + Number(f.width || 0) > box.x);
+    // Don't stack a box on top of one that's already there (real overlap only: form lines are
+    // often closer together than a box is tall, and each line still needs its own box).
+    const vOverlap = (f) => {
+      const fy = Number(f.y); const fh = Number(f.hPct) || box.hPct;
+      return Math.min(fy + fh, box.y + box.hPct) - Math.max(fy, box.y);
+    };
+    const overlaps = [...existing, ...out].some((f) => vOverlap(f) > Math.min(Number(f.hPct) || box.hPct, box.hPct) * 0.6
+      && Number(f.x) < box.x + box.width - 0.5 && Number(f.x) + Number(f.width || 0) > box.x + 0.5);
     if (!overlaps) out.push(box);
   }
   return out;
