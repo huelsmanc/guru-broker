@@ -443,7 +443,8 @@ export default function UnifiedESignCreator({
             <ESignFieldEditor
               onAutoDetect={isPdfUrl(currentDoc.document_url) ? autoDetectFields : undefined}
               doc={currentDoc}
-              deal={deal}
+              deal={deal || facts ? { ...(deal || {}), ...(facts || {}) } : null}
+              autoRun={!!facts && isPdfUrl(currentDoc.document_url) && !(currentDoc.fields || []).some((f) => f.deal_key || f.from_deal || f.auto)}
               onChange={(fields) => setCurrentDoc((d) => (d ? { ...d, fields } : d))}
               onComplete={handleFieldsComplete}
             />

@@ -134,7 +134,7 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
  * shows which signers still have nothing to sign.
  */
 // templateMode: setting up a library form (no deal yet); `persist(fields)` saves instead of the document.
-export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChange, deal, persist, templateMode }) {
+export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChange, deal, persist, templateMode, autoRun }) {
   const signers = doc.signers || [];
   const [fields, setFields] = useState(() => (doc.fields || []).map((f, i) => ({ ...f, id: f.id || `field-${i}-${Date.now()}` })));
   const [layout, setLayout] = useState(null); // { width, height, ratio }
@@ -338,14 +338,23 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChan
     }
   };
 
+  // Filling a form from an offer or deal: read it and fill the blanks right away.
+  const autoRan = useRef(false);
+  useEffect(() => {
+    if (!autoRun || !layout || autoRan.current || !onAutoDetect) return;
+    autoRan.current = true;
+    autoDetect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoRun, layout]);
+
   const autoDetect = async () => {
     if (!onAutoDetect) return;
     setDetecting(true);
     setError(null);
     try {
-      const found = await onAutoDetect({ doc, signers, layout });
+      const found = await onAutoDetect({ doc, signers, layout, facts: deal || null, existing: fields });
       if (found?.length) setFields((prev) => [...prev, ...found]);
-      else setError('No signature lines were found. You can place fields by hand.');
+      else setError('No new blanks were found (or they already have boxes). You can place fields by hand.');
     } catch (err) {
       setError('Auto-detect failed: ' + (err.message || err));
     } finally {
@@ -468,7 +477,7 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChan
           {onAutoDetect && (
             <Button variant="outline" className="w-full mt-2 gap-2" disabled={!layout || detecting} onClick={autoDetect}>
               {detecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-              {detecting ? 'Finding signature lines…' : 'Auto-place fields with AI'}
+              {detecting ? (deal ? 'Reading the form and filling it in…' : 'Finding signature lines…') : deal ? 'Find blanks & fill them with AI' : 'Auto-place fields with AI'}
             </Button>
           )}
         </div>

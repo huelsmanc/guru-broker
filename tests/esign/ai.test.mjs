@@ -12,7 +12,8 @@ globalThis.fetch = async (url, init) => {
     if (failAnthropic) return new Response('{"error":{"message":"overloaded"}}', { status: 529 });
     if (body.tool_choice) {
       const schema = body.tools[0].input_schema;
-      const input = schema.properties.assignments ? { assignments: [{ id: 'c0', type: 'signature', signer_index: 0 }] }
+      const input = schema.properties.assignments && JSON.stringify(body.messages).includes('Facts:') ? { assignments: [{ id: 'c0', type: 'fill', signer_index: 0, label: 'Purchase price', value: '$500,000.00' }, { id: 'c1', type: 'signature', signer_index: 0 }] }
+        : schema.properties.assignments ? { assignments: [{ id: 'c0', type: 'signature', signer_index: 0 }] }
         : schema.properties.term_tips ? { headline: 'Offer near list with a short inspection', suggested_price: 445000, price_low: 435000, price_high: 452000, confidence: 'medium', market_read: 'Moving fast', reasons: ['Comps support it'], term_tips: ['Shorten inspection to 7 days'], risks: ['Appraisal gap'] }
         : schema.properties.score ? { score: 72, headline: 'Two items need attention', items: [{ severity: 'critical', title: 'Inspection deadline passed', detail: 'Due yesterday', suggested_task: 'Get inspection waiver signed' }] }
         : { document_type: 'Purchase and Sale Agreement', summary: 'x', buyers: ['Bob'], sellers: ['Sue'], purchase_price: 450000, dates: { closing_date: '2026-11-15' }, contingencies: [], issues: [] };
@@ -138,5 +139,13 @@ assert.deepEqual(notes, ['comp@x.com', 'tc2@x.com']);
   assert.match(JSON.stringify(sent.messages), /12 Elm St/);
   const bad = await call('aiOfferStrategy', {});
   assert.equal(bad.status, 400);
+}
+// Fill a form's blanks from the offer
+{
+  const r = await call('aiAssignFields', { title: 'CT contract', signers: [{ name: 'Bob', role: 'Buyer 1' }], candidates: [{ id: 'c0', page: 1, context: '5. Purchase Price $ [BLANK]' }, { id: 'c1', page: 2, context: 'Buyer [BLANK] Date' }], facts: { offer_price: 500000, buyers: [{ name: 'Bob' }], property_address: '17 Debra Lane' } });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.assignments[0].type, 'fill'); assert.equal(r.body.assignments[0].value, '$500,000.00');
+  const sent = JSON.stringify(calls.filter((c) => c.url.includes('anthropic')).at(-1).body.messages);
+  assert.match(sent, /17 Debra Lane/); assert.match(sent, /Never guess/);
 }
 console.log('Roles, review and send: all checks passed');
