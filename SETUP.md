@@ -158,3 +158,16 @@ npm install
 npm run build          # the app compiles
 npm run test:esign     # e-sign, AI, MLS, back office, messaging, marketing, private files and imports, with fake email/database
 ```
+
+## Gear Store (Shopify, per brokerage)
+
+Nothing to set in Vercel. Each brokerage connects its own Shopify store from **Gear Store** in the menu
+(brokers and admins only):
+
+1. Shopify admin → Sales channels → add the free **Headless** channel → Create storefront.
+2. Copy the **Storefront API public access token**.
+3. Publish the products you want agents to see to the Headless channel.
+4. In Guru Broker → Gear Store, enter the store address (yourstore.myshopify.com) and the token.
+
+The token is kept server-side (app_secret table, `shopify:<brokerage id>`). Agents check out on
+Shopify's own checkout page; orders carry the agent's name and email as order notes/attributes.

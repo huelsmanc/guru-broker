@@ -52,6 +52,7 @@ export const FUNCTIONS = {
   fileUpload: () => import('./fileUpload.js'),
   fixDisplayNames: () => import('./fixDisplayNames.js'),
   forceCreateUser: () => import('./forceCreateUser.js'),
+  gearStore: () => import('./gearStore.js'),
   generateAndSendOTP: () => import('./generateAndSendOTP.js'),
   generateAuditTrailPDF: () => import('./generateAuditTrailPDF.js'),
   generateCMAPDF: () => import('./generateCMAPDF.js'),

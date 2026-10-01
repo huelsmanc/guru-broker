@@ -41,6 +41,7 @@ const TechLinks = lazy(() => import('@/pages/TechLinks'));
 const SalesCoach = lazy(() => import('@/pages/SalesCoach'));
 const Onboarding = lazy(() => import('@/pages/Onboarding'));
 const MarketingHub = lazy(() => import('@/pages/MarketingHub'));
+const GearStore = lazy(() => import('@/pages/GearStore'));
 const PublicReview = lazy(() => import('@/pages/PublicReview'));
 const Transactions = lazy(() => import('@/pages/Transactions'));
 const Contacts = lazy(() => import('@/pages/Contacts'));
@@ -173,6 +174,7 @@ const AuthenticatedApp = () => {
             <Route path="/ClientPortal" element={<ClientPortal />} />
             <Route path="/MyCommissions" element={<MyCommissions />} />
             <Route path="/Marketing" element={<MarketingHub />} />
+            <Route path="/GearStore" element={<GearStore />} />
             <Route path="/Payouts" element={<Payouts />} />
             <Route path="/CommissionPlans" element={<CommissionPlans />} />
             <Route path="/Reports" element={<Reports />} />

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { MessageSquare, Phone, LayoutDashboard, Monitor, LogOut, Users, Settings as SettingsIcon, ShieldCheck, Building2, UserCircle, TrendingUp, UserPlus, Mail, Trophy, BookOpen, FileText, Heart, Lightbulb, Calendar, FolderOpen, Link2, Wand2, Target, ScrollText, Calculator, File, Gift, Star, ClipboardList, Handshake, Wallet, Banknote, Percent, BarChart3, Activity as ActivityIcon, FileCheck2, ListChecks, Megaphone, Database } from 'lucide-react';
+import { MessageSquare, Phone, LayoutDashboard, Monitor, LogOut, Users, Settings as SettingsIcon, ShieldCheck, Building2, UserCircle, TrendingUp, UserPlus, Mail, Trophy, BookOpen, FileText, Heart, Lightbulb, Calendar, FolderOpen, Link2, Wand2, Target, ScrollText, Calculator, File, Gift, Star, ClipboardList, Handshake, Wallet, Banknote, Percent, BarChart3, Activity as ActivityIcon, FileCheck2, ListChecks, Megaphone, Database, ShoppingBag } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import NotificationBell from './NotificationBell';
 import ChatChannelsDropdown from './ChatChannelsDropdown';
@@ -94,6 +94,7 @@ export default function Sidebar({ user, brokerageId, onChannelClick, mobile }) {
     { to: '/ESignDocuments', icon: FileText, label: 'E-Sign Documents' },
     { to: '/TechLinks', icon: Link2, label: 'Tech Links' },
     { to: '/Marketing', icon: Megaphone, label: 'Marketing' },
+    { to: '/GearStore', icon: ShoppingBag, label: 'Gear Store' },
     { to: '/SalesCoach', icon: Target, label: 'AI Sales Coach' },
     { to: '/Offers', icon: Handshake, label: 'Offers & Contracts' },
     { to: '/Contacts', icon: Users, label: 'Contacts' },
@@ -115,6 +116,7 @@ export default function Sidebar({ user, brokerageId, onChannelClick, mobile }) {
     { to: '/AdminChat', icon: ShieldCheck, label: 'Broker Chat' },
     { to: '/TechLinks', icon: Link2, label: 'Tech Links' },
     { to: '/Marketing', icon: Megaphone, label: 'Marketing' },
+    { to: '/GearStore', icon: ShoppingBag, label: 'Gear Store' },
     { to: '/SalesCoach', icon: Target, label: 'AI Sales Coach' },
     { to: '/Offers', icon: Handshake, label: 'Offers & Contracts' },
     { to: '/Contacts', icon: Users, label: 'Contacts' },
