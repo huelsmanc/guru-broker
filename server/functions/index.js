@@ -33,6 +33,7 @@ export const FUNCTIONS = {
   dealChat: () => import('./dealChat.js'),
   dealChatSync: () => import('./dealChatSync.js'),
   decryptDocument: () => import('./decryptDocument.js'),
+  deleteTransaction: () => import('./deleteTransaction.js'),
   deleteUserAccount: () => import('./deleteUserAccount.js'),
   detectPDFFields: () => import('./detectPDFFields.js'),
   docTools: () => import('./docTools.js'),

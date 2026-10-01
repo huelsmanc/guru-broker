@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, ClipboardList, User, Calendar, DollarSign, CheckCircle, AlertCircle, ChevronDown, ChevronUp, Search, Paperclip, Upload, FileText, Trash2, ExternalLink } from 'lucide-react';
+import { Plus, ClipboardList, User, Calendar, DollarSign, CheckCircle, AlertCircle, ChevronDown, ChevronUp, Search, Paperclip, Upload, FileText, Trash2, ExternalLink, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format } from 'date-fns';
 import TransactionESign from '@/components/transactions/TransactionESign';
@@ -213,6 +213,16 @@ export default function Transactions() {
     },
   });
 
+  const onDeal = (tx) => [tx.agent_email, tx.tc_email, ...(tx.co_agents || []).map((c) => c?.email)].some((e) => e && String(e).toLowerCase() === String(user?.email || '').toLowerCase());
+  const [deletingId, setDeletingId] = useState(null);
+  const deleteDeal = async (tx) => {
+    if (!window.confirm(`Delete ${tx.property_address}?\n\nThis permanently removes the deal, its checklists, deal chat and unpaid commission. Signed documents and offers are kept. This can't be undone.\n\nTo keep it on file, use Cancel instead.`)) return;
+    setDeletingId(tx.id);
+    try {
+      await base44.functions.invoke('deleteTransaction', { id: tx.id });
+      queryClient.invalidateQueries({ queryKey: ['transactions', brokerageId] });
+    } catch (err) { window.alert(err.message); } finally { setDeletingId(null); }
+  };
   const updateStatus = useMutation({
     mutationFn: ({ id, status, tx }) => base44.entities.Transaction.update(id, { status }),
     onSuccess: (_, variables) => {
@@ -539,19 +549,29 @@ export default function Transactions() {
                           </div>
                         )}
 
-                        {/* Status controls for admin */}
-                        {isAdmin && (
+                        {/* Status: admins any time; agents on the deal while it's open (reopening stays with admins). Delete: admins only. */}
+                        {(isAdmin || (!isClosed && onDeal(tx))) && (
                           <div className="flex items-center gap-2 flex-wrap">
                             <p className="text-xs text-muted-foreground font-medium">Change status:</p>
                             {Object.entries(STATUS_CONFIG).map(([key, val]) => (
                              <button
                                key={key}
-                               onClick={() => updateStatus.mutate({ id: tx.id, status: key, tx })}
+                               onClick={() => {
+                                 if (tx.status === key) return;
+                                 if (key === 'cancelled' && !window.confirm(`Cancel ${tx.property_address}? It stays on file as Cancelled.`)) return;
+                                 updateStatus.mutate({ id: tx.id, status: key, tx });
+                               }}
                                className={`px-2.5 py-1 rounded-lg text-xs border transition-all ${tx.status === key ? `${val.color} font-semibold` : 'bg-background border-border/40 text-muted-foreground hover:bg-muted'} ${key === 'cancelled' && tx.status !== 'cancelled' ? 'hover:bg-red-50 hover:text-red-600 hover:border-red-200' : ''}`}
                              >
                                {key === 'cancelled' ? '🚫 Cancel' : val.label}
                              </button>
                             ))}
+                            {isAdmin && (
+                              <button onClick={() => deleteDeal(tx)} disabled={deletingId === tx.id}
+                                className="ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs border border-red-200 text-red-600 bg-background hover:bg-red-50 disabled:opacity-50 transition-colors">
+                                {deletingId === tx.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />} Delete deal
+                              </button>
+                            )}
                           </div>
                         )}
 

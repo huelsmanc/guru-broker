@@ -347,7 +347,14 @@ for ent, fields in sorted(ENTITIES.items()):
                 " or coalesce(co_agents, '[]'::jsonb) @> jsonb_build_array(jsonb_build_object('email', public.auth_email()))"
                 " or (brokerage_id = public.auth_brokerage_id() and (public.is_brokerage_admin() or public.has_perm('tx.all') or public.leads_agent(agent_email)))"
                 " or public.is_super_admin())")
-        pw(f"create policy {t}_access on public.{t} for all using {cond} with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());")
+        # Everyone on the deal can see and change it (including status, e.g. Cancelled); only brokerage
+        # admins can delete a deal.
+        same = "(brokerage_id = public.auth_brokerage_id() or public.is_super_admin())"
+        pw(f"create policy {t}_access on public.{t} for select using {cond};")
+        for op in ("insert", "update", "delete"): pw(f"drop policy if exists {t}_{op} on public.{t};")
+        pw(f"create policy {t}_insert on public.{t} for insert with check {same};")
+        pw(f"create policy {t}_update on public.{t} for update using {cond} with check {same};")
+        pw(f"create policy {t}_delete on public.{t} for delete using ((brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin());")
     elif ent == "Offer":
         cond = "(lower(agent_email) = public.auth_email() or (brokerage_id = public.auth_brokerage_id() and (public.is_brokerage_admin() or public.has_perm('offers.all') or public.leads_agent(agent_email))) or public.is_super_admin())"
         pw(f"create policy {t}_access on public.{t} for all using {cond} with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());")

@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Save, Sparkles, RefreshCw, CheckCircle2, Circle, CalendarClock, AlertTriangle, Mail, Phone, ListChecks, MessagesSquare, FileSignature, Megaphone, ChevronDown, Pencil, Info, Upload, ScanLine } from 'lucide-react';
+import { Loader2, Save, Sparkles, RefreshCw, CheckCircle2, Circle, CalendarClock, AlertTriangle, Mail, Phone, ListChecks, MessagesSquare, FileSignature, Megaphone, ChevronDown, Pencil, Info, Upload, ScanLine, Trash2 } from 'lucide-react';
 import { can } from '../../../shared/permissions.generated.js';
 import { STAGES, DEADLINES, dealDeadlines, dealStage, dealHealth, countdown, todayStr } from '../../../shared/dealTimeline.js';
 import { Row, money } from './ui';
@@ -52,6 +52,11 @@ export default function WorkspaceOverview({ tx, user, refresh, canEdit, admin, o
     await postUpdate(tx, user, 'Deal re-opened.', { milestone: 'Re-opened' }).catch(() => {});
     refresh();
   };
+  const navigate = useNavigate();
+  const deleteDeal = async () => {
+    if (!window.confirm(`Delete ${tx.property_address}?\n\nThis permanently removes the deal, its checklists, deal chat and unpaid commission. Signed documents and offers are kept. This can't be undone.\n\nTo keep it on file, cancel it instead.`)) return;
+    try { await base44.functions.invoke('deleteTransaction', { id: tx.id }); navigate('/Transactions'); } catch (err) { window.alert(err.message); }
+  };
   const goTab = (t) => setParams({ tab: t });
   const buyerSide = (tx.deal_type || 'buyer') !== 'listing';
 
@@ -91,6 +96,7 @@ export default function WorkspaceOverview({ tx, user, refresh, canEdit, admin, o
           <QuickAction icon={MessagesSquare} label="Deal chat" onClick={() => goTab('chat')} />
           {canClose && !isClosed && <QuickAction icon={CheckCircle2} label="Close deal" onClick={() => setClosingDeal(true)} success />}
           {canReopen && tx.status === 'closed' && <QuickAction icon={RefreshCw} label="Re-open deal" onClick={reopen} />}
+          {admin && <QuickAction icon={Trash2} label="Delete deal" onClick={deleteDeal} danger />}
         </div>
         {posting && <PostUpdate tx={tx} user={user} onDone={() => { setPosting(false); refresh(); }} />}
       </div>
@@ -175,10 +181,10 @@ function Stepper({ stage }) {
   );
 }
 
-function QuickAction({ icon: Icon, label, onClick, accent, success }) {
+function QuickAction({ icon: Icon, label, onClick, accent, success, danger }) {
   return (
     <button type="button" onClick={onClick}
-      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm border ${accent ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white border-transparent' : success ? 'bg-emerald-600 text-white border-transparent hover:bg-emerald-700' : 'bg-background hover:border-primary'}`}>
+      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm border ${accent ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white border-transparent' : success ? 'bg-emerald-600 text-white border-transparent hover:bg-emerald-700' : danger ? 'bg-background text-red-600 border-red-200 hover:bg-red-50' : 'bg-background hover:border-primary'}`}>
       <Icon className="w-4 h-4" /> {label}
     </button>
   );
