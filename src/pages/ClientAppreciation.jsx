@@ -23,8 +23,12 @@ export default function ClientAppreciation() {
 
   React.useEffect(() => {
     if (brokerageId) {
-      base44.entities.BrokerageSettings.filter({ brokerage_id: brokerageId }).then((results) => {
-        if (results.length > 0) setBrokerageSettings(results[0]);
+      // The brokerage's name: from Settings if filled in there, otherwise the brokerage itself.
+      Promise.all([
+        base44.entities.BrokerageSettings.filter({ brokerage_id: brokerageId }).catch(() => []),
+        base44.entities.Brokerage.filter({ id: brokerageId }).catch(() => []),
+      ]).then(([settings, brokerages]) => {
+        setBrokerageSettings({ ...(settings[0] || {}), brokerage_name: settings[0]?.brokerage_name || brokerages[0]?.name || '' });
       });
     }
   }, [brokerageId]);
@@ -120,7 +124,9 @@ Keep it to 3-4 paragraphs, warm and genuine tone.`;
         to: clientEmail,
         subject: preview.subject,
         body: `<html><body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">${preview.body}</body></html>`,
-        from_name: `${user?.full_name} - ${brokerageSettings?.brokerage_name || 'Your Brokerage'}`
+        // Comes from the agent by name, and replies go straight to them.
+        from_name: user?.display_name || user?.full_name || brokerageSettings?.brokerage_name || 'Your agent',
+        reply_to: user?.email,
       });
 
       setSuccess(true);
