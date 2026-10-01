@@ -98,7 +98,6 @@ export default function Sidebar({ user, brokerageId, onChannelClick }) {
     { to: '/Offers', icon: Handshake, label: 'Offers & Contracts' },
     { to: '/Contacts', icon: Users, label: 'Contacts' },
     { to: '/Transactions', icon: ClipboardList, label: 'Transactions' },
-    { to: '/Reviews', icon: Star, label: 'Reviews' },
     { to: '/Profile', icon: UserCircle, label: 'My Profile' },
   ];
 
@@ -120,7 +119,6 @@ export default function Sidebar({ user, brokerageId, onChannelClick }) {
     { to: '/Offers', icon: Handshake, label: 'Offers & Contracts' },
     { to: '/Contacts', icon: Users, label: 'Contacts' },
     { to: '/Transactions', icon: ClipboardList, label: 'Transactions' },
-    { to: '/Reviews', icon: Star, label: 'Reviews' },
     { to: '/Settings', icon: SettingsIcon, label: 'Settings' },
     { to: '/Profile', icon: UserCircle, label: 'My Profile' },
   ];

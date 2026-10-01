@@ -49,24 +49,12 @@ export default function ClientAppreciation() {
     setPreview(null);
 
     try {
-      // Generate unique review token
-      const reviewToken = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-      
-      // Create pending review record
-      const reviewRecord = await base44.entities.ClientReview.create({
-        brokerage_id: brokerageId,
-        agent_id: user.id,
-        agent_name: user.full_name,
-        agent_email: user.email,
-        client_name: form.clientName,
-        property_address: form.propertyAddress,
-        review_token: reviewToken,
-        status: 'pending'
-      });
+      // Reviews go to the agent's Google profile (set in My Profile), the one that helps them rank.
+      const me = await base44.auth.me().catch(() => user);
+      const googleReviewUrl = me?.google_review_url || '';
 
       const brokerage = brokerageSettings?.brokerage_name || 'our brokerage';
       const agentName = user.full_name;
-      const reviewLink = `${window.location.origin}/review?token=${reviewToken}`;
       
       const prompt = `Generate a warm, personalized thank you email for a real estate ${form.clientType}. The agent's name is ${agentName} from ${brokerage}. 
       
@@ -82,7 +70,7 @@ Write a professional yet heartfelt thank you email in HTML format that:
 
 Use HTML with <strong> tags to bold the client name, agent name, and brokerage name. Use <p> tags for paragraphs and add line breaks for readability. 
 
-At the end of the email, include a call-to-action section with a button/link that says "Leave a Review" and links to: ${reviewLink}
+${googleReviewUrl ? `At the end, include a short line asking them to share their experience, and a button-style link that says "Leave a Google review" linking to: ${googleReviewUrl} (style it as an inline-block link with background #4285F4, white bold text, padding 12px 28px, rounded corners, no underline).` : 'End with a warm closing (no review link).'}
 
 Keep it to 3-4 paragraphs, warm and genuine tone.`;
 
@@ -167,6 +155,9 @@ Keep it to 3-4 paragraphs, warm and genuine tone.`;
         <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}>
           <Card className="p-6 border-border/40">
             <h2 className="font-semibold text-foreground mb-4">Client Details</h2>
+            {user?.google_review_url
+              ? <p className="text-xs text-muted-foreground mb-4 -mt-2">The email includes a button to leave you a Google review.</p>
+              : <p className="text-xs rounded-lg bg-amber-50 border border-amber-200 text-amber-900 px-3 py-2 mb-4">Add your Google review link in <a href="/Profile" className="underline">My Profile</a> and the email will include a "Leave a Google review" button.</p>}
             <div className="space-y-4">
               <div>
                 <Label className="text-sm">Client Name *</Label>
