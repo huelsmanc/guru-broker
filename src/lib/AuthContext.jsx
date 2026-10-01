@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
+import React, { createContext, useState, useContext, useEffect, useCallback, useRef } from 'react';
 import { base44, supabase } from '@/api/base44Client';
 
 const AuthContext = createContext();
@@ -30,8 +30,13 @@ export const AuthProvider = ({ children }) => {
 
   const isPublicRoute = () => PUBLIC_PATHS.includes(window.location.pathname);
 
+  // Only the first check shows the loading screen. Later checks (Supabase re-confirms the
+  // session whenever the tab comes back into view) update quietly, so open pages and
+  // half-finished forms stay where they are.
+  const checked = useRef(false);
+  const signedInAs = useRef(null);
   const checkUserAuth = useCallback(async () => {
-    setIsLoadingAuth(true);
+    if (!checked.current) setIsLoadingAuth(true);
     try {
       const { data } = await supabase.auth.getSession();
       if (!data.session) {
@@ -40,13 +45,14 @@ export const AuthProvider = ({ children }) => {
         setAuthError({ type: 'auth_required', message: 'Authentication required' });
         return;
       }
+      signedInAs.current = data.session.user?.id || signedInAs.current;
       const currentUser = await base44.auth.me();
       if (currentUser.suspended) {
         await supabase.auth.signOut();
         setAuthError({ type: 'user_not_registered', message: 'This account is suspended' });
         return;
       }
-      setUser(currentUser);
+      setUser((prev) => (prev && JSON.stringify(prev) === JSON.stringify(currentUser) ? prev : currentUser));
       setIsAuthenticated(true);
       setAuthError(null);
     } catch (error) {
@@ -54,6 +60,7 @@ export const AuthProvider = ({ children }) => {
       setIsAuthenticated(false);
       setAuthError({ type: 'auth_required', message: 'Authentication required' });
     } finally {
+      checked.current = true;
       setIsLoadingAuth(false);
     }
   }, []);
@@ -64,13 +71,19 @@ export const AuthProvider = ({ children }) => {
       return;
     }
     checkUserAuth();
-    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT') {
+        signedInAs.current = null;
         setUser(null);
         setIsAuthenticated(false);
       } else if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
-        checkUserAuth();
-        if (event === 'SIGNED_IN') logSignIn();
+        // Supabase also sends SIGNED_IN when the tab regains focus; only a real new sign-in
+        // (a different person, or no one before) is logged as one.
+        const id = session?.user?.id || null;
+        const isNew = event === 'SIGNED_IN' && id && signedInAs.current !== id;
+        signedInAs.current = id || signedInAs.current;
+        if (isNew || event === 'USER_UPDATED' || !checked.current) checkUserAuth();
+        if (isNew && checked.current) logSignIn();
       }
     });
     return () => sub.subscription.unsubscribe();
