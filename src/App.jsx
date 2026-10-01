@@ -41,7 +41,6 @@ const TechLinks = lazy(() => import('@/pages/TechLinks'));
 const SalesCoach = lazy(() => import('@/pages/SalesCoach'));
 const Onboarding = lazy(() => import('@/pages/Onboarding'));
 const MarketingHub = lazy(() => import('@/pages/MarketingHub'));
-const ClientAppreciation = lazy(() => import('@/pages/ClientAppreciation'));
 const PublicReview = lazy(() => import('@/pages/PublicReview'));
 const Reviews = lazy(() => import('@/pages/Reviews'));
 const Transactions = lazy(() => import('@/pages/Transactions'));
@@ -168,7 +167,7 @@ const AuthenticatedApp = () => {
             <Route path="/Onboarding" element={<Onboarding />} />
             <Route path="/CMABuilder" element={<KeepQuery to="/Marketing" add="tool=cma" />} />
             <Route path="/MyReports" element={<Navigate to="/Marketing?tool=cma&tab=saved" replace />} />
-            <Route path="/ClientAppreciation" element={<ClientAppreciation />} />
+            <Route path="/ClientAppreciation" element={<Navigate to="/Marketing?tool=clients" replace />} />
             <Route path="/Reviews" element={<Reviews />} />
             <Route path="/Transactions" element={<Transactions />} />
             <Route path="/Contacts" element={<Contacts />} />
