@@ -22,11 +22,14 @@ export const supabase = createClient(SUPABASE_URL || 'https://missing-config.sup
 function syncFileCookie(session) {
   try {
     const secure = window.location.protocol === 'https:' ? '; Secure' : '';
-    if (session?.access_token) {
-      const ttl = Math.max(60, (session.expires_at || 0) - Math.floor(Date.now() / 1000));
-      document.cookie = `gbh_at=${encodeURIComponent(session.access_token)}; Path=/api/file; Max-Age=${ttl}; SameSite=Lax${secure}`;
-    } else {
-      document.cookie = `gbh_at=; Path=/api/file; Max-Age=0; SameSite=Lax${secure}`;
+    // Also the street-photo route (CMA comps), which <img> tags load the same way.
+    for (const path of ['/api/file', '/api/fn/streetView']) {
+      if (session?.access_token) {
+        const ttl = Math.max(60, (session.expires_at || 0) - Math.floor(Date.now() / 1000));
+        document.cookie = `gbh_at=${encodeURIComponent(session.access_token)}; Path=${path}; Max-Age=${ttl}; SameSite=Lax${secure}`;
+      } else {
+        document.cookie = `gbh_at=; Path=${path}; Max-Age=0; SameSite=Lax${secure}`;
+      }
     }
   } catch { /* no cookies (private mode): file links ask to sign in */ }
 }

@@ -18,4 +18,10 @@ assert.equal(r.status, 200); assert.equal(r.headers.get('content-type'), 'image/
 assert.ok(seen.at(-1).includes('location=12+Elm+St') && seen.at(-1).includes('key=gk'));
 r = await get('1 Nowhere Rd', 'gbh_at=ann');
 assert.equal(r.status, 404, 'no imagery');
+globalThis.fetch = async (url) => (String(url).includes('metadata') ? new Response(JSON.stringify({ status: 'REQUEST_DENIED', error_message: 'API keys with referer restrictions cannot be used with this API.' })) : new Response('', { status: 403 }));
+r = await GET(new Request('https://gurubroker.app/api/fn/streetView?check=1&address=x', { headers: { cookie: 'gbh_at=ann' } }));
+const j = await r.json();
+assert.equal(j.google_status, 'REQUEST_DENIED'); assert.match(j.meaning, /restrictions/); assert.equal(j.key_ends_with, '=gk'.slice(-2) === 'gk' ? 'gk' : j.key_ends_with);
+r = await GET(new Request('https://gurubroker.app/api/fn/streetView?check=1'));
+assert.match((await r.json()).problem, /signed in/);
 console.log('street view: all checks passed');
