@@ -4,6 +4,11 @@ import { calculateDeal, capYearStart, r2 } from '../../shared/commission.js';
 
 const num = (n, d = 0) => (Number.isFinite(Number(n)) ? Number(n) : d);
 
+/** Today's date where the brokerage is (APP_TIMEZONE, default US Eastern), not UTC. */
+export function localDate(d = new Date()) {
+  return d.toLocaleDateString('en-CA', { timeZone: process.env.APP_TIMEZONE || 'America/New_York' });
+}
+
 export async function profileByEmail(entities, email) {
   const [p] = await entities.User.filter({ email: String(email || '').toLowerCase() }, '-created_date', 1);
   return p || null;
@@ -120,7 +125,7 @@ export async function calculateForTransaction(entities, tx, input = {}) {
     })),
   };
   const result = calculateDeal(deal);
-  return { deal, result, contexts, closed_date: input.closed_date || tx.closed_date || new Date().toISOString().slice(0, 10) };
+  return { deal, result, contexts, closed_date: input.closed_date || tx.closed_date || localDate() };
 }
 
 /**

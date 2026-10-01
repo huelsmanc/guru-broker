@@ -56,7 +56,7 @@ export default function Payouts() {
   const runStatements = async () => {
     if (!window.confirm(`Build and email ${month} statements to every agent who closed a deal that month?`)) return;
     setBusy('statements');
-    try { const r = (await base44.functions.invoke('monthlyStatements', { month })).data; window.alert(`Sent ${r.statements?.length || 0} statements for ${r.month}.`); }
+    try { const r = (await base44.functions.invoke('monthlyStatements', { month })).data; window.alert(r.statements ? `Emailed ${r.statements} statement${r.statements === 1 ? '' : 's'} for ${r.month}.` : `No statements for ${r.month}: nobody had a deal close or a payout paid that month.`); }
     catch (err) { window.alert(err.message); } finally { setBusy(null); }
   };
   const run1099 = async () => {

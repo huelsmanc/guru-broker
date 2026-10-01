@@ -5,7 +5,7 @@ import { isServiceRequest } from '../lib/base44.js';
 import { isAdminRole, can } from '../lib/team.js';
 import { SendEmail } from '../lib/integrations.js';
 import { createDoc, money } from '../lib/pdfdoc.js';
-import { agentContext } from '../lib/backoffice.js';
+import { agentContext, localDate } from '../lib/backoffice.js';
 import { esc } from '../lib/esign.js';
 
 function monthRange(ym) {
@@ -17,15 +17,21 @@ function monthRange(ym) {
 
 export async function buildStatement(entities, email, ym, brokerageId) {
   const { from, to, label } = monthRange(ym);
-  const recs = (await entities.CommissionRecord.filter({ agent_email: email, status: { $in: ['approved', 'paid'] }, closed_date: { $gte: from, $lt: to } }, 'closed_date', 500))
-    .filter((r) => !r.calc?.opening); // carried-over cap balances aren't deals
-  const payouts = await entities.Payout.filter({ payee_email: email, created_date: { $gte: from, $lt: to } }, 'created_date', 500);
+  // A deal is on the statement for the month it closed, or the month its commission was paid
+  // to this agent (dates as the brokerage sees them, not UTC).
+  const inMonth = (iso) => { const d = iso ? localDate(new Date(iso)) : ''; return d >= from && d < to; };
+  const allPayouts = await entities.Payout.filter({ payee_email: email }, '-created_date', 2000);
+  const payouts = allPayouts.filter((p) => inMonth(p.created_date));
+  const paidRecIds = new Set(allPayouts.filter((p) => p.status === 'paid' && inMonth(p.paid_at) && p.commission_record_id).map((p) => p.commission_record_id));
+  const recs = (await entities.CommissionRecord.filter({ agent_email: email, status: { $in: ['approved', 'paid'] } }, 'closed_date', 2000))
+    .filter((r) => !r.calc?.opening) // carried-over cap balances aren't deals
+    .filter((r) => (r.closed_date >= from && r.closed_date < to) || paidRecIds.has(r.id));
   const ctx = await agentContext(entities, email, { brokerageId, on: new Date(`${to}T00:00:00Z`) });
   const [settings] = await entities.BrokerageSettings.filter({ brokerage_id: brokerageId }, '-created_date', 1);
   const doc = await createDoc();
   doc.title(`Commission statement - ${label}`, `${ctx.name} <${email}> | ${settings?.brokerage_name || 'Guru Broker'} | Plan: ${ctx.plan.name}`);
   doc.heading('Closed deals');
-  if (!recs.length) doc.text('No deals closed this month.');
+  if (!recs.length) doc.text('No deals closed or paid this month.');
   const cols = (a, b, c, d, e) => [{ text: a, width: 70 }, { text: b, width: 190 }, { text: c, width: 84, align: 'right' }, { text: d, width: 84, align: 'right' }, { text: e, width: 84, align: 'right' }];
   if (recs.length) doc.row(cols('Closed', 'Property', 'Your share', 'Brokerage', 'Your net'), { isBold: true });
   let net = 0; let gci = 0; let cd = 0;
@@ -59,7 +65,8 @@ export default async (req) => {
     }
     const body = await req.json().catch(() => ({}));
     const now = new Date();
-    const prev = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+    const [ty, tm] = localDate(now).split('-').map(Number);
+    const prev = new Date(Date.UTC(ty, tm - 2, 1));
     const ym = body.month || prev.toISOString().slice(0, 7);
     const entities = base44.asServiceRole.entities;
     let people = await entities.User.list('-created_date', 5000);
