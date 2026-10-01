@@ -314,7 +314,7 @@ export default function UnifiedESignCreator({
   return (
     <div className="space-y-6 py-4">
       {/* Progress Indicator */}
-      <div className="flex gap-2">
+      <div className="grid grid-cols-4 gap-1.5 sm:flex sm:gap-2">
         {STEPS.map((s, idx) => {
           const StepIcon = s.icon;
           const isActive = s.id === step;
@@ -324,7 +324,7 @@ export default function UnifiedESignCreator({
             <motion.button
               key={s.id}
               onClick={() => idx <= currentStepIndex && setStep(s.id)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-all ${
+              className={`flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 px-1 sm:px-4 py-1.5 sm:py-2 rounded-lg border transition-all min-w-0 ${
                 isActive
                   ? 'bg-primary text-primary-foreground border-primary'
                   : isCompleted
@@ -334,7 +334,7 @@ export default function UnifiedESignCreator({
               disabled={idx > currentStepIndex}
             >
               <StepIcon className="w-4 h-4" />
-              <span className="text-sm font-medium">{s.label}</span>
+              <span className="text-[11px] sm:text-sm font-medium truncate max-w-full">{s.label}</span>
             </motion.button>
           );
         })}
@@ -564,7 +564,7 @@ export default function UnifiedESignCreator({
       )}
 
       {/* Navigation Buttons */}
-      <div className="flex justify-between gap-3 pt-4 border-t border-border/40">
+      <div className="sticky bottom-0 -mx-4 sm:mx-0 px-4 sm:px-0 pb-1 bg-background flex flex-wrap items-center justify-between gap-2 sm:gap-3 pt-3 sm:pt-4 border-t border-border/40 z-20">
         <Button
           variant="outline"
           onClick={() => {
@@ -577,7 +577,7 @@ export default function UnifiedESignCreator({
         </Button>
 
         {step !== 'send' && !canProceed() && !uploading && (
-          <p className="text-xs text-muted-foreground self-center ml-auto">
+          <p className="order-first sm:order-none basis-full sm:basis-auto text-xs text-muted-foreground sm:self-center sm:ml-auto">
             {step === 'upload' ? (!parts.length ? 'Upload a file or pick a template to continue.' : 'Add a title to continue.') : step === 'signers' ? (signers.length ? 'Every signer needs an email address.' : 'Add at least one signer.') : step === 'fields' ? 'Place at least one field.' : ''}
           </p>
         )}

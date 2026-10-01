@@ -364,7 +364,27 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChan
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 py-2">
-      <div className="lg:col-span-2 space-y-2">
+      <div className="lg:col-span-2 space-y-2 min-w-0">
+        {/* Phones: who you're placing for and the field types, right above the document. */}
+        <div className="lg:hidden sticky top-0 z-30 -mx-1 px-1 py-1.5 bg-background/95 backdrop-blur space-y-1.5">
+          {signers.length > 1 && (
+            <select value={activeSigner} onChange={(e) => setActiveSigner(Number(e.target.value))}
+              className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm" style={{ borderLeft: `4px solid ${SIGNER_COLORS[activeSigner % SIGNER_COLORS.length]}` }}>
+              {signers.map((sg, i) => <option key={i} value={i}>Placing for: {sg.name || sg.email || sg.role}</option>)}
+            </select>
+          )}
+          <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+            {FIELD_TYPES.map((t) => {
+              const Icon = t.icon;
+              return (
+                <button key={t.id} type="button" disabled={!layout} onClick={() => { setPlacingValue(null); setRadioGroup(null); setPlacing(placing === t.id ? null : t.id); }}
+                  className={`flex-shrink-0 px-2.5 py-1.5 rounded-lg border text-xs flex items-center gap-1 disabled:opacity-40 ${placing === t.id ? 'bg-primary text-primary-foreground border-primary' : 'bg-muted border-border/40'}`}>
+                  <Icon className="w-3.5 h-3.5" /> {t.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
         {placing && (
           <div className="rounded-lg bg-blue-50 border border-blue-200 px-3 py-2 text-sm text-blue-800 flex justify-between items-center">
             <span>{placing === 'strike' ? 'Tap the text you want to strike out, then drag the corner to cover it.'
@@ -374,7 +394,7 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChan
             <button type="button" className="text-blue-700 underline text-xs" onClick={stopPlacing}>{placing === 'radio' ? 'Done' : 'Cancel'}</button>
           </div>
         )}
-        <div className="border border-border/50 rounded-lg overflow-auto bg-slate-100" style={{ maxHeight: '72vh' }}>
+        <div className="border border-border/50 rounded-lg overflow-auto bg-slate-100 max-h-[60vh] lg:max-h-[72vh]">
           <PDFPageRenderer url={doc.document_url} containerRef={containerRef} onLayout={setLayout}>
             <div
               className={`absolute inset-0 z-10 ${placing ? 'cursor-crosshair' : ''}`}
