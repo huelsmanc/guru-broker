@@ -193,4 +193,20 @@ assert.equal(r.status, 403, 'only the platform owner adds shared forms');
 r = await call('fileUpload', { scope: { kind: 'forms', platform: true }, name: 'NY form.pdf', size: 10 }, { authorization: 'Bearer superTok' });
 assert.equal(r.status, 200, JSON.stringify(r.body)); assert.match(r.body.path, /^scoped\/platform\/forms\//);
 
+// Page tools: rotate, reorder, combine a PDF and a photo into a new document on the deal
+r = await call('docTools', { action: 'build', transactionId: 'tx1', name: 'Combined', sources: ['/api/file?p=scoped%2FB1%2Ftx%2Ftx1%2Fa.pdf', '/api/file?p=scoped%2FB1%2Ftx%2Ftx1%2Fb.png'], pages: [{ s: 0, p: 2, r: 90 }, { s: 1, p: 0 }, { s: 0, p: 0, r: -90 }] }, agent);
+assert.equal(r.status, 200, JSON.stringify(r.body));
+assert.equal(r.body.page_count, 3); assert.match(r.body.file_url, /scoped%2FB1%2Ftx%2Ftx1/);
+{
+  const { PDFDocument } = await import('pdf-lib');
+  const built = await PDFDocument.load(globalThis.__storage['private-files/' + decodeURIComponent(r.body.file_url.split('p=')[1])]);
+  assert.deepEqual(built.getPages().map((pg) => pg.getRotation().angle), [90, 0, 270], 'rotations kept');
+}
+r = await call('docTools', { action: 'build', sources: ['/api/file?p=scoped%2FB1%2Ftx%2Ftx1%2Fa.pdf'], pages: [{ s: 0, p: 99 }] }, agent);
+assert.equal(r.status, 400, 'page out of range');
+r = await call('docTools', { action: 'build', sources: ['/api/file?p=scoped%2FB1%2Ftx%2Ftx1%2Fa.pdf'], pages: [{ s: 0, p: 0 }] }, { authorization: 'Bearer otherTok' });
+assert.equal(r.status, 403, "another brokerage can't use the file");
+r = await call('docTools', { action: 'build', sources: ['https://evil.example/x.pdf'], pages: [{ s: 0, p: 0 }] }, agent);
+assert.equal(r.status, 400);
+
 console.log('E-sign upgrades: all checks passed');

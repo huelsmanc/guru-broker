@@ -11,6 +11,7 @@ import { motion } from 'framer-motion';
 import ESignFieldEditor, { fillFromDeal } from './ESignFieldEditor';
 import { fieldSignerIndex } from '../../../shared/esignGeometry.js';
 import SignerManagementDashboard from './SignerManagementDashboard';
+import DocWorkbench from '@/components/documents/DocWorkbench';
 
 const STEPS = [
   { id: 'upload', label: 'Upload', icon: Upload },
@@ -84,6 +85,7 @@ export default function UnifiedESignCreator({
     queryFn: () => base44.entities.ContractForm.list('state', 500).then((l) => l.filter((f) => f.is_active !== false)).catch(() => []),
   });
   const [formState, setFormState] = useState('');
+  const [editingPart, setEditingPart] = useState(null); // index of the file whose pages are being edited
   const { data: templates = [] } = useQuery({
     queryKey: ['esign-templates', brokerageId],
     enabled: !!brokerageId,
@@ -428,6 +430,9 @@ export default function UnifiedESignCreator({
                     {p.kind === 'template' ? <LayoutTemplate className="w-4 h-4 text-purple-600" /> : <FileText className={`w-4 h-4 ${p.kind === 'form' ? 'text-emerald-600' : 'text-blue-600'}`} />}
                     <span className="flex-1 truncate">{p.name}</span>
                     {p.kind === 'form' && <span className="text-[10px] uppercase text-emerald-700">contract form</span>}
+                    {p.kind === 'file' && (
+                      <button type="button" onClick={() => setEditingPart(i)} className="text-xs text-primary hover:underline" title="Rotate, reorder or delete pages">Pages</button>
+                    )}
                     {p.kind === 'template' && <span className="text-[10px] uppercase text-purple-600">{p.auto ? 'fields ready' : 'template'}</span>}
                     <button type="button" onClick={() => removePart(i)} className="p-1 rounded hover:bg-muted" aria-label="Remove"><X className="w-4 h-4" /></button>
                   </div>
@@ -562,6 +567,16 @@ export default function UnifiedESignCreator({
           <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
           <p className="text-sm text-destructive">{error}</p>
         </motion.div>
+      )}
+
+      {editingPart != null && parts[editingPart] && (
+        <DocWorkbench sources={[{ url: parts[editingPart].url, name: parts[editingPart].name }]} transactionId={dealId || undefined}
+          saveLabel="Use the edited pages"
+          onSaved={(built) => {
+            setParts((list) => list.map((x, j) => (j === editingPart ? { ...x, url: built.file_url } : x)));
+            setEditingPart(null);
+          }}
+          onClose={() => setEditingPart(null)} />
       )}
 
       {/* Navigation Buttons */}

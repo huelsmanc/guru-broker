@@ -2,7 +2,9 @@ import React, { useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
-import { Upload, Loader2, FileText, Download, Trash2, ScanLine } from 'lucide-react';
+import { Upload, Loader2, FileText, Download, Trash2, ScanLine, Scissors } from 'lucide-react';
+import DocWorkbench from '@/components/documents/DocWorkbench';
+import { isPdfUrl } from '@/components/esign/PDFPageRenderer';
 import { Section, Empty, Pill } from './ui';
 import ScanContractButton from '@/components/transactions/ScanContractButton';
 import SignedDownload, { isSignedLink } from '@/components/esign/SignedDownload';
@@ -14,6 +16,7 @@ export default function WorkspaceDocuments({ tx, user, refresh, canEdit }) {
   const fileRef = useRef(null);
   const [busy, setBusy] = useState(false);
   const [showScan, setShowScan] = useState(false);
+  const [tools, setTools] = useState(null); // { sources, replaceIndex }
   const { data: lists = [] } = useQuery({
     queryKey: ['checklists', 'transaction', tx.id],
     queryFn: () => base44.entities.Checklist.filter({ subject_type: 'transaction', subject_id: tx.id }, 'created_date', 50),
@@ -54,6 +57,21 @@ export default function WorkspaceDocuments({ tx, user, refresh, canEdit }) {
   };
 
   const openItems = lists.flatMap((l) => (l.items || []).filter((i) => i.requires_document && !['approved', 'exempt'].includes(i.status)).map((i) => ({ l, i })));
+  const toolItems = openItems.map(({ l, i }) => ({ key: `${l.id}|${i.id}`, title: `${l.name}: ${i.title}`, checklist_id: l.id, item_id: i.id }));
+  const editable = (d) => !isSignedLink(d.url) && (isPdfUrl(d.url) || /\.(pdf|png|jpe?g)$/i.test(d.name || ''));
+  const closeTools = async (changed) => {
+    const t = tools;
+    setTools(null);
+    if (changed) {
+      queryClient.invalidateQueries({ queryKey: ['checklists', 'transaction', tx.id] });
+      // Split into new documents: offer to drop the original packet.
+      if (changed === true && t?.replaceIndex != null && t.split && window.confirm(`Remove the original "${t.sources[0]?.name}" now that it's split?`)) {
+        const fresh = await base44.entities.Transaction.get(tx.id);
+        await base44.entities.Transaction.update(tx.id, { documents: (fresh.documents || []).filter((d) => d.url !== t.sources[0]?.url) });
+      }
+    }
+    refresh();
+  };
 
   return (
     <div className="max-w-5xl">
@@ -61,6 +79,12 @@ export default function WorkspaceDocuments({ tx, user, refresh, canEdit }) {
         actions={canEdit && <>
           <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => upload([...e.target.files])} />
           <Button variant="outline" className="gap-1.5" onClick={() => setShowScan((s) => !s)}><ScanLine className="w-4 h-4" /> Scan with AI</Button>
+          {unsorted.filter(editable).length > 1 && (
+            <Button variant="outline" className="gap-1.5" title="Open all unsorted files together to combine and split them"
+              onClick={() => setTools({ sources: unsorted.filter(editable).map((d) => ({ url: d.url, name: d.name })), replaceIndex: null })}>
+              <Scissors className="w-4 h-4" /> Combine &amp; split
+            </Button>
+          )}
           <Button className="gap-1.5" disabled={busy} onClick={() => fileRef.current?.click()}>{busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} Add document</Button>
         </>}>
         {showScan && <div className="mb-4 max-w-md"><ScanContractButton scope={{ kind: 'tx', id: tx.id }} label="Scan a contract to check it and pull dates" /></div>}
@@ -72,6 +96,11 @@ export default function WorkspaceDocuments({ tx, user, refresh, canEdit }) {
               <li key={d.idx} className="flex flex-wrap items-center gap-3 px-4 py-3">
                 <FileText className="w-4 h-4 text-muted-foreground" />
                 <a href={d.url} target="_blank" rel="noreferrer" className="flex-1 min-w-0 truncate text-sm hover:underline">{d.name}</a>
+                {canEdit && editable(d) && (
+                  <Button size="sm" variant="outline" className="gap-1 h-8" title="Split, rotate, reorder or delete pages" onClick={() => setTools({ sources: [{ url: d.url, name: d.name }], replaceIndex: d.idx, split: true })}>
+                    <Scissors className="w-3.5 h-3.5" /> Pages
+                  </Button>
+                )}
                 {canEdit && openItems.length > 0 && (
                   <select className="rounded-md border border-input bg-background px-2 py-1 text-xs max-w-[220px]" defaultValue="" onChange={(e) => assign(d, e.target.value)}>
                     <option value="">Assign to…</option>
@@ -103,6 +132,7 @@ export default function WorkspaceDocuments({ tx, user, refresh, canEdit }) {
           </ul>
         )}
       </Section>
+      {tools && <DocWorkbench sources={tools.sources} tx={tx} items={toolItems} replaceIndex={tools.replaceIndex} onClose={closeTools} />}
     </div>
   );
 }

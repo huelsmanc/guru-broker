@@ -34,6 +34,7 @@ export const FUNCTIONS = {
   decryptDocument: () => import('./decryptDocument.js'),
   deleteUserAccount: () => import('./deleteUserAccount.js'),
   detectPDFFields: () => import('./detectPDFFields.js'),
+  docTools: () => import('./docTools.js'),
   encryptDocument: () => import('./encryptDocument.js'),
   esignAttach: () => import('./esignAttach.js'),
   esignCode: () => import('./esignCode.js'),

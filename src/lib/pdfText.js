@@ -10,6 +10,40 @@ function loadLib() {
   return libPromise;
 }
 
+/** Opens a PDF (File/Blob or URL) with pdf.js. */
+export async function openPdf(source) {
+  const lib = await loadLib();
+  const data = source instanceof Blob ? { data: new Uint8Array(await source.arrayBuffer()) } : { url: source, withCredentials: false };
+  return lib.getDocument(data).promise;
+}
+
+/** A small picture of one page (data URL), `width` pixels wide. */
+export async function pageThumb(pdf, n, width = 180) {
+  const page = await pdf.getPage(n);
+  const vp1 = page.getViewport({ scale: 1 });
+  const vp = page.getViewport({ scale: (width * Math.min(window.devicePixelRatio || 1, 2)) / vp1.width });
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.floor(vp.width); canvas.height = Math.floor(vp.height);
+  await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+  return canvas.toDataURL('image/jpeg', 0.7);
+}
+
+/** Text of one page, lines in reading order. */
+export async function pageText(pdf, n) {
+  const page = await pdf.getPage(n);
+  const { items } = await page.getTextContent();
+  const rows = [];
+  for (const it of items) {
+    if (!it.str?.trim()) continue;
+    const y = Math.round(it.transform[5]);
+    let row = rows.find((r) => Math.abs(r.y - y) < 3);
+    if (!row) rows.push((row = { y, parts: [] }));
+    row.parts.push({ x: it.transform[4], s: it.str });
+  }
+  rows.sort((a, b) => b.y - a.y);
+  return rows.map((r) => r.parts.sort((a, b) => a.x - b.x).map((q) => q.s).join(' ')).join('\n').replace(/[ \t]+/g, ' ');
+}
+
 /** source: a File/Blob or a URL. Returns [{ n, text }] with lines kept in reading order. */
 export async function pdfPageTexts(source, { onProgress } = {}) {
   const lib = await loadLib();

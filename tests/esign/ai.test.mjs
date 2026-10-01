@@ -17,6 +17,7 @@ globalThis.fetch = async (url, init) => {
         : schema.properties.next_steps ? { headline: 'Inspection contingency ends tomorrow', next_steps: [{ text: 'Get the inspection response signed', who: 'agent', due: '2026-10-02' }], risks: ['Closing in 5 weeks with no loan commitment date'] }
         : schema.properties.reply ? { reply: 'Closing is 11/05/2026.', actions: [{ type: 'update_date', label: 'Move closing to 11/20', field: 'closing_date', date: '2026-11-20' }, { type: 'update_date', label: 'bad', field: 'agent_email', date: '2026-11-20' }, { type: 'draft_email', label: 'Email lender', to: 'lender@x.com', subject: 'Commitment', body: 'Hi, any update? Ann' }] }
         : schema.properties.checklist_item_id ? { document_type: 'Addendum', summary: 'Moves closing.', checklist_item_id: 'it2', changes: [{ field: 'closing_date', to: '2026-11-20', reason: 'Addendum 1' }, { field: 'closing_date', to: '2026-11-05', reason: 'same' }, { field: 'agent_email', to: 'x', reason: 'no' }], issues: ['Seller initials missing on page 2'] }
+        : schema.properties.documents ? { documents: [{ name: 'Purchase Agreement', pages: [1, 2, 3], item_key: 'k1' }, { name: 'Lead Paint Disclosure', pages: [4, 99], item_key: 'bogus' }] }
         : schema.properties.inspector ? { inspector: 'Ace Inspections', inspection_date: '2026-09-28', summary: 'Solid house; roof and water heater need work.', items: [{ title: 'Roof shingles at end of life', location: 'Roof', category: 'roof', severity: 'major', description: 'Granule loss, curling', reference: '3.1, p. 8', suggested_ask: 'replace' }, { title: 'Water heater TPR pipe missing', location: 'Basement', category: 'plumbing', severity: 'moderate', description: 'No discharge pipe', reference: '6.2, p. 15', suggested_ask: 'repair' }, { title: 'Loose cabinet hinge', category: 'interior', severity: 'minor', description: 'Kitchen', suggested_ask: 'none' }] }
         : schema.properties.term_tips ? { headline: 'Offer near list with a short inspection', suggested_price: 445000, price_low: 435000, price_high: 452000, confidence: 'medium', market_read: 'Moving fast', reasons: ['Comps support it'], term_tips: ['Shorten inspection to 7 days'], risks: ['Appraisal gap'] }
         : schema.properties.score ? { score: 72, headline: 'Two items need attention', items: [{ severity: 'critical', title: 'Inspection deadline passed', detail: 'Due yesterday', suggested_task: 'Get inspection waiver signed' }] }
@@ -215,5 +216,11 @@ globalThis.__db.checklist = [...(globalThis.__db.checklist || []), { id: 'clA', 
   assert.equal(r.body.request.items.length, 3, 'duplicates merged');
   assert.deepEqual(r.body.request.items.map((i) => i.severity), ['major', 'moderate', 'minor'], 'most serious first');
   assert.ok(r.body.request.summary.length > 0);
+}
+// Split a scanned packet with AI
+{
+  const r = await call('docTools', { action: 'suggest', transactionId: 'txI', pages: [1, 2, 3, 4].map((n) => ({ n, text: `page ${n}` })), items: [{ key: 'k1', title: 'Purchase agreement' }] });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.deepEqual(r.body.documents, [{ name: 'Purchase Agreement', pages: [1, 2, 3], item_key: 'k1' }, { name: 'Lead Paint Disclosure', pages: [4], item_key: null }], 'unknown pages and items dropped');
 }
 console.log('Roles, review and send: all checks passed');
