@@ -10,7 +10,7 @@ import { can } from '../../shared/permissions.generated.js';
 import { Empty, money } from '@/components/workspace/ui';
 
 const sel = 'mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm';
-const fmt = (v, t) => (v == null || v === '' ? '' : t === 'money' ? money(v) : t === 'datetime' ? new Date(v).toLocaleString() : t === 'number' ? Number(v).toLocaleString() : String(v));
+const fmt = (v, t) => (v == null || v === '' ? '' : t === 'money' ? money(v) : t === 'datetime' ? new Date(v).toLocaleString() : t === 'date' && /^\d{4}-\d{2}-\d{2}/.test(String(v)) ? new Date(`${String(v).slice(0, 10)}T12:00:00`).toLocaleDateString() : t === 'number' ? Number(v).toLocaleString() : String(v));
 const STATUS = { payouts: ['pending_approval', 'approved', 'sent', 'paid', 'failed'], offers: ['draft', 'review_requested', 'sent', 'accepted', 'rejected'], esign: ['pending', 'in_progress', 'completed', 'voided', 'expired'] };
 const RANGES = [['ytd', 'Year to date'], ['last_month', 'Last month'], ['this_month', 'This month'], ['last_year', 'Last year'], ['12m', 'Last 12 months'], ['all', 'All time'], ['custom', 'Custom']];
 
@@ -40,7 +40,7 @@ export default function Reports() {
   const [sort, setSort] = useState(null);
 
   useEffect(() => {
-    base44.functions.invoke('reportsQuery', { list: true }).then((r) => setList(r.data.reports)).catch(() => {});
+    base44.functions.invoke('reportsQuery', { list: true }).then((r) => setList(r.data?.reports || {})).catch(() => {});
     base44.entities.User.filter({ brokerage_id: brokerageId }, 'full_name', 2000).then(setPeople).catch(() => {});
   }, [brokerageId]);
 
@@ -51,6 +51,8 @@ export default function Reports() {
   };
   useEffect(() => { if (Object.keys(list).length) runIt(); /* eslint-disable-next-line */ }, [report, list]);
 
+  // Columns arrive as { key, label, type }; older responses used [key, label, type].
+  const cols = useMemo(() => (out?.columns || []).map((c) => (Array.isArray(c) ? c : [c.key, c.label, c.type])), [out]);
   const rows = useMemo(() => {
     if (!out?.rows) return [];
     if (!sort) return out.rows;
@@ -61,8 +63,8 @@ export default function Reports() {
   if (!can(user, 'reports.company')) return <div className="p-8 text-sm">You need the company reports permission.</div>;
 
   const exportCsv = () => {
-    const head = out.columns.map((c) => csvCell(c[1])).join(',');
-    const body = rows.map((r) => out.columns.map(([k]) => csvCell(r[k])).join(',')).join('\n');
+    const head = cols.map((c) => csvCell(c[1])).join(',');
+    const body = rows.map((r) => cols.map(([k]) => csvCell(r[k])).join(',')).join('\n');
     const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([`${head}\n${body}`], { type: 'text/csv' })), download: `${report}-${from || 'all'}-${to || 'now'}.csv` });
     a.click();
   };
@@ -102,11 +104,11 @@ export default function Reports() {
             {!rows.length ? <Empty>No results for these filters.</Empty> : (
               <div className="overflow-x-auto rounded-xl border bg-card">
                 <table className="w-full text-sm">
-                  <thead><tr className="border-b text-left text-muted-foreground">{out.columns.map(([k, l, t]) => (
-                    <th key={k} className={`p-3 cursor-pointer select-none whitespace-nowrap ${t === 'money' || t === 'number' ? 'text-right' : ''}`} onClick={() => setSort(([sk, d] = []) => [k, sk === k ? -d : 1])}>{l}{sort?.[0] === k ? (sort[1] > 0 ? ' ▲' : ' ▼') : ''}</th>
+                  <thead><tr className="border-b text-left text-muted-foreground">{cols.map(([k, l, t]) => (
+                    <th key={k} className={`p-3 cursor-pointer select-none whitespace-nowrap ${t === 'money' || t === 'number' ? 'text-right' : ''}`} onClick={() => setSort((cur) => { const [sk, d] = cur || []; return [k, sk === k ? -d : 1]; })}>{l}{sort?.[0] === k ? (sort[1] > 0 ? ' ▲' : ' ▼') : ''}</th>
                   ))}</tr></thead>
                   <tbody>{rows.slice(0, 1000).map((r, i) => (
-                    <tr key={i} className="border-b last:border-0">{out.columns.map(([k, , t]) => <td key={k} className={`p-3 ${t === 'money' || t === 'number' ? 'text-right tabular-nums' : ''}`}>{fmt(r[k], t)}</td>)}</tr>
+                    <tr key={i} className="border-b last:border-0">{cols.map(([k, , t]) => <td key={k} className={`p-3 ${t === 'money' || t === 'number' ? 'text-right tabular-nums' : ''}`}>{fmt(r[k], t)}</td>)}</tr>
                   ))}</tbody>
                 </table>
                 {rows.length > 1000 && <p className="p-3 text-xs text-muted-foreground">Showing 1,000 of {rows.length}. Download the CSV for everything.</p>}
