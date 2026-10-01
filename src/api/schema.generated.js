@@ -210,19 +210,51 @@ export const SCHEMA = {
       "cma_report"
     ]
   },
-  "Channel": {
-    "table": "channel",
+  "Call": {
+    "table": "call",
     "columns": [
       "brokerage_id",
-      "emoji",
-      "label",
-      "name",
+      "conversation_key",
+      "conversation_kind",
+      "created_by_email",
+      "created_by_name",
+      "ended_at",
+      "invitees",
+      "kind",
+      "room_name",
+      "room_url",
+      "started_at",
+      "status",
+      "title",
       "id",
       "created_date",
       "updated_date",
       "created_by"
     ],
-    "typed": []
+    "typed": [
+      "ended_at",
+      "invitees",
+      "started_at"
+    ]
+  },
+  "Channel": {
+    "table": "channel",
+    "columns": [
+      "brokerage_id",
+      "created_by_email",
+      "emoji",
+      "is_private",
+      "label",
+      "name",
+      "topic",
+      "id",
+      "created_date",
+      "updated_date",
+      "created_by"
+    ],
+    "typed": [
+      "is_private"
+    ]
   },
   "ChannelMember": {
     "table": "channel_member",
@@ -237,6 +269,23 @@ export const SCHEMA = {
       "created_by"
     ],
     "typed": []
+  },
+  "ChatReadState": {
+    "table": "chat_read_state",
+    "columns": [
+      "brokerage_id",
+      "conv_key",
+      "kind",
+      "last_read_at",
+      "user_email",
+      "id",
+      "created_date",
+      "updated_date",
+      "created_by"
+    ],
+    "typed": [
+      "last_read_at"
+    ]
   },
   "Checklist": {
     "table": "checklist",
@@ -525,6 +574,7 @@ export const SCHEMA = {
     "columns": [
       "brokerage_id",
       "content",
+      "edited_at",
       "reactions",
       "read",
       "receiver_email",
@@ -541,6 +591,7 @@ export const SCHEMA = {
       "created_by"
     ],
     "typed": [
+      "edited_at",
       "reactions",
       "read"
     ]
@@ -793,7 +844,9 @@ export const SCHEMA = {
     "columns": [
       "brokerage_id",
       "content",
+      "edited_at",
       "group_id",
+      "mentions",
       "reactions",
       "sender_email",
       "sender_id",
@@ -805,6 +858,8 @@ export const SCHEMA = {
       "created_by"
     ],
     "typed": [
+      "edited_at",
+      "mentions",
       "reactions"
     ]
   },
@@ -1065,8 +1120,10 @@ export const SCHEMA = {
     "table": "social_message",
     "columns": [
       "brokerage_id",
+      "call_id",
       "channel",
       "content",
+      "edited_at",
       "mentions",
       "pinned",
       "pinned_by",
@@ -1081,6 +1138,7 @@ export const SCHEMA = {
       "created_by"
     ],
     "typed": [
+      "edited_at",
       "mentions",
       "pinned",
       "reactions",
@@ -1108,6 +1166,8 @@ export const SCHEMA = {
     "columns": [
       "brokerage_id",
       "content",
+      "edited_at",
+      "mentions",
       "message_id",
       "reactions",
       "sender_email",
@@ -1119,6 +1179,8 @@ export const SCHEMA = {
       "created_by"
     ],
     "typed": [
+      "edited_at",
+      "mentions",
       "reactions"
     ]
   },

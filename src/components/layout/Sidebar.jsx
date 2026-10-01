@@ -6,6 +6,7 @@ import NotificationBell from './NotificationBell';
 import ChatChannelsDropdown from './ChatChannelsDropdown';
 
 import { useQuery } from '@tanstack/react-query';
+import { useChat } from '@/lib/chat/ChatProvider';
 import { isAdminRole, normalizeRole, can } from '../../../shared/permissions.generated.js';
 
 export default function Sidebar({ user, brokerageId, onChannelClick }) {
@@ -14,16 +15,9 @@ export default function Sidebar({ user, brokerageId, onChannelClick }) {
   const [brokerageSettings, setBrokerageSettings] = useState(null);
   const [brokerage, setBrokerage] = useState(null);
 
-  // Unread DM count
-  const { data: unreadDmCount = 0 } = useQuery({
-    queryKey: ['unread-dm-count', user?.id],
-    queryFn: async () => {
-      const received = await base44.entities.DirectMessage.filter({ receiver_id: user.id, read: false });
-      return received.length;
-    },
-    enabled: !!user?.id,
-    refetchInterval: 10000,
-  });
+  // Unread DMs and group messages (live)
+  const chat = useChat();
+  const unreadDmCount = chat?.totals.dms || 0;
 
   useEffect(() => {
     if (user?.brokerage_id) {

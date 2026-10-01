@@ -55,7 +55,7 @@ export default function Chat() {
 
   const { data: messages = [] } = useQuery({
     queryKey: ['messages', conversationId],
-    queryFn: () => base44.entities.Message.filter({ conversation_id: conversationId }, 'created_date', 200),
+    queryFn: async () => (await base44.entities.Message.filter({ conversation_id: conversationId }, '-created_date', 300)).reverse(), // newest 300, oldest first
     enabled: !!conversationId,
   });
 

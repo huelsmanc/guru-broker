@@ -13,6 +13,7 @@ export const SERVICE_ONLY = new Set([
   // database automations
   'notifyAgentsNewTraining', 'notifyDocumentActivity', 'applyDefaultChecklists', 'notifyNewSocialMessage', 'notifySignatureUpdate',
   // unused by the app
+  'notifyOnMention', 'notifyNewSocialMessage',
   'cancelESignDocument', 'createMasterAdmin', 'createSubmission', 'decryptDocument', 'detectPDFFields',
   'encryptDocument', 'exportCommissionSummary', 'fixDisplayNames', 'generateAndSendOTP',
   'generateConversationSummary', 'generateDocumentHash', 'generateFinalizedPDF', 'generateMultiPagePDF',

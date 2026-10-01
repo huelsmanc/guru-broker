@@ -12,8 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Phone, Plus, Calendar, Clock, CheckCircle, XCircle, Video } from 'lucide-react';
 import { format } from 'date-fns';
 import { motion } from 'framer-motion';
-import VideoConferenceModal from '@/components/calls/VideoConferenceModal';
-import VideoCallNotificationDialog from '@/components/calls/VideoCallNotificationDialog';
+import { useCalls } from '@/lib/chat/CallProvider';
 import { isAdminRole, normalizeRole, can } from '../../shared/permissions.generated.js';
 
 const timeSlots = [
@@ -28,12 +27,9 @@ export default function ScheduleCalls() {
   const isAdmin = isAdminRole(user?.role);
   const [showDialog, setShowDialog] = useState(false);
   const [showPhoneEditor, setShowPhoneEditor] = useState(false);
-  const [showVideoCall, setShowVideoCall] = useState(false);
-  const [activeVideoCall, setActiveVideoCall] = useState(null);
+  const callSystem = useCalls();
   const [form, setForm] = useState({ date: '', time: '', topic: '', notes: '', call_type: 'phone' });
   const [supportPhone, setSupportPhone] = useState('');
-  const [incomingCall, setIncomingCall] = useState(null);
-  const [showIncomingDialog, setShowIncomingDialog] = useState(false);
 
   const { data: settings } = useQuery({
     queryKey: ['brokerage-settings', brokerageId],
@@ -76,20 +72,6 @@ export default function ScheduleCalls() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['scheduled-calls'] }),
   });
 
-  const sendVideoCallNotification = useMutation({
-    mutationFn: async (call) => {
-      if (!call.agent_email) return;
-      await base44.functions.invoke('notifyVideoCall', {
-        callId: call.id,
-        callTopic: call.topic,
-        agentEmail: call.agent_email,
-        agentName: call.agent_name,
-        brokerageId: brokerageId,
-        adminName: user.full_name,
-      });
-    },
-  });
-
   const updatePhoneMutation = useMutation({
     mutationFn: async () => {
       if (settings?.[0]?.id) {
@@ -104,24 +86,6 @@ export default function ScheduleCalls() {
 
   const scheduledCalls = calls.filter(c => c.status === 'scheduled');
   const pastCalls = calls.filter(c => c.status !== 'scheduled');
-
-  // Listen for incoming video calls
-  useEffect(() => {
-    const unsubscribe = base44.entities.Notification.subscribe((event) => {
-      if (event.type === 'create' && event.data?.channel === 'video_call' && event.data?.user_email === user?.email) {
-        const callId = event.data?.reference_id;
-        // Fetch the call directly instead of looking in the array
-        base44.entities.ScheduledCall.list().then(allCalls => {
-          const call = allCalls.find(c => c.id === callId);
-          if (call && call.call_type === 'video') {
-            setIncomingCall(call);
-            setShowIncomingDialog(true);
-          }
-        });
-      }
-    });
-    return unsubscribe;
-  }, [user?.email]);
 
   return (
     <div className="p-6 lg:p-10 max-w-5xl mx-auto">
@@ -221,11 +185,7 @@ export default function ScheduleCalls() {
                       size="sm"
                       variant="outline"
                       className="gap-1 rounded-xl text-xs"
-                      onClick={() => {
-                        setActiveVideoCall(call);
-                        setShowVideoCall(true);
-                        sendVideoCallNotification.mutate(call);
-                      }}
+                      onClick={() => callSystem?.start('scheduled', call.id, true)}
                     >
                       <Video className="w-3.5 h-3.5" /> Join
                     </Button>
@@ -314,26 +274,6 @@ export default function ScheduleCalls() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Incoming Video Call Notification */}
-      <VideoCallNotificationDialog
-        open={showIncomingDialog}
-        onOpenChange={setShowIncomingDialog}
-        call={incomingCall}
-        onJoin={(call) => {
-          setActiveVideoCall(call);
-          setShowVideoCall(true);
-          setShowIncomingDialog(false);
-        }}
-      />
-
-      {/* Video Conference Modal */}
-      <VideoConferenceModal
-        open={showVideoCall}
-        onOpenChange={setShowVideoCall}
-        callId={activeVideoCall?.id}
-        topic={activeVideoCall?.topic}
-      />
 
       {/* Schedule Dialog */}
       <Dialog open={showDialog} onOpenChange={setShowDialog}>

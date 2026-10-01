@@ -9,6 +9,8 @@ import NotificationManager from '@/components/notifications/notificationManager'
 import MobileTabBar from './MobileTabBar';
 import IdeaPadBubble from '@/components/ideapad/IdeaPadBubble';
 import { Menu, X } from 'lucide-react';
+import { ChatProvider } from '@/lib/chat/ChatProvider';
+import { CallProvider } from '@/lib/chat/CallProvider';
 
 export default function AppLayout() {
   const [user, setUser] = useState(null);
@@ -26,6 +28,8 @@ export default function AppLayout() {
   }, [navigate]);
 
   return (
+    <ChatProvider user={user}>
+    <CallProvider>
     <div className="min-h-screen bg-background">
       <PushNotificationBanner />
       {user && <NotificationManager user={user} brokerageId={user?.brokerage_id} />}
@@ -68,5 +72,7 @@ export default function AppLayout() {
       {/* Floating Idea Pad */}
       <IdeaPadBubble user={user} />
     </div>
+    </CallProvider>
+    </ChatProvider>
   );
 }

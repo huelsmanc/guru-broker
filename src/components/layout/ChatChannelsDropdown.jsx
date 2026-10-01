@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { ChevronDown, Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, Plus, Trash2, Lock } from 'lucide-react';
+import { useChat } from '@/lib/chat/ChatProvider';
 import { base44 } from '@/api/base44Client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
@@ -12,7 +13,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 const EMOJIS = ['💬', '🏠', '📋', '📣', '😄', '🎉', '📊', '💼', '🤝', '📢', '💡', '⚡', '🎯', '✅', '📞', '🔔'];
 
 export default function ChatChannelsDropdown({ brokerageId, isAdmin, isSuperAdmin, onChannelClick }) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(true);
+  const [newPrivate, setNewPrivate] = useState(false);
+  const chat = useChat();
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [newChannelName, setNewChannelName] = useState('');
   const [newChannelEmoji, setNewChannelEmoji] = useState('💬');
@@ -36,7 +39,7 @@ export default function ChatChannelsDropdown({ brokerageId, isAdmin, isSuperAdmi
   const addChannelMutation = useMutation({
     mutationFn: async () => {
       if (!newChannelName.trim()) return null;
-      const name = newChannelName.toLowerCase().replace(/\s+/g, '-');
+      const name = newChannelName.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
       // Check if channel with this name already exists to prevent duplicates
       const existing = await base44.entities.Channel.filter({ brokerage_id: brokerageId, name });
       if (existing.length > 0) return null;
@@ -45,12 +48,15 @@ export default function ChatChannelsDropdown({ brokerageId, isAdmin, isSuperAdmi
         name,
         label: newChannelName,
         emoji: newChannelEmoji,
+        is_private: newPrivate,
+        created_by_email: chat?.me,
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['channels', brokerageId] });
       setNewChannelName('');
       setNewChannelEmoji('💬');
+      setNewPrivate(false);
       setShowAddDialog(false);
     },
   });
@@ -109,6 +115,8 @@ export default function ChatChannelsDropdown({ brokerageId, isAdmin, isSuperAdmi
             ) : (
               channels.map((ch) => {
                 const isActive = activeChannel === ch.name;
+                const u = chat?.unread.get(`channel:${ch.name}`);
+                const bold = !isActive && u?.unread > 0;
                 return (
                   <motion.div
                     key={ch.id}
@@ -132,7 +140,9 @@ export default function ChatChannelsDropdown({ brokerageId, isAdmin, isSuperAdmi
                       )}
                     >
                       <span className="text-lg leading-none flex-shrink-0">{ch.emoji}</span>
-                      <span className="truncate">{ch.label}</span>
+                      <span className={cn('truncate flex-1 text-left', bold && 'font-bold text-sidebar-foreground')}>{ch.label}</span>
+                      {ch.is_private && <Lock className="w-3 h-3 opacity-50 flex-shrink-0" />}
+                      {!isActive && u?.mentions > 0 && <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">{u.mentions}</span>}
                     </button>
                     {isAdmin && !ch.is_default && (
                       <motion.button
@@ -171,6 +181,8 @@ export default function ChatChannelsDropdown({ brokerageId, isAdmin, isSuperAdmi
               />
               <p className="text-xs text-muted-foreground mt-1.5">Will be formatted as lowercase with hyphens</p>
             </div>
+            <label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1" checked={newPrivate} onChange={(e) => setNewPrivate(e.target.checked)} />
+              <span><b>Private channel</b><br /><span className="text-muted-foreground">Only people you add (and admins) can see it. Add members from the channel after creating it.</span></span></label>
             <div>
               <label className="text-sm font-semibold text-foreground block mb-2">Channel Icon</label>
               <div className="grid grid-cols-8 gap-2">

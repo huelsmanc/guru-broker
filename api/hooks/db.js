@@ -8,7 +8,6 @@ import { fromRow } from '../../shared/entities.js';
 
 // table -> { INSERT/UPDATE: [functions] }
 const AUTOMATIONS = {
-  social_message: { INSERT: ['notifyNewSocialMessage'], entity: 'SocialMessage' },
   compliance_training: { INSERT: ['notifyAgentsNewTraining'], entity: 'ComplianceTraining' },
   activity_log: { INSERT: ['notifyDocumentActivity'], entity: 'ActivityLog' },
   esign_document: { UPDATE: ['notifySignatureUpdate'], entity: 'ESignDocument' },

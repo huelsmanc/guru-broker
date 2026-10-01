@@ -20,7 +20,7 @@ ENTITIES = {
     "Brokerage": "account_owner_id broker_name broker_title email name phone status welcome_message",
     "BrokerageSettings": "brokerage_id brokerage_phone logo_url tech_links",
     "CMAsReport": "address bathrooms bedrooms brokerage_id cma_report notes status title user_email",
-    "Channel": "brokerage_id emoji label name",
+    "Channel": "brokerage_id emoji label name is_private topic created_by_email",
     "ChannelMember": "brokerage_id channel_id user_email user_name",
     "ClientReview": "agent_email agent_id agent_name brokerage_id client_name comment property_address rating reactions review_token status submitted",
     "Comment": "author_email author_name brokerage_id content idea_id mentions parent_comment_id",
@@ -31,7 +31,7 @@ ENTITIES = {
     "CultureCalendarEntry": "brokerage_id created_by_email created_by_name date description event_type month person_email person_name title",
     "CultureCalendarRSVP": "brokerage_id culture_calendar_entry_id response_date status user_email user_name",
     "DashboardAnnouncement": "audio_url brokerage_id message posted_by_email posted_by_name",
-    "DirectMessage": "brokerage_id content reactions read receiver_email receiver_id receiver_name receiver_photo sender_email sender_id sender_name sender_photo",
+    "DirectMessage": "brokerage_id edited_at content reactions read receiver_email receiver_id receiver_name receiver_photo sender_email sender_id sender_name sender_photo",
     "DocumentTemplate": "brokerage_id is_active",
     "ESignAuditLog": "action details document_id ip_address signer_email user_agent",
     "ESignDocument": "transaction_id algorithm audit_trail_pdf_url brokerage_id created_by_email created_by_name description document_hash document_url encrypted encryption_metadata fields final_signed_document_url iv name original_document_url require_sequential_signing signatories signature_fields signers slug status title version versions",
@@ -43,7 +43,7 @@ ENTITIES = {
     "FileRepository": "brokerage_id category description downloads_count file_name file_size file_url is_featured tags uploaded_by_email uploaded_by_name",
     "GeneratedContract": "brokerage_id buyer_name contract_text created_by_email created_by_name property_address purchase_price seller_name state",
     "GroupChat": "brokerage_id created_by_email created_by_name members name",
-    "GroupMessage": "brokerage_id content group_id reactions sender_email sender_id sender_name sender_photo",
+    "GroupMessage": "brokerage_id edited_at mentions content group_id reactions sender_email sender_id sender_name sender_photo",
     "Idea": "admin_notes brokerage_id category description downvotes is_anonymous status submitter_email submitter_name title upvotes",
     "IdeaPadNote": "content messages title user_email",
     "Message": "brokerage_id content conversation_id read sender_email sender_name sender_role",
@@ -62,28 +62,30 @@ ENTITIES = {
     "Recognition": "brokerage_id category from_email from_name is_anonymous message reactions to_email to_name",
     "ScheduledCall": "agent_email agent_name brokerage_id status scheduled_at",
     "SignatureData": "fields ip_address signed_at signer_email signer_name submission_id user_agent",
-    "SocialMessage": "brokerage_id channel content mentions pinned pinned_by reactions read_by sender_email sender_name sender_photo",
-    "ThreadReply": "brokerage_id content message_id reactions sender_email sender_name sender_photo",
+    "SocialMessage": "brokerage_id edited_at call_id channel content mentions pinned pinned_by reactions read_by sender_email sender_name sender_photo",
+    "ThreadReply": "brokerage_id edited_at mentions content message_id reactions sender_email sender_name sender_photo",
     "Transaction": "co_agents referral deductions commission_calc closed_date checklist_template_id thank_you_sent_at agent_email agent_name agent_net agent_split_percentage brokerage_fee brokerage_fee_flat brokerage_fee_percentage brokerage_fee_type brokerage_id buyer_name buyers checklist closing_date commission_amount commission_flat commission_notes commission_percentage commission_sale_price commission_type completed_dates documents esign_docs property_address sale_price seller_name sellers status tc_email tc_name transaction_fee transaction_fee_flat transaction_fee_percentage transaction_fee_type updates inspection_date appraisal_date financing_contingency_date inspection_contingency_date loan_approval_date title_deadline_date",
     "UserBadge": "brokerage_id user_email badge_type",
+    "Call": "brokerage_id room_name room_url kind title created_by_email created_by_name invitees conversation_kind conversation_key status started_at ended_at",
+    "ChatReadState": "brokerage_id user_email kind conv_key last_read_at",
 }
 
 # User lives in `profiles`, linked 1:1 to Supabase auth.users.
 USER_FIELDS = "email full_name display_name role brokerage_id suspended headshot agent_status duties license_number license_state license_expiration eo_expiration mls_ids phone start_date cap_start_date commission_plan_id team_lead_email sponsor_email first_name last_name personal_company birthday address city state zip alternate_name tc_email licenses annual_cap team_id permissions alerts_sent"
 
 JSON_FIELDS = set("""co_agents referral deductions commission_calc config calc items changed mls_ids answers buyers checklist completed_dates details documents encryption_metadata esign_docs fields items
-members mentions messages options reactions read_by sellers signatories signature_fields signers tags tech_links updates
+members invitees mentions messages options reactions read_by sellers signatories signature_fields signers tags tech_links updates
 versions cma_report""".split())
-BOOL_FIELDS = set("is_client is_default active appraisal_contingency read pinned encrypted suspended submitted checked_in is_active is_anonymous is_featured signed passed require_sequential_signing".split())
+BOOL_FIELDS = set("is_private is_client is_default active appraisal_contingency read pinned encrypted suspended submitted checked_in is_active is_anonymous is_featured signed passed require_sequential_signing".split())
 INT_FIELDS = set("level inspection_days financing_days bathrooms bedrooms downloads_count downvotes upvotes guests_count order passing_score rating signer_index version file_size score".split())
 NUM_FIELDS = set("""lead_pct gross_share company_dollar agent_net fees team_lead revshare_total amount list_price offer_price earnest_money down_payment_percent loan_amount seller_concessions agent_net agent_split_percentage brokerage_fee brokerage_fee_flat brokerage_fee_percentage commission_amount
 commission_flat commission_percentage commission_sale_price sale_price sales_amount transaction_fee transaction_fee_flat
 transaction_fee_percentage purchase_price""".split())
 DATE_FIELDS = set("cap_year_start closed_date license_expiration eo_expiration start_date cap_start_date acceptance_date date closing_date inspection_date appraisal_date financing_contingency_date inspection_contingency_date loan_approval_date title_deadline_date".split())
-TS_FIELDS = set("approved_at sent_at paid_at bank_linked_at thank_you_sent_at offer_expiration accepted_at completed_at submitted_at signed_at response_date scheduled_at".split())
+TS_FIELDS = set("edited_at started_at ended_at last_read_at approved_at sent_at paid_at bank_linked_at thank_you_sent_at offer_expiration accepted_at completed_at submitted_at signed_at response_date scheduled_at".split())
 
 # Tables not scoped by brokerage (owned by a user or reached via a parent)
-PERSONAL = {"IdeaPadNote": "user_email"}
+PERSONAL = {"IdeaPadNote": "user_email", "ChatReadState": "user_email"}
 
 def snake(name):
     s = re.sub(r"(?<=[a-z0-9])([A-Z])", r"_\1", name).lower()
@@ -286,7 +288,49 @@ for ent, fields in sorted(ENTITIES.items()):
         k = PERSONAL[ent]
         pw(f"create policy {t}_access on public.{t} for all using (lower({k}) = public.auth_email()) with check (lower({k}) = public.auth_email());")
     elif ent == "DirectMessage":
-        pw(f"create policy {t}_access on public.{t} for all using (lower(sender_email) = public.auth_email() or lower(receiver_email) = public.auth_email() or public.is_super_admin()) with check (lower(sender_email) = public.auth_email() or lower(receiver_email) = public.auth_email());")
+        # Only the two people in it. Only the sender can edit or delete; "read" and reactions go through chat_* functions.
+        pw(f"create policy {t}_access on public.{t} for select using (lower(sender_email) = public.auth_email() or lower(receiver_email) = public.auth_email() or public.is_super_admin());")
+        for op in ("insert", "update", "delete"): pw(f"drop policy if exists {t}_{op} on public.{t};")
+        pw(f"create policy {t}_insert on public.{t} for insert with check (lower(sender_email) = public.auth_email() and brokerage_id = public.auth_brokerage_id());")
+        pw(f"create policy {t}_update on public.{t} for update using (lower(sender_email) = public.auth_email()) with check (lower(sender_email) = public.auth_email());")
+        pw(f"create policy {t}_delete on public.{t} for delete using (lower(sender_email) = public.auth_email());")
+    elif ent == "Conversation":
+        # Support chat: the agent who opened it and the brokerage's admins.
+        pw(f"create policy {t}_access on public.{t} for all using (lower(agent_email) = public.auth_email() or (brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());")
+    elif ent == "Message":
+        pw(f"create policy {t}_access on public.{t} for all using (exists (select 1 from public.conversation c where c.id = message.conversation_id) or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() and exists (select 1 from public.conversation c where c.id = message.conversation_id));")
+    elif ent == "AdminMessage":
+        pw(f"create policy {t}_access on public.{t} for all using ((brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin());")
+    elif ent == "Channel":
+        # Public channels: everyone in the brokerage. Private: members (and admins).
+        pw(f"create policy {t}_access on public.{t} for select using (public.can_see_channel(brokerage_id, name));")
+        pw(f"drop policy if exists {t}_admin on public.{t};")
+        pw(f"create policy {t}_admin on public.{t} for all using (brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) with check (brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin());")
+    elif ent == "ChannelMember":
+        pw(f"create policy {t}_access on public.{t} for select using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());")
+        pw(f"drop policy if exists {t}_admin on public.{t};")
+        pw(f"create policy {t}_admin on public.{t} for all using (brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) with check (brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin());")
+    elif ent in ("SocialMessage", "ThreadReply", "GroupMessage"):
+        see = {"SocialMessage": "public.can_see_channel(brokerage_id, channel)",
+               "ThreadReply": "exists (select 1 from public.social_message m where m.id = thread_reply.message_id)",
+               "GroupMessage": "exists (select 1 from public.group_chat g where g.id = group_message.group_id)"}[ent]
+        pw(f"create policy {t}_access on public.{t} for select using ({see} or public.is_super_admin());")
+        for op in ("insert", "update", "delete"): pw(f"drop policy if exists {t}_{op} on public.{t};")
+        pw(f"create policy {t}_insert on public.{t} for insert with check (lower(sender_email) = public.auth_email() and brokerage_id = public.auth_brokerage_id() and {see});")
+        mod = "(brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin())" if ent != "GroupMessage" else "false"
+        pw(f"create policy {t}_update on public.{t} for update using (lower(sender_email) = public.auth_email() or {mod}) with check (brokerage_id = public.auth_brokerage_id());")
+        pw(f"create policy {t}_delete on public.{t} for delete using (lower(sender_email) = public.auth_email() or {mod});")
+    elif ent == "GroupChat":
+        pw(f"create policy {t}_access on public.{t} for select using (public.in_members(members) or public.is_super_admin());")
+        for op in ("insert", "update", "delete"): pw(f"drop policy if exists {t}_{op} on public.{t};")
+        pw(f"create policy {t}_insert on public.{t} for insert with check (brokerage_id = public.auth_brokerage_id() and public.in_members(members));")
+        pw(f"create policy {t}_update on public.{t} for update using (public.in_members(members)) with check (brokerage_id = public.auth_brokerage_id());")
+        pw(f"create policy {t}_delete on public.{t} for delete using (lower(created_by_email) = public.auth_email());")
+    elif ent == "Call":
+        # Created and changed only by the server (callStart / callJoin / callEnd).
+        pw(f"create policy {t}_access on public.{t} for select using (brokerage_id = public.auth_brokerage_id() and (lower(created_by_email) = public.auth_email()"
+           f" or coalesce(invitees, '[]'::jsonb) @> jsonb_build_array(jsonb_build_object('email', public.auth_email()))"
+           f" or (conversation_kind = 'channel' and public.can_see_channel(brokerage_id, conversation_key))) or public.is_super_admin());")
     elif ent == "Notification":
         pw(f"create policy {t}_access on public.{t} for all using (lower(user_email) = public.auth_email() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or lower(user_email) = public.auth_email() or public.is_super_admin());")
     elif ent == "Transaction":
@@ -370,13 +414,32 @@ for ent, fields in sorted(ENTITIES.items()):
     colmap[ent] = {"table": t, "columns": fl + ["id", "created_date", "updated_date", "created_by"],
                    "typed": [f for f in fl if coltype(f) != "text"]}
 
+w("""-- Messaging helpers (need the chat tables, so they come after them) ----------
+-- Can the signed-in user read this channel? Public channels: anyone in the brokerage.
+-- Private channels (and legacy messages whose channel row is gone): members and admins.
+create or replace function public.can_see_channel(p_brokerage text, p_channel text) returns boolean
+language sql stable security definer set search_path = public as $$
+  select p_brokerage = public.auth_brokerage_id() and (
+    public.is_brokerage_admin()
+    or exists (select 1 from public.channel c where c.brokerage_id = p_brokerage and c.name = p_channel and not coalesce(c.is_private, false))
+    or exists (select 1 from public.channel_member m where m.brokerage_id = p_brokerage and m.channel_id = p_channel and lower(m.user_email) = public.auth_email())
+  ) or public.is_super_admin()
+$$;
+-- Is the signed-in user in a group chat's member list ([{id, email, ...}])?
+create or replace function public.in_members(p_members jsonb) returns boolean
+language sql stable as $$
+  select exists (select 1 from jsonb_array_elements(coalesce(p_members, '[]'::jsonb)) m
+                 where lower(m->>'email') = public.auth_email() or m->>'id' = auth.uid()::text)
+$$;
+""")
 w("-- Security rules ------------------------------------------------------------")
 out.extend(pol)
 w("")
 
 # Realtime for the live chat and notification screens
 live = ["notification", "social_message", "direct_message", "group_message", "message", "thread_reply",
-        "conversation", "admin_message", "scheduled_call", "culture_calendar_entry", "profiles"]
+        "conversation", "admin_message", "scheduled_call", "culture_calendar_entry", "profiles",
+        "channel", "channel_member", "group_chat", "call"]
 w("-- Live updates (chat, notifications) ---------------------------------------")
 w("do $$ declare t text; begin")
 w("  foreach t in array array[" + ",".join(f"'{x}'" for x in live) + "] loop")

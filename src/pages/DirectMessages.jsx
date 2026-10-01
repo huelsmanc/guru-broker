@@ -1,924 +1,285 @@
-import React, { useRef, useState, useEffect, useMemo } from 'react';
-import { useOutletContext } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
-import { Button } from '@/components/ui/button';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useOutletContext, useSearchParams } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { ArrowLeft, Search, PenSquare, Users, X, Check, LogOut, UserPlus, Pencil } from 'lucide-react';
+import { format, isToday, isThisWeek } from 'date-fns';
+import { base44, supabase } from '@/api/base44Client';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { MessageSquare, Send, Check, CheckCheck, Search, Plus, X, SmilePlus, Trash2, Pencil, ArrowLeft } from 'lucide-react';
-import { format, isToday, isYesterday } from 'date-fns';
-import FileUploadButton from '@/components/chat/FileUploadButton';
-import VoiceMemoButton from '@/components/chat/VoiceMemoButton';
-import EmojiPicker from '@/components/chat/EmojiPicker';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import UserProfilePanel from '@/components/chat/UserProfilePanel';
-import { useIsMobile } from '@/hooks/use-mobile.jsx';
+import { useChat, useRoom, lc, preview } from '@/lib/chat/ChatProvider';
+import { useConversation } from '@/lib/chat/useConversation';
+import { CallButtons, CallCard } from '@/lib/chat/CallProvider';
+import MessageList, { Avatar } from '@/components/messaging/MessageList';
+import Composer from '@/components/messaging/Composer';
+
+const renderCall = (id, kind) => <CallCard id={id} kind={kind} />;
+const when = (d) => { const x = new Date(d); return isToday(x) ? format(x, 'h:mm a') : isThisWeek(x) ? format(x, 'EEE') : format(x, 'MMM d'); };
 
 export default function DirectMessages() {
-  const { user, brokerageId } = useOutletContext();
+  const { user } = useOutletContext();
+  const chat = useChat();
   const queryClient = useQueryClient();
-  const isMobile = useIsMobile();
-  const messagesEndRef = useRef(null);
-  const emojiPickerRef = useRef(null);
-  const typingTimeoutRef = useRef({});
+  const [params, setParams] = useSearchParams();
+  const dm = params.get('dm') ? lc(params.get('dm')) : null;
+  const groupId = params.get('group');
+  const [search, setSearch] = useState('');
+  const [composing, setComposing] = useState(false);
+  const me = chat?.me;
 
-  const [selectedUserId, setSelectedUserId] = useState(null);
-  const [selectedGroupId, setSelectedGroupId] = useState(null);
-  const [messageText, setMessageText] = useState('');
-  const [conversationSearch, setConversationSearch] = useState('');
-  const [messageSearch, setMessageSearch] = useState('');
-  const [showNewChat, setShowNewChat] = useState(false);
-  const [userSearchQuery, setUserSearchQuery] = useState('');
-  const [selectedUsers, setSelectedUsers] = useState([]);
-  const [typingUsers, setTypingUsers] = useState({});
-  const [voiceMemoUrl, setVoiceMemoUrl] = useState('');
-  const [openEmojiFor, setOpenEmojiFor] = useState(null);
-  const [selectedUserProfile, setSelectedUserProfile] = useState(null);
-  const [hoveredMsgId, setHoveredMsgId] = useState(null);
-  const [editingGroupName, setEditingGroupName] = useState(false);
-  const [newGroupName, setNewGroupName] = useState('');
-  const [editingMsgId, setEditingMsgId] = useState(null);
-  const [editedContent, setEditedContent] = useState('');
-  const [deletingMsgId, setDeletingMsgId] = useState(null);
-
-  // Fetch all users in brokerage
-  const { data: brokerageUsers = [] } = useQuery({
-    queryKey: ['brokerage-users-dm', brokerageId],
+  // Conversation list: latest DM per person + every group I'm in.
+  const { data: list = [] } = useQuery({
+    queryKey: ['dm-list', me],
+    enabled: !!me,
     queryFn: async () => {
-      const res = await base44.functions.invoke('getBrokerageUsers', {});
-      return res.data?.users || [];
+      const [{ data: dms }, groups] = await Promise.all([
+        supabase.from('direct_message').select('id,sender_email,receiver_email,content,created_date').order('created_date', { ascending: false }).limit(800),
+        base44.entities.GroupChat.filter({ brokerage_id: chat.brokerageId }, '-created_date', 200),
+      ]);
+      const out = new Map();
+      for (const m of dms || []) {
+        const other = lc(m.sender_email) === me ? lc(m.receiver_email) : lc(m.sender_email);
+        if (!out.has(`dm:${other}`)) out.set(`dm:${other}`, { kind: 'dm', key: other, last: m });
+      }
+      const ids = groups.map((g) => g.id);
+      const { data: gms } = ids.length ? await supabase.from('group_message').select('id,group_id,sender_email,content,created_date').in('group_id', ids).order('created_date', { ascending: false }).limit(800) : { data: [] };
+      for (const g of groups) {
+        const last = (gms || []).find((m) => m.group_id === g.id);
+        out.set(`group:${g.id}`, { kind: 'group', key: g.id, group: g, last: last || { created_date: g.created_date, content: '' } });
+      }
+      return [...out.values()].sort((a, b) => String(b.last.created_date).localeCompare(String(a.last.created_date)));
     },
-    enabled: !!brokerageId,
-    staleTime: 0,
   });
-
-  // Fetch conversations
-  const { data: conversations = [] } = useQuery({
-    queryKey: ['dm-conversations', user?.id, brokerageId],
-    queryFn: async () => {
-      const sent = await base44.entities.DirectMessage.filter(
-        { sender_id: user.id, brokerage_id: brokerageId },
-        '-created_date',
-        1000
-      );
-      const received = await base44.entities.DirectMessage.filter(
-        { receiver_id: user.id, brokerage_id: brokerageId },
-        '-created_date',
-        1000
-      );
-      const all = [...sent, ...received];
-
-      const userMap = new Map();
-      all.forEach(msg => {
-        const otherUserId = msg.sender_id === user.id ? msg.receiver_id : msg.sender_id;
-        const otherName = msg.sender_id === user.id ? msg.receiver_name : msg.sender_name;
-        const otherEmail = msg.sender_id === user.id ? msg.receiver_email : msg.sender_email;
-
-        if (!userMap.has(otherUserId)) {
-          userMap.set(otherUserId, { id: otherUserId, name: otherName, email: otherEmail, lastMessage: msg });
-        } else if (new Date(msg.created_date) > new Date(userMap.get(otherUserId).lastMessage.created_date)) {
-          userMap.get(otherUserId).lastMessage = msg;
-        }
-      });
-
-      return Array.from(userMap.values()).sort((a, b) => new Date(b.lastMessage.created_date) - new Date(a.lastMessage.created_date));
-    },
-    enabled: !!user?.id && !!brokerageId,
-  });
-
-  // Fetch group chats
-  const { data: groups = [] } = useQuery({
-    queryKey: ['group-chats', user?.id, brokerageId],
-    queryFn: async () => {
-      const groups = await base44.entities.GroupChat.filter({ brokerage_id: brokerageId }, '-created_date', 100);
-      return groups.filter(g => g.members.some(m => m.id === user.id));
-    },
-    enabled: !!user?.id && !!brokerageId,
-  });
-
-  // Fetch messages with selected user
-  const { data: messages = [] } = useQuery({
-    queryKey: ['dm-messages', user?.id, selectedUserId],
-    queryFn: async () => {
-      const sent = await base44.entities.DirectMessage.filter(
-        { sender_id: user.id, receiver_id: selectedUserId },
-        'created_date',
-        500
-      );
-      const received = await base44.entities.DirectMessage.filter(
-        { sender_id: selectedUserId, receiver_id: user.id },
-        'created_date',
-        500
-      );
-      return [...sent, ...received].sort((a, b) => new Date(a.created_date) - new Date(b.created_date));
-    },
-    enabled: !!selectedUserId && !!user?.id,
-    staleTime: 0,
-  });
-
-  // Fetch group messages
-  const { data: groupMessages = [] } = useQuery({
-    queryKey: ['group-messages', selectedGroupId],
-    queryFn: () => base44.entities.GroupMessage.filter({ group_id: selectedGroupId, brokerage_id: brokerageId }, 'created_date', 500),
-    enabled: !!selectedGroupId && !!brokerageId,
-    staleTime: 0,
-  });
-
-  // Mark messages as read
   useEffect(() => {
-    if (!messages.length || !selectedUserId) return;
-    const unread = messages.filter(m => m.sender_id === selectedUserId && !m.read);
-    unread.forEach(m => base44.entities.DirectMessage.update(m.id, { read: true }));
-    if (unread.length > 0) {
-      queryClient.invalidateQueries({ queryKey: ['dm-conversations', user?.id, brokerageId] });
-    }
-  }, [messages, selectedUserId]);
+    if (!chat) return undefined;
+    let t;
+    const bump = () => { clearTimeout(t); t = setTimeout(() => queryClient.invalidateQueries({ queryKey: ['dm-list', me] }), 300); };
+    const offs = [chat.on('direct_message', bump), chat.on('group_message', bump), chat.on('group_chat', bump)];
+    return () => { clearTimeout(t); offs.forEach((o) => o()); };
+  }, [chat, queryClient, me]);
 
-  // Real-time subscriptions
-  useEffect(() => {
-    const unsubs = [];
-    unsubs.push(base44.entities.DirectMessage.subscribe(() => {
-      queryClient.invalidateQueries({ queryKey: ['dm-messages', user?.id, selectedUserId] });
-      queryClient.invalidateQueries({ queryKey: ['dm-conversations', user?.id, brokerageId] });
-    }));
-    unsubs.push(base44.entities.User.subscribe(() => {
-      queryClient.refetchQueries({ queryKey: ['brokerage-users-dm', brokerageId] });
-    }));
-    unsubs.push(base44.entities.GroupChat.subscribe(() => {
-      queryClient.invalidateQueries({ queryKey: ['group-chats', user?.id, brokerageId] });
-    }));
-    return () => unsubs.forEach(u => u());
-  }, [user?.id, brokerageId, selectedUserId, queryClient]);
-
-  // Scroll to bottom on new messages only
-  const prevMessageCountRef = useRef(0);
-  useEffect(() => {
-    const currentMessages = selectedGroupId ? groupMessages : messages;
-    const currentCount = currentMessages.length;
-    const isNewMessage = currentCount > prevMessageCountRef.current;
-    if (isNewMessage && messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-    prevMessageCountRef.current = currentCount;
-  }, [messages.length, groupMessages.length, selectedGroupId]);
-
-  const sendMessage = useMutation({
-    mutationFn: async (content) => {
-      if (!selectedUserId) return;
-      const selectedUser = brokerageUsers.find(u => u.id === selectedUserId) ||
-        (() => { const c = conversations.find(c => c.id === selectedUserId); return c ? { id: c.id, full_name: c.name, email: c.email, headshot: c.headshot } : null; })();
-      if (!selectedUser) throw new Error('User not found');
-      await base44.entities.DirectMessage.create({
-        brokerage_id: brokerageId,
-        sender_id: user.id,
-        sender_name: user.display_name || user.full_name,
-        sender_email: user.email,
-        sender_photo: user.headshot || '',
-        receiver_id: selectedUserId,
-        receiver_name: selectedUser.display_name || selectedUser.full_name,
-        receiver_email: selectedUser.email,
-        receiver_photo: selectedUser.headshot || '',
-        content,
-      });
-      queryClient.invalidateQueries({ queryKey: ['dm-messages', user?.id, selectedUserId] });
-      queryClient.invalidateQueries({ queryKey: ['dm-conversations', user?.id, brokerageId] });
-    },
-  });
-
-  const sendGroupMessage = useMutation({
-    mutationFn: async (content) => {
-      await base44.entities.GroupMessage.create({
-        group_id: selectedGroupId,
-        brokerage_id: brokerageId,
-        sender_id: user.id,
-        sender_name: user.full_name,
-        sender_email: user.email,
-        sender_photo: user.headshot || '',
-        content,
-      });
-      queryClient.invalidateQueries({ queryKey: ['group-messages', selectedGroupId] });
-    },
-  });
-
-  const editMessage = useMutation({
-    mutationFn: ({ id, content, isGroup }) => {
-      if (isGroup) {
-        return base44.entities.GroupMessage.update(id, { content });
-      } else {
-        return base44.entities.DirectMessage.update(id, { content });
-      }
-    },
-    onSuccess: () => {
-      if (selectedGroupId) {
-        queryClient.invalidateQueries({ queryKey: ['group-messages', selectedGroupId] });
-      } else {
-        queryClient.invalidateQueries({ queryKey: ['dm-messages', user?.id, selectedUserId] });
-      }
-      setEditingMsgId(null);
-      setEditedContent('');
-    },
-  });
-
-  const deleteMessage = useMutation({
-    mutationFn: ({ id, isGroup }) => {
-      if (isGroup) {
-        return base44.entities.GroupMessage.delete(id);
-      } else {
-        return base44.entities.DirectMessage.delete(id);
-      }
-    },
-    onSuccess: () => {
-      if (selectedGroupId) {
-        queryClient.invalidateQueries({ queryKey: ['group-messages', selectedGroupId] });
-      } else {
-        queryClient.invalidateQueries({ queryKey: ['dm-messages', user?.id, selectedUserId] });
-      }
-    },
-  });
-
-  const createGroup = useMutation({
-    mutationFn: async () => {
-      if (selectedUsers.length < 2) return;
-      const freshMembers = selectedUsers.map(su => {
-        const fresh = brokerageUsers.find(u => u.id === su.id);
-        return fresh || su;
-      });
-      const groupMembers = [{ id: user.id, email: user.email, full_name: user.full_name }, ...freshMembers];
-      const group = await base44.entities.GroupChat.create({
-        brokerage_id: brokerageId,
-        name: `${groupMembers.map(m => m.full_name.split(' ')[0]).join(', ')}`,
-        created_by_email: user.email,
-        created_by_name: user.full_name,
-        members: groupMembers,
-      });
-      await queryClient.refetchQueries({ queryKey: ['group-chats', user?.id, brokerageId], type: 'all' });
-      setTimeout(() => setSelectedGroupId(group.id), 50);
-      setShowNewChat(false);
-      setSelectedUsers([]);
-    },
-  });
-
-  const broadcastTyping = (isTyping) => {
-    if (!user?.email) return;
-    const chatId = selectedGroupId || selectedUserId;
-    if (!chatId) return;
-    
-    const key = `${chatId}-${user.id}`;
-    if (isTyping) {
-      if (typingTimeoutRef.current[key]) clearTimeout(typingTimeoutRef.current[key]);
-      typingTimeoutRef.current[key] = setTimeout(() => {
-        setTypingUsers(prev => { const u = { ...prev }; delete u[key]; return u; });
-      }, 3000);
-      setTypingUsers(prev => ({ ...prev, [key]: { id: user.id, name: user.display_name || user.full_name, email: user.email } }));
-    }
-  };
-
-  const handleSend = () => {
-    if (!messageText.trim()) return;
-    if (selectedGroupId) {
-      sendGroupMessage.mutate(messageText);
-    } else {
-      sendMessage.mutate(messageText);
-    }
-    setMessageText('');
-    broadcastTyping(false);
-    setTypingUsers({});
-  };
-
-  const updateGroupName = async () => {
-    if (!newGroupName.trim()) return;
-    await base44.entities.GroupChat.update(selectedGroupId, { name: newGroupName });
-    await queryClient.refetchQueries({ queryKey: ['group-chats', user?.id, brokerageId] });
-    setEditingGroupName(false);
-    setNewGroupName('');
-  };
-
-  const filteredConversations = useMemo(() =>
-    conversationSearch.trim()
-      ? conversations.filter(c =>
-          c.name?.toLowerCase().includes(conversationSearch.toLowerCase()) ||
-          c.email?.toLowerCase().includes(conversationSearch.toLowerCase())
-        )
-      : conversations,
-    [conversationSearch, conversations]
-  );
-
-  const filteredGroups = useMemo(() =>
-    conversationSearch.trim()
-      ? groups.filter(g => g.name?.toLowerCase().includes(conversationSearch.toLowerCase()))
-      : groups,
-    [conversationSearch, groups]
-  );
-
-  const filteredMessages = useMemo(() =>
-    messageSearch.trim()
-      ? (selectedGroupId ? groupMessages : messages).filter(msg => msg.content?.toLowerCase().includes(messageSearch.toLowerCase()))
-      : (selectedGroupId ? groupMessages : messages),
-    [messageSearch, messages, groupMessages, selectedGroupId]
-  );
-
-  const selectedUser = brokerageUsers.find(u => u.id === selectedUserId) ||
-    (() => { const c = conversations.find(c => c.id === selectedUserId); return c ? { id: c.id, full_name: c.name, email: c.email, headshot: c.headshot } : null; })();
-
-  const selectedGroup = groups.find(g => g.id === selectedGroupId);
-
-  const getGroupDisplayName = (group) => {
-    const freshMembers = group.members.map(m => {
-      const fresh = brokerageUsers.find(u => u.id === m.id);
-      return fresh || m;
-    });
-    return freshMembers.map(m => m.full_name.split(' ')[0]).join(', ');
-  };
-
-  const allChats = [
-    ...filteredConversations.map(c => ({ ...c, type: 'dm' })),
-    ...filteredGroups.map(g => ({ id: g.id, name: g.name, lastMessage: { created_date: g.created_date, content: g.last_message_preview }, type: 'group', members: g.members }))
-  ].sort((a, b) => new Date(b.lastMessage?.created_date || 0) - new Date(a.lastMessage?.created_date || 0));
-
-  const isGroupChat = !!selectedGroupId;
-  const displayMessages = isGroupChat ? groupMessages : messages;
-  const touchStartX = useRef(0);
-  const touchStartY = useRef(0);
-
-  const handleTouchStart = (e) => {
-    touchStartX.current = e.touches[0].clientX;
-    touchStartY.current = e.touches[0].clientY;
-  };
-
-  const handleTouchEnd = (e) => {
-    const touchEndX = e.changedTouches[0].clientX;
-    const touchEndY = e.changedTouches[0].clientY;
-    const diffX = touchEndX - touchStartX.current;
-    const diffY = Math.abs(touchEndY - touchStartY.current);
-    
-    // Swipe right with minimal vertical movement = go back
-    if (diffX > 50 && diffY < 30 && isMobile && (selectedUserId || selectedGroupId)) {
-      setSelectedUserId(null);
-      setSelectedGroupId(null);
-    }
-  };
+  if (!chat) return null;
+  const open = (kind, key) => setParams(kind === 'dm' ? { dm: key } : { group: key });
+  const close = () => setParams({});
+  const nameFor = (c) => (c.kind === 'dm' ? chat.personOf(c.key).name : groupName(c.group, chat));
+  const filtered = list.filter((c) => !search || nameFor(c).toLowerCase().includes(search.toLowerCase()));
+  const activeGroup = groupId ? list.find((c) => c.key === groupId)?.group : null;
+  const hasOpen = !!dm || !!groupId;
 
   return (
-    <div 
-      className="h-[100dvh] flex overflow-hidden"
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
-    >
-      {/* Sidebar - hidden on mobile when chat is open */}
-      {(!isMobile || (!selectedUserId && !selectedGroupId)) && (
-        <div className={cn('border-r border-border bg-background flex flex-col flex-shrink-0', isMobile ? 'w-full' : 'w-80')}>
-            {/* Header */}
-          <div className="px-6 py-4 border-b border-border/30 flex-shrink-0">
-          <div className="flex items-center justify-between mb-3">
-            <h1 className="text-lg font-bold text-foreground">Messages</h1>
-            <Button
-              onClick={() => { setSelectedUsers([]); setShowNewChat(true); }}
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 rounded-lg"
-            >
-              <Plus className="w-4 h-4" />
-            </Button>
-          </div>
-          <div className="flex items-center gap-2 bg-muted rounded-lg px-3 py-2 border border-border/40">
-            <Search className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-            <input
-              type="text"
-              placeholder="Search..."
-              value={conversationSearch}
-              onChange={(e) => setConversationSearch(e.target.value)}
-              className="bg-transparent outline-none text-sm w-full placeholder:text-muted-foreground/50"
-            />
-            {conversationSearch && (
-              <button onClick={() => setConversationSearch('')} className="p-1 hover:bg-background rounded">
-                <X className="w-3.5 h-3.5 text-muted-foreground" />
-              </button>
-            )}
-          </div>
+    <div className="h-[calc(100dvh-4rem)] md:h-[100dvh] flex overflow-hidden bg-background">
+      <aside className={cn('w-full md:w-80 border-r flex-col flex-shrink-0', hasOpen ? 'hidden md:flex' : 'flex')}>
+        <div className="px-4 pt-4 pb-3 border-b space-y-3">
+          <div className="flex items-center justify-between"><h1 className="text-xl font-bold">Chats</h1>
+            <button onClick={() => setComposing(true)} className="p-2 rounded-full hover:bg-muted" title="New message"><PenSquare className="w-5 h-5" /></button></div>
+          <div className="flex items-center gap-2 rounded-full bg-muted px-3 py-2"><Search className="w-4 h-4 text-muted-foreground" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search chats" className="bg-transparent outline-none text-sm flex-1" /></div>
+          <OnlineRow chat={chat} onOpen={(e) => open('dm', e)} />
         </div>
-
-        {/* Conversations List */}
         <div className="flex-1 overflow-y-auto">
-          {allChats.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full gap-3 text-center px-6">
-              <MessageSquare className="w-8 h-8 text-muted-foreground/30" />
-              <p className="text-sm text-muted-foreground">No messages yet</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-border/30">
-              {allChats.map((chat, i) => {
-                const isSelected = (isGroupChat && chat.id === selectedGroupId) || (!isGroupChat && chat.id === selectedUserId);
-                const isGroup = chat.type === 'group';
-                const freshUser = !chat.type || chat.type === 'dm' ? brokerageUsers.find(u => u.id === chat.id) : null;
-                let displayName = chat.name;
-                if (!isGroup && freshUser) {
-                  displayName = freshUser.display_name || freshUser.full_name || chat.name;
-                }
-
-                return (
-                  <motion.button
-                    key={chat.id}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.02 }}
-                    onClick={() => isGroup ? setSelectedGroupId(chat.id) : setSelectedUserId(chat.id)}
-                    className={cn(
-                      'w-full flex items-center gap-3 px-4 py-3 text-left transition-colors border-l-2',
-                      isSelected ? 'bg-primary/5 border-primary' : 'hover:bg-muted/30 border-transparent'
-                    )}
-                  >
-                    <div className={cn('w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 overflow-hidden', isGroup ? 'bg-accent/20 text-accent text-lg' : 'bg-gradient-to-br from-primary/20 to-accent/20 text-primary')}>
-                      {isGroup ? '👥' : freshUser?.headshot ? <img src={freshUser.headshot} alt={displayName} className="w-full h-full object-cover" /> : displayName?.[0]?.toUpperCase() || 'U'}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-foreground truncate">{displayName}</p>
-                      <p className="text-xs text-muted-foreground truncate line-clamp-1">{chat.lastMessage?.content || 'No messages'}</p>
-                    </div>
-                  </motion.button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-        </div>
-      )}
-
-      {/* Main area - full screen on mobile when chat is open */}
-      {!selectedUserId && !selectedGroupId && !isMobile ? (
-        <div className="flex-1 flex flex-col items-center justify-center gap-4 bg-background">
-          <MessageSquare className="w-16 h-16 text-muted-foreground/20" />
-          <p className="text-muted-foreground">Select a conversation to start messaging</p>
-        </div>
-      ) : (selectedUserId || selectedGroupId) ? (
-        <div className="flex-1 flex flex-col">
-          {/* Header */}
-          <div className={cn('px-6 py-4 border-b border-border/30 bg-background flex-shrink-0 fixed top-16 left-0 right-0 z-40 md:top-0', isMobile && 'px-4 py-3')}>
-            <div className="flex items-center justify-between gap-3">
-              {isMobile && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => {
-                    setSelectedUserId(null);
-                    setSelectedGroupId(null);
-                  }}
-                  className="rounded-lg h-9 w-9 flex-shrink-0"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                </Button>
-              )}
-              <div className="flex items-center gap-3 flex-1 min-w-0">
-                <div className={cn('flex items-center gap-3', isMobile && 'flex-1 min-w-0')}>
-                  <div className={cn('w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm', isGroupChat ? 'bg-accent/20 text-accent text-lg' : 'bg-gradient-to-br from-primary/20 to-accent/20 text-primary')}>
-                    {isGroupChat ? '👥' : selectedUser?.full_name?.[0]?.toUpperCase() || 'U'}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    {editingGroupName ? (
-                      <input
-                        autoFocus
-                        value={newGroupName}
-                        onChange={(e) => setNewGroupName(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') updateGroupName();
-                          if (e.key === 'Escape') setEditingGroupName(false);
-                        }}
-                        className="px-2 py-1 rounded border border-primary bg-transparent text-sm font-semibold text-foreground outline-none"
-                      />
-                    ) : (
-                      <div onClick={() => isGroupChat && (setEditingGroupName(true), setNewGroupName(selectedGroup?.name || ''))}>
-                        <h2 className={cn('font-semibold text-foreground', isMobile && 'text-sm')}>{isGroupChat ? getGroupDisplayName(selectedGroup) : selectedUser?.display_name || selectedUser?.full_name}</h2>
-                        <p className={cn('text-xs text-muted-foreground', isMobile && 'text-[11px]')}>{isGroupChat ? `${selectedGroup?.members?.length} members` : selectedUser?.email}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-              {!isMobile && (
-                <div className="flex items-center gap-2 bg-muted rounded-lg px-3 py-2 border border-border/40">
-                  <Search className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                  <input
-                    type="text"
-                    placeholder="Search..."
-                    value={messageSearch}
-                    onChange={(e) => setMessageSearch(e.target.value)}
-                    className="bg-transparent outline-none text-sm w-28 placeholder:text-muted-foreground/50"
-                  />
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Messages */}
-          <div className={cn('flex-1 overflow-hidden flex flex-col', isMobile && 'mt-[72px]')}>
-            <div className={cn('flex-1 overflow-y-auto space-y-3 flex flex-col justify-end scroll-smooth', isMobile ? 'px-3 py-3' : 'px-6 py-4')} style={{ overscrollBehavior: 'contain' }}>
-              {displayMessages.length === 0 ? (
-                <div className="flex items-center justify-center h-full text-center">
-                  <p className="text-sm text-muted-foreground">{messageSearch ? 'No messages found' : 'No messages yet. Start the conversation!'}</p>
-                </div>
-              ) : (
-                displayMessages.map((msg, idx) => {
-                  const isOwn = msg.sender_id === user.id;
-                  const isMediaFile = msg.content?.startsWith('[file]');
-                  const isVoiceMemo = msg.content?.startsWith('[voice_memo]');
-                  const fileData = isMediaFile ? msg.content.replace('[file]', '').split('|') : [];
-                  const senderUser = brokerageUsers.find(u => u.id === msg.sender_id);
-                  const senderName = senderUser?.display_name || senderUser?.full_name || msg.sender_name;
-                  const senderPhoto = senderUser?.headshot || (msg.sender_id === user.id ? user.headshot : msg.sender_photo);
-
-                  return (
-                    <motion.div
-                      key={msg.id}
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.2, delay: idx * 0.02 }}
-                      className={cn('flex gap-2.5 group', isOwn && 'flex-row-reverse')}
-                      onMouseEnter={() => setHoveredMsgId(msg.id)}
-                      onMouseLeave={() => setHoveredMsgId(null)}
-                    >
-                      <button
-                        onClick={() => setSelectedUserProfile({ ...brokerageUsers.find(u => u.id === msg.sender_id), email: msg.sender_email, full_name: msg.sender_name, headshot: msg.sender_photo })}
-                        className="w-8 h-8 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center flex-shrink-0 font-bold text-xs text-primary overflow-hidden hover:opacity-80 transition-opacity mt-0.5"
-                      >
-                        {senderPhoto ? <img src={senderPhoto} alt={senderName} className="w-full h-full object-cover" /> : senderName?.[0]?.toUpperCase() || 'U'}
-                      </button>
-
-                      <div className={cn('flex flex-col max-w-sm', isOwn && 'items-end')}>
-                        {editingMsgId === msg.id ? (
-                          <div className="flex gap-2 mb-2 w-full">
-                            <textarea
-                              value={editedContent}
-                              onChange={(e) => setEditedContent(e.target.value)}
-                              className="flex-1 bg-muted border border-border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30 resize-none max-h-24"
-                              rows={2}
-                            />
-                            <div className="flex flex-col gap-1">
-                              <button
-                                onClick={() => editMessage.mutate({ id: msg.id, content: editedContent, isGroup: isGroupChat })}
-                                disabled={editMessage.isPending}
-                                className="px-2 py-1 bg-primary text-primary-foreground rounded text-xs font-medium hover:bg-primary/90 transition-colors"
-                              >
-                                Save
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setEditingMsgId(null);
-                                  setEditedContent('');
-                                }}
-                                className="px-2 py-1 bg-muted text-foreground rounded text-xs font-medium hover:bg-muted/80 transition-colors"
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className={cn('rounded-2xl px-4 py-2.5 text-sm leading-relaxed', isOwn ? 'bg-primary text-primary-foreground rounded-tr-sm' : 'bg-card border border-border rounded-tl-sm')}>
-                            {isVoiceMemo ? (
-                              <audio controls src={msg.content.replace('[voice_memo]', '')} className="h-8 max-w-xs" />
-                            ) : isMediaFile ? (
-                              fileData[1]?.startsWith('image/') ? (
-                                <img src={fileData[0]} alt={fileData[2]} className="rounded-lg max-w-xs max-h-64 object-cover" />
-                              ) : fileData[1]?.startsWith('video/') ? (
-                                <video src={fileData[0]} controls className="rounded-lg max-w-xs max-h-64" />
-                              ) : (
-                                <a href={fileData[0]} target="_blank" rel="noopener noreferrer" className={cn('underline text-sm', isOwn ? 'text-primary-foreground' : 'text-primary')}>
-                                  {fileData[2]}
-                                </a>
-                              )
-                            ) : (
-                              <p className="whitespace-pre-wrap break-words">{msg.content}</p>
-                            )}
-                          </div>
-                        )}
-                        <div className={cn('flex items-center gap-1.5 text-[11px] text-muted-foreground mt-1.5 px-1', isOwn && 'flex-row-reverse')}>
-                          <span>{format(new Date(msg.created_date), 'h:mm a')}</span>
-                          {isOwn && (msg.read ? <CheckCheck className="w-3.5 h-3.5 text-accent" /> : <Check className="w-3.5 h-3.5 text-muted-foreground/50" />)}
-                        </div>
-                        {msg.reactions?.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mt-2">
-                            {msg.reactions.map((reaction, ridx) => (
-                              <button
-                                key={ridx}
-                                onClick={async () => {
-                                  const newReactions = [...msg.reactions];
-                                  const userIdx = newReactions[ridx].users.indexOf(user?.email);
-                                  if (userIdx !== -1) {
-                                    newReactions[ridx].users.splice(userIdx, 1);
-                                    if (newReactions[ridx].users.length === 0) newReactions.splice(ridx, 1);
-                                  } else {
-                                    newReactions[ridx].users.push(user?.email);
-                                  }
-                                  if (isGroupChat) {
-                                    await base44.entities.GroupMessage.update(msg.id, { reactions: newReactions });
-                                    queryClient.invalidateQueries({ queryKey: ['group-messages', selectedGroupId] });
-                                  } else {
-                                    await base44.entities.DirectMessage.update(msg.id, { reactions: newReactions });
-                                    queryClient.invalidateQueries({ queryKey: ['dm-messages', user?.id, selectedUserId] });
-                                  }
-                                }}
-                                className={cn('flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-all', reaction.users.includes(user?.email) ? 'bg-primary/15 border-primary/30 text-primary' : 'bg-muted/50 border-border/50 hover:bg-muted/70')}
-                              >
-                                <span>{reaction.emoji}</span>
-                                {reaction.users.length > 1 && <span className="text-[10px]">{reaction.users.length}</span>}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                      {hoveredMsgId === msg.id && !editingMsgId && (
-                        <motion.div
-                          initial={{ opacity: 0, scale: 0.9 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          exit={{ opacity: 0, scale: 0.9 }}
-                          className="flex gap-1 mt-0.5"
-                        >
-                          {isOwn && (
-                            <>
-                              <button
-                                onClick={() => {
-                                  setEditingMsgId(msg.id);
-                                  setEditedContent(msg.content);
-                                }}
-                                className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                                title="Edit message"
-                              >
-                                <Pencil className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => setDeletingMsgId(msg.id)}
-                                className="p-1 rounded hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors"
-                                title="Delete message"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </>
-                          )}
-                          <button
-                            onClick={() => setOpenEmojiFor(openEmojiFor === msg.id ? null : msg.id)}
-                            className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                          >
-                            <SmilePlus className="w-4 h-4" />
-                          </button>
-                        </motion.div>
-                      )}
-
-                      <AnimatePresence>
-                        {openEmojiFor === msg.id && (
-                          <div ref={emojiPickerRef} className="absolute top-0 right-0 z-50">
-                            <div className="bg-card border border-border rounded-lg p-1 shadow-lg">
-                              <EmojiPicker
-                                onSelect={async (emoji) => {
-                                  const newReactions = (msg.reactions || []).length > 0 ? [...msg.reactions] : [];
-                                  const idx = newReactions.findIndex(r => r.emoji === emoji);
-                                  if (idx !== -1) {
-                                    if (!newReactions[idx].users.includes(user?.email)) newReactions[idx].users.push(user?.email);
-                                  } else {
-                                    newReactions.push({ emoji, users: [user?.email] });
-                                  }
-                                  if (isGroupChat) {
-                                    await base44.entities.GroupMessage.update(msg.id, { reactions: newReactions });
-                                    queryClient.invalidateQueries({ queryKey: ['group-messages', selectedGroupId] });
-                                  } else {
-                                    await base44.entities.DirectMessage.update(msg.id, { reactions: newReactions });
-                                    queryClient.invalidateQueries({ queryKey: ['dm-messages', user?.id, selectedUserId] });
-                                  }
-                                  setOpenEmojiFor(null);
-                                }}
-                              />
-                            </div>
-                          </div>
-                        )}
-                      </AnimatePresence>
-                    </motion.div>
-                  );
-                })
-              )}
-              <div ref={messagesEndRef} />
-            </div>
-          </div>
-
-          {/* Typing indicator */}
-          <AnimatePresence>
-            {Object.values(typingUsers).length > 0 && (
-              <motion.div
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 8 }}
-                className={cn('text-xs text-muted-foreground flex items-center gap-2', isMobile ? 'px-3 py-2' : 'px-6 py-2')}
-              >
-                <span className="flex gap-0.5 items-center">
-                  {[0, 0.15, 0.3].map((d) => (
-                    <span key={d} className="w-1.5 h-1.5 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: `${d}s` }} />
-                  ))}
-                </span>
-                <span>
-                  {Object.values(typingUsers).map(t => t.name).join(', ')} {Object.values(typingUsers).length === 1 ? 'is' : 'are'} typing…
-                </span>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Input */}
-          <div className={cn('border-t border-border/30 bg-background flex-shrink-0', isMobile ? 'px-3 py-3' : 'px-6 py-4')}>
-            {voiceMemoUrl && (
-              <div className="flex items-center gap-3 bg-muted/40 rounded-lg px-4 py-2 mb-3 border border-border/30">
-                <audio controls src={voiceMemoUrl} className="flex-1 h-8" />
-                <button onClick={() => setVoiceMemoUrl('')} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors flex-shrink-0">
-                  <X className="w-4 h-4" />
+          {!filtered.length ? <p className="text-sm text-muted-foreground text-center py-10 px-6">{search ? 'No chats match.' : 'No messages yet. Tap the pencil to start one.'}</p>
+            : filtered.map((c) => {
+              const u = chat.unread.get(`${c.kind}:${c.key}`);
+              const selected = (c.kind === 'dm' && c.key === dm) || (c.kind === 'group' && c.key === groupId);
+              const lastFromMe = lc(c.last.sender_email) === me;
+              return (
+                <button key={`${c.kind}:${c.key}`} onClick={() => open(c.kind, c.key)} className={cn('w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-muted/60', selected && 'bg-primary/10')}>
+                  {c.kind === 'dm' ? <Avatar person={chat.personOf(c.key)} size={48} online={chat.online.has(c.key)} />
+                    : <span className="w-12 h-12 rounded-full bg-gradient-to-br from-violet-200 to-sky-200 dark:from-violet-900 dark:to-sky-900 flex items-center justify-center flex-shrink-0"><Users className="w-5 h-5 text-violet-700 dark:text-violet-200" /></span>}
+                  <span className="flex-1 min-w-0">
+                    <span className={cn('block truncate text-sm', u?.unread ? 'font-bold' : 'font-medium')}>{nameFor(c)}</span>
+                    <span className={cn('flex gap-1 text-xs truncate', u?.unread ? 'text-foreground font-semibold' : 'text-muted-foreground')}>
+                      <span className="truncate">{c.last.content ? `${lastFromMe ? 'You: ' : c.kind === 'group' ? `${chat.personOf(c.last.sender_email).name.split(' ')[0]}: ` : ''}${preview(c.last.content)}` : 'New group'}</span>
+                      <span className="flex-shrink-0">· {when(c.last.created_date)}</span>
+                    </span>
+                  </span>
+                  {u?.unread > 0 && <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-primary text-primary-foreground text-[11px] font-bold flex items-center justify-center">{u.unread > 99 ? '99+' : u.unread}</span>}
                 </button>
-              </div>
-            )}
-            <div className={cn('flex items-end gap-2.5', isMobile && 'gap-2')}>
-              <textarea
-                value={messageText}
-                onChange={(e) => {
-                  setMessageText(e.target.value);
-                  if (e.target.value.trim()) broadcastTyping(true);
-                }}
-                onBlur={() => broadcastTyping(false)}
-                onKeyDown={(e) => {
-                   if (e.key === 'Enter' && !e.shiftKey) {
-                     e.preventDefault();
-                     handleSend();
-                   }
-                 }}
-                placeholder="Type a message..."
-                disabled={sendMessage.isPending || sendGroupMessage.isPending || !!voiceMemoUrl}
-                rows={1}
-                className={cn('flex-1 resize-none bg-muted border border-border/50 rounded-2xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/30 focus:border-transparent placeholder:text-muted-foreground/50 max-h-[120px] transition-all disabled:opacity-50', isMobile ? 'min-h-[40px]' : 'min-h-[44px]')}
-              />
-              {!isMobile && (
-                <>
-                  <FileUploadButton onFileSelect={({ file_url, fileName, fileType }) => sendMessage.mutate(`[file]${file_url}|${fileType}|${fileName}`)} disabled={sendMessage.isPending || !!voiceMemoUrl} />
-                  <VoiceMemoButton
-                    onSend={(content) => { sendMessage.mutate(content); setVoiceMemoUrl(''); }}
-                    onStage={(content) => setVoiceMemoUrl(content.replace('[voice_memo]', ''))}
-                    disabled={sendMessage.isPending || !!messageText.trim()}
-                  />
-                </>
-              )}
-              <Button
-                onClick={() => {
-                  if (voiceMemoUrl) {
-                    sendMessage.mutate(`[voice_memo]${voiceMemoUrl}`);
-                    setVoiceMemoUrl('');
-                  } else {
-                    handleSend();
-                  }
-                }}
-                disabled={sendMessage.isPending || (!messageText.trim() && !voiceMemoUrl)}
-                className={cn('rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground p-0 flex-shrink-0', isMobile ? 'h-10 w-10' : 'h-11 w-11')}
-              >
-                <Send className={cn('', isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4')} />
-              </Button>
-            </div>
-          </div>
+              );
+            })}
         </div>
-      ) : null}
+      </aside>
 
-      {/* New chat modal */}
-      <AnimatePresence>
-        {showNewChat && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/40 z-40"
-              onClick={() => { setShowNewChat(false); setSelectedUsers([]); setUserSearchQuery(''); }}
-            />
-            <motion.div
-              initial={{ y: 20, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 20, opacity: 0 }}
-              className="fixed inset-x-4 top-28 z-50 bg-card border border-border rounded-2xl shadow-xl max-h-96 overflow-hidden"
-            >
-              <div className="p-4 border-b border-border/50 flex-shrink-0 space-y-3">
-                <Input
-                  placeholder="Search teammates..."
-                  value={userSearchQuery}
-                  onChange={(e) => setUserSearchQuery(e.target.value)}
-                  autoFocus
-                  className="text-sm"
-                />
-                {selectedUsers.length > 0 && (
-                  <div className="flex gap-2 flex-wrap">
-                    {selectedUsers.map(u => (
-                      <div key={u.id} className="bg-primary/10 border border-primary/20 rounded-full px-3 py-1.5 text-xs font-medium flex items-center gap-2">
-                        {u.display_name || u.full_name}
-                        <button onClick={() => setSelectedUsers(selectedUsers.filter(su => su.id !== u.id))} className="text-primary/60 hover:text-primary ml-0.5">×</button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div className="overflow-y-auto max-h-72">
-                {(() => {
-                  const filtered = brokerageUsers.filter(u => u.id !== user.id && !selectedUsers.some(su => su.id === u.id)).filter(u =>
-                    u.full_name?.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
-                    u.display_name?.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
-                    u.email?.toLowerCase().includes(userSearchQuery.toLowerCase())
-                  );
-                  if (filtered.length === 0) {
-                    return <div className="p-8 text-center text-sm text-muted-foreground">{userSearchQuery ? 'No users found' : 'No teammates'}</div>;
-                  }
-                  return filtered.map((u) => (
-                    <motion.button
-                      key={u.id}
-                      onClick={() => setSelectedUsers([...selectedUsers, u])}
-                      className="w-full flex items-center gap-3 px-4 py-3 border-b border-border/30 last:border-b-0 text-left hover:bg-muted/40 transition-colors"
-                    >
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center flex-shrink-0 font-bold text-sm text-primary overflow-hidden">
-                        {u.headshot ? <img src={u.headshot} alt={u.display_name || u.full_name} className="w-full h-full object-cover" /> : (u.display_name || u.full_name)?.[0]?.toUpperCase() || 'U'}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-foreground">{u.display_name || u.full_name}</p>
-                        <p className="text-xs text-muted-foreground truncate">{u.email}</p>
-                      </div>
-                      <Plus className="w-4 h-4 text-muted-foreground" />
-                    </motion.button>
-                  ));
-                })()}
-              </div>
-              {selectedUsers.length > 0 && (
-                <div className="p-4 border-t border-border/50 flex gap-2">
-                  <Button
-                    onClick={() => setSelectedUsers([])}
-                    variant="outline"
-                    className="flex-1 h-9 rounded-lg text-sm"
-                  >
-                    Clear
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      if (selectedUsers.length === 1) {
-                        setSelectedUserId(selectedUsers[0].id);
-                      } else {
-                        createGroup.mutate();
-                      }
-                      setShowNewChat(false);
-                      setSelectedUsers([]);
-                      setUserSearchQuery('');
-                    }}
-                    disabled={createGroup.isPending}
-                    className="flex-1 h-9 rounded-lg text-sm font-medium"
-                  >
-                    {selectedUsers.length === 1 ? 'Start Chat →' : 'Create Group →'}
-                  </Button>
-                </div>
-              )}
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+      <main className={cn('flex-1 min-w-0 flex-col', hasOpen ? 'flex' : 'hidden md:flex')}>
+        {dm ? <Conversation key={`dm:${dm}`} kind="dm" convKey={dm} chat={chat} onBack={close} />
+          : groupId ? (activeGroup ? <Conversation key={`group:${groupId}`} kind="group" convKey={groupId} group={activeGroup} chat={chat} onBack={close} /> : <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">Loading…</div>)
+            : <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground gap-2"><PenSquare className="w-10 h-10 opacity-30" /><p className="text-sm">Pick a chat or start a new one.</p></div>}
+      </main>
 
-      <AnimatePresence>
-        {selectedUserProfile && (
-          <UserProfilePanel user={selectedUserProfile} brokerageId={brokerageId} onClose={() => setSelectedUserProfile(null)} />
-        )}
-      </AnimatePresence>
-
-      {/* Delete confirmation dialog */}
-      <AnimatePresence>
-        {deletingMsgId && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/40 z-40"
-              onClick={() => setDeletingMsgId(null)}
-            />
-            <motion.div
-              initial={{ y: 20, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 20, opacity: 0 }}
-              className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-card border border-border rounded-xl shadow-lg p-6 max-w-sm"
-            >
-              <h3 className="font-semibold text-foreground mb-2">Delete message?</h3>
-              <p className="text-sm text-muted-foreground mb-6">This action cannot be undone.</p>
-              <div className="flex gap-3 justify-end">
-                <button
-                  onClick={() => setDeletingMsgId(null)}
-                  className="px-4 py-2 rounded-lg border border-border text-sm font-medium hover:bg-muted transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => {
-                    deleteMessage.mutate({ id: deletingMsgId, isGroup: isGroupChat });
-                    setDeletingMsgId(null);
-                  }}
-                  disabled={deleteMessage.isPending}
-                  className="px-4 py-2 rounded-lg bg-destructive text-destructive-foreground text-sm font-medium hover:bg-destructive/90 transition-colors disabled:opacity-50"
-                >
-                  Delete
-                </button>
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+      {composing && <NewChat chat={chat} user={user} onClose={() => setComposing(false)} onOpen={(kind, key) => { setComposing(false); queryClient.invalidateQueries({ queryKey: ['dm-list', me] }); open(kind, key); }} />}
     </div>
+  );
+}
+
+function groupName(g, chat) {
+  if (!g) return 'Group';
+  if (g.name && !g.auto_name) return g.name;
+  return (g.members || []).filter((m) => lc(m.email) !== chat.me).map((m) => chat.personOf(m.email).name.split(' ')[0]).join(', ') || g.name || 'Group';
+}
+
+function OnlineRow({ chat, onOpen }) {
+  const on = chat.peopleList.filter((p) => chat.online.has(lc(p.email)) && lc(p.email) !== chat.me).slice(0, 12);
+  if (!on.length) return null;
+  return (
+    <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1">
+      {on.map((p) => (
+        <button key={p.id} onClick={() => onOpen(lc(p.email))} className="flex flex-col items-center gap-1 w-14 flex-shrink-0">
+          <Avatar person={chat.personOf(p.email)} size={44} online />
+          <span className="text-[11px] truncate w-full text-center">{chat.personOf(p.email).name.split(' ')[0]}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function Conversation({ kind, convKey, group, chat, onBack }) {
+  const room = useRoom(`${kind}:${kind === 'dm' ? [chat.me, convKey].sort().join('|') : convKey}`);
+  const [manage, setManage] = useState(false);
+  const conv = useConversation(kind, convKey, {
+    onSent: (m) => {
+      if (kind === 'group') {
+        base44.entities.GroupChat.update(convKey, { last_message_at: m.created_date }).catch(() => {});
+        if (m.mentions?.length) base44.functions.invoke('chatNotify', { kind: 'group', id: m.id }).catch(() => {});
+      }
+    },
+  });
+  useEffect(() => { chat.setActive({ kind, key: convKey }); return () => chat.setActive(null); }, [chat, kind, convKey]);
+  const lastId = conv.messages[conv.messages.length - 1]?.id;
+  useEffect(() => {
+    if (conv.loading) return undefined;
+    const t = setTimeout(() => { if (document.visibilityState === 'visible') { chat.markRead(kind, convKey); room.announceRead(); } }, 500);
+    return () => clearTimeout(t);
+  }, [lastId, conv.loading]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const v = () => { if (document.visibilityState === 'visible') { chat.markRead(kind, convKey); room.announceRead(); } };
+    document.addEventListener('visibilitychange', v);
+    return () => document.removeEventListener('visibilitychange', v);
+  }, [chat, kind, convKey, room]);
+
+  // Seen: DMs use the read flag; groups use read times.
+  const { data: readers = [], refetch } = useQuery({
+    queryKey: ['readers', kind, convKey], enabled: kind === 'group',
+    queryFn: async () => (await supabase.rpc('chat_readers', { p_kind: 'group', p_key: convKey })).data || [],
+  });
+  useEffect(() => { if (kind === 'group') refetch(); }, [room.seenTick, kind, refetch]);
+  const myLast = [...conv.messages].reverse().find((m) => lc(m.sender_email) === chat.me && !m._pending && !m._failed);
+  let seenBy = null;
+  if (myLast && kind === 'dm') seenBy = myLast.read ? 'Seen' : 'Sent';
+  if (myLast && kind === 'group') {
+    const s = readers.filter((r) => r.user_email !== chat.me && r.last_read_at >= myLast.created_date).map((r) => chat.personOf(r.user_email).name.split(' ')[0]);
+    seenBy = s.length ? `Seen by ${s.slice(0, 4).join(', ')}${s.length > 4 ? ` +${s.length - 4}` : ''}` : 'Sent';
+  }
+
+  const members = kind === 'group' ? (group.members || []).map((m) => lc(m.email)) : [convKey];
+  const people = members.filter((e) => e !== chat.me).map((e) => chat.personOf(e));
+  const title = kind === 'dm' ? chat.personOf(convKey).name : groupName(group, chat);
+  const online = kind === 'dm' ? chat.online.has(convKey) : people.some((p) => chat.online.has(p.email));
+
+  return (
+    <>
+      <header className="flex items-center gap-3 px-3 sm:px-4 py-2.5 border-b">
+        <button onClick={onBack} className="md:hidden p-2 -ml-1 rounded-full hover:bg-muted"><ArrowLeft className="w-5 h-5" /></button>
+        {kind === 'dm' ? <Avatar person={chat.personOf(convKey)} size={40} online={online} /> : <span className="w-10 h-10 rounded-full bg-gradient-to-br from-violet-200 to-sky-200 dark:from-violet-900 dark:to-sky-900 flex items-center justify-center"><Users className="w-5 h-5 text-violet-700 dark:text-violet-200" /></span>}
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold truncate">{title}</p>
+          <p className="text-xs text-muted-foreground truncate">{kind === 'dm' ? (online ? <span className="text-emerald-600">Active now</span> : chat.people.get(convKey)?.role ? 'Offline' : '') : `${members.length} people${online ? ' · some online' : ''}`}</p>
+        </div>
+        <CallButtons kind={kind} convKey={convKey} />
+        {kind === 'group' && <button onClick={() => setManage(true)} className="p-2 rounded-lg hover:bg-muted text-muted-foreground" title="Group settings"><Users className="w-4 h-4" /></button>}
+      </header>
+      <MessageList key={`${kind}:${convKey}`} conv={conv} kind={kind} chat={chat} variant="bubble" renderCall={renderCall} seenBy={seenBy} typers={room.typers}
+        emptyText={kind === 'dm' ? `This is the start of your conversation with ${title}.` : 'Say hi to the group!'} />
+      <Composer draftKey={`${kind}:${convKey}`} people={kind === 'group' ? people : []} placeholder="Aa" onSend={(t, extra) => conv.send(t, kind === 'group' ? extra : {})}
+        onTyping={room.typing} onStopTyping={room.stopTyping} />
+      {manage && group && <GroupSettings group={group} chat={chat} onClose={() => setManage(false)} onLeft={onBack} />}
+    </>
+  );
+}
+
+function PeoplePicker({ chat, exclude = [], picked, setPicked }) {
+  const [q, setQ] = useState('');
+  const options = chat.peopleList.filter((p) => !p.suspended && lc(p.email) !== chat.me && !exclude.includes(lc(p.email))
+    && `${p.display_name || ''} ${p.full_name || ''} ${p.email}`.toLowerCase().includes(q.toLowerCase())).slice(0, 50);
+  return (
+    <>
+      <div className="flex flex-wrap gap-1.5 items-center rounded-lg border px-2 py-1.5">
+        <span className="text-sm text-muted-foreground">To:</span>
+        {picked.map((e) => <span key={e} className="flex items-center gap-1 rounded-full bg-primary/10 text-primary text-xs px-2 py-1">{chat.personOf(e).name}<button onClick={() => setPicked(picked.filter((x) => x !== e))}><X className="w-3 h-3" /></button></span>)}
+        <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search people" className="flex-1 min-w-[120px] bg-transparent outline-none text-sm py-1" />
+      </div>
+      <ul className="max-h-72 overflow-y-auto divide-y">
+        {options.map((p) => {
+          const e = lc(p.email); const on = picked.includes(e);
+          return (
+            <li key={p.id}><button onClick={() => { setPicked(on ? picked.filter((x) => x !== e) : [...picked, e]); setQ(''); }} className="w-full flex items-center gap-3 px-2 py-2 hover:bg-muted text-left">
+              <Avatar person={chat.personOf(e)} size={36} online={chat.online.has(e)} />
+              <span className="flex-1 min-w-0"><span className="block text-sm font-medium truncate">{chat.personOf(e).name}</span><span className="block text-xs text-muted-foreground truncate">{p.email}</span></span>
+              <span className={cn('w-5 h-5 rounded-full border flex items-center justify-center', on && 'bg-primary border-primary text-primary-foreground')}>{on && <Check className="w-3 h-3" />}</span>
+            </button></li>
+          );
+        })}
+      </ul>
+    </>
+  );
+}
+
+function NewChat({ chat, user, onClose, onOpen }) {
+  const [picked, setPicked] = useState([]);
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const go = async () => {
+    if (picked.length === 1) return onOpen('dm', picked[0]);
+    setBusy(true);
+    try {
+      const members = [{ id: user.id, email: chat.me, full_name: chat.personOf(chat.me).name }, ...picked.map((e) => ({ id: chat.personOf(e).id, email: e, full_name: chat.personOf(e).name }))];
+      const g = await base44.entities.GroupChat.create({ brokerage_id: chat.brokerageId, name: name.trim() || members.map((m) => m.full_name.split(' ')[0]).join(', '), auto_name: !name.trim(), members, created_by_email: chat.me, created_by_name: chat.personOf(chat.me).name });
+      onOpen('group', g.id);
+    } catch (err) { window.alert(err.message); setBusy(false); }
+  };
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader><DialogTitle>New message</DialogTitle></DialogHeader>
+        <PeoplePicker chat={chat} picked={picked} setPicked={setPicked} />
+        {picked.length > 1 && <Input placeholder="Group name (optional)" value={name} onChange={(e) => setName(e.target.value)} />}
+        <Button disabled={!picked.length || busy} onClick={go}>{picked.length > 1 ? `Create group with ${picked.length}` : 'Chat'}</Button>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function GroupSettings({ group, chat, onClose, onLeft }) {
+  const [name, setName] = useState(group.auto_name ? '' : group.name || '');
+  const [adding, setAdding] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const memberEmails = (group.members || []).map((m) => lc(m.email));
+  const save = async () => {
+    setBusy(true);
+    try {
+      const members = [...(group.members || []), ...adding.map((e) => ({ id: chat.personOf(e).id, email: e, full_name: chat.personOf(e).name }))];
+      await base44.entities.GroupChat.update(group.id, { name: name.trim() || group.name, auto_name: !name.trim(), members });
+      onClose();
+    } catch (err) { window.alert(err.message); } finally { setBusy(false); }
+  };
+  const leave = async () => {
+    if (!window.confirm('Leave this group? You will stop getting its messages.')) return;
+    await base44.entities.GroupChat.update(group.id, { members: (group.members || []).filter((m) => lc(m.email) !== chat.me) });
+    onClose(); onLeft();
+  };
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader><DialogTitle>Group settings</DialogTitle></DialogHeader>
+        <div className="flex items-center gap-2"><Pencil className="w-4 h-4 text-muted-foreground" /><Input placeholder="Group name" value={name} onChange={(e) => setName(e.target.value)} /></div>
+        <p className="text-xs font-semibold text-muted-foreground uppercase mt-2">Members ({memberEmails.length})</p>
+        <ul className="max-h-40 overflow-y-auto space-y-1">{memberEmails.map((e) => <li key={e} className="flex items-center gap-2 text-sm"><Avatar person={chat.personOf(e)} size={24} online={chat.online.has(e)} />{chat.personOf(e).name}{e === chat.me && ' (you)'}</li>)}</ul>
+        <p className="text-xs font-semibold text-muted-foreground uppercase mt-2 flex items-center gap-1"><UserPlus className="w-3.5 h-3.5" /> Add people</p>
+        <PeoplePicker chat={chat} exclude={memberEmails} picked={adding} setPicked={setAdding} />
+        <div className="flex justify-between gap-2 pt-2">
+          <Button variant="ghost" className="text-red-600 gap-1" onClick={leave}><LogOut className="w-4 h-4" /> Leave group</Button>
+          <Button onClick={save} disabled={busy}>Save</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

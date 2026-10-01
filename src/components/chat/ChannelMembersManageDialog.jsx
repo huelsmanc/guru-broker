@@ -22,8 +22,8 @@ export default function ChannelMembersManageDialog({ open, onOpenChange, channel
       await base44.entities.ChannelMember.create({
         brokerage_id: brokerageId,
         channel_id: channel,
-        user_email: user.email,
-        user_name: user.full_name,
+        user_email: String(user.email).toLowerCase(),
+        user_name: user.display_name || user.full_name,
       });
     },
     onSuccess: () => {
@@ -42,11 +42,11 @@ export default function ChannelMembersManageDialog({ open, onOpenChange, channel
     },
   });
 
-  const memberEmails = channelMembers.map(m => m.user_email);
-  const availableUsers = brokerageUsers.filter(u => !memberEmails.includes(u.email));
+  const memberEmails = channelMembers.map(m => String(m.user_email).toLowerCase());
+  const availableUsers = brokerageUsers.filter(u => !memberEmails.includes(String(u.email).toLowerCase()) && !u.suspended);
   const filteredAvailable = availableUsers.filter(u =>
-    u.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    u.email.toLowerCase().includes(searchQuery.toLowerCase())
+    String(u.display_name || u.full_name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    String(u.email).toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (

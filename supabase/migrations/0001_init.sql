@@ -455,22 +455,69 @@ alter table public.cmas_report enable row level security;
 create index if not exists cmas_report_brokerage_id_idx on public.cmas_report (brokerage_id);
 create index if not exists cmas_report_user_email_idx on public.cmas_report (user_email);
 
+-- Call ------------------------------------------------------------------
+create table if not exists public.call (
+  id text primary key default replace(gen_random_uuid()::text, '-', ''),
+  brokerage_id text,
+  conversation_key text,
+  conversation_kind text,
+  created_by_email text,
+  created_by_name text,
+  ended_at timestamptz,
+  invitees jsonb,
+  kind text,
+  room_name text,
+  room_url text,
+  started_at timestamptz,
+  status text,
+  title text,
+  extra jsonb not null default '{}'::jsonb,
+  created_date timestamptz not null default now(),
+  updated_date timestamptz not null default now(),
+  created_by text
+);
+alter table public.call add column if not exists brokerage_id text;
+alter table public.call add column if not exists conversation_key text;
+alter table public.call add column if not exists conversation_kind text;
+alter table public.call add column if not exists created_by_email text;
+alter table public.call add column if not exists created_by_name text;
+alter table public.call add column if not exists ended_at timestamptz;
+alter table public.call add column if not exists invitees jsonb;
+alter table public.call add column if not exists kind text;
+alter table public.call add column if not exists room_name text;
+alter table public.call add column if not exists room_url text;
+alter table public.call add column if not exists started_at timestamptz;
+alter table public.call add column if not exists status text;
+alter table public.call add column if not exists title text;
+drop trigger if exists call_touch on public.call;
+create trigger call_touch before update on public.call for each row execute function public.touch_updated_date();
+drop trigger if exists call_fill on public.call;
+create trigger call_fill before insert on public.call for each row execute function public.fill_owner();
+alter table public.call enable row level security;
+create index if not exists call_brokerage_id_idx on public.call (brokerage_id);
+
 -- Channel ---------------------------------------------------------------
 create table if not exists public.channel (
   id text primary key default replace(gen_random_uuid()::text, '-', ''),
   brokerage_id text,
+  created_by_email text,
   emoji text,
+  is_private boolean,
   label text,
   name text,
+  topic text,
   extra jsonb not null default '{}'::jsonb,
   created_date timestamptz not null default now(),
   updated_date timestamptz not null default now(),
   created_by text
 );
 alter table public.channel add column if not exists brokerage_id text;
+alter table public.channel add column if not exists created_by_email text;
 alter table public.channel add column if not exists emoji text;
+alter table public.channel add column if not exists is_private boolean;
 alter table public.channel add column if not exists label text;
 alter table public.channel add column if not exists name text;
+alter table public.channel add column if not exists topic text;
 drop trigger if exists channel_touch on public.channel;
 create trigger channel_touch before update on public.channel for each row execute function public.touch_updated_date();
 drop trigger if exists channel_fill on public.channel;
@@ -501,6 +548,32 @@ create trigger channel_member_fill before insert on public.channel_member for ea
 alter table public.channel_member enable row level security;
 create index if not exists channel_member_brokerage_id_idx on public.channel_member (brokerage_id);
 create index if not exists channel_member_user_email_idx on public.channel_member (user_email);
+
+-- ChatReadState ---------------------------------------------------------
+create table if not exists public.chat_read_state (
+  id text primary key default replace(gen_random_uuid()::text, '-', ''),
+  brokerage_id text,
+  conv_key text,
+  kind text,
+  last_read_at timestamptz,
+  user_email text,
+  extra jsonb not null default '{}'::jsonb,
+  created_date timestamptz not null default now(),
+  updated_date timestamptz not null default now(),
+  created_by text
+);
+alter table public.chat_read_state add column if not exists brokerage_id text;
+alter table public.chat_read_state add column if not exists conv_key text;
+alter table public.chat_read_state add column if not exists kind text;
+alter table public.chat_read_state add column if not exists last_read_at timestamptz;
+alter table public.chat_read_state add column if not exists user_email text;
+drop trigger if exists chat_read_state_touch on public.chat_read_state;
+create trigger chat_read_state_touch before update on public.chat_read_state for each row execute function public.touch_updated_date();
+drop trigger if exists chat_read_state_fill on public.chat_read_state;
+create trigger chat_read_state_fill before insert on public.chat_read_state for each row execute function public.fill_owner();
+alter table public.chat_read_state enable row level security;
+create index if not exists chat_read_state_brokerage_id_idx on public.chat_read_state (brokerage_id);
+create index if not exists chat_read_state_user_email_idx on public.chat_read_state (user_email);
 
 -- Checklist -------------------------------------------------------------
 create table if not exists public.checklist (
@@ -926,6 +999,7 @@ create table if not exists public.direct_message (
   id text primary key default replace(gen_random_uuid()::text, '-', ''),
   brokerage_id text,
   content text,
+  edited_at timestamptz,
   reactions jsonb,
   read boolean,
   receiver_email text,
@@ -943,6 +1017,7 @@ create table if not exists public.direct_message (
 );
 alter table public.direct_message add column if not exists brokerage_id text;
 alter table public.direct_message add column if not exists content text;
+alter table public.direct_message add column if not exists edited_at timestamptz;
 alter table public.direct_message add column if not exists reactions jsonb;
 alter table public.direct_message add column if not exists read boolean;
 alter table public.direct_message add column if not exists receiver_email text;
@@ -1327,7 +1402,9 @@ create table if not exists public.group_message (
   id text primary key default replace(gen_random_uuid()::text, '-', ''),
   brokerage_id text,
   content text,
+  edited_at timestamptz,
   group_id text,
+  mentions jsonb,
   reactions jsonb,
   sender_email text,
   sender_id text,
@@ -1340,7 +1417,9 @@ create table if not exists public.group_message (
 );
 alter table public.group_message add column if not exists brokerage_id text;
 alter table public.group_message add column if not exists content text;
+alter table public.group_message add column if not exists edited_at timestamptz;
 alter table public.group_message add column if not exists group_id text;
+alter table public.group_message add column if not exists mentions jsonb;
 alter table public.group_message add column if not exists reactions jsonb;
 alter table public.group_message add column if not exists sender_email text;
 alter table public.group_message add column if not exists sender_id text;
@@ -1740,8 +1819,10 @@ create index if not exists signature_data_submission_id_idx on public.signature_
 create table if not exists public.social_message (
   id text primary key default replace(gen_random_uuid()::text, '-', ''),
   brokerage_id text,
+  call_id text,
   channel text,
   content text,
+  edited_at timestamptz,
   mentions jsonb,
   pinned boolean,
   pinned_by text,
@@ -1756,8 +1837,10 @@ create table if not exists public.social_message (
   created_by text
 );
 alter table public.social_message add column if not exists brokerage_id text;
+alter table public.social_message add column if not exists call_id text;
 alter table public.social_message add column if not exists channel text;
 alter table public.social_message add column if not exists content text;
+alter table public.social_message add column if not exists edited_at timestamptz;
 alter table public.social_message add column if not exists mentions jsonb;
 alter table public.social_message add column if not exists pinned boolean;
 alter table public.social_message add column if not exists pinned_by text;
@@ -1802,6 +1885,8 @@ create table if not exists public.thread_reply (
   id text primary key default replace(gen_random_uuid()::text, '-', ''),
   brokerage_id text,
   content text,
+  edited_at timestamptz,
+  mentions jsonb,
   message_id text,
   reactions jsonb,
   sender_email text,
@@ -1814,6 +1899,8 @@ create table if not exists public.thread_reply (
 );
 alter table public.thread_reply add column if not exists brokerage_id text;
 alter table public.thread_reply add column if not exists content text;
+alter table public.thread_reply add column if not exists edited_at timestamptz;
+alter table public.thread_reply add column if not exists mentions jsonb;
 alter table public.thread_reply add column if not exists message_id text;
 alter table public.thread_reply add column if not exists reactions jsonb;
 alter table public.thread_reply add column if not exists sender_email text;
@@ -1995,6 +2082,24 @@ alter table public.user_badge enable row level security;
 create index if not exists user_badge_brokerage_id_idx on public.user_badge (brokerage_id);
 create index if not exists user_badge_user_email_idx on public.user_badge (user_email);
 
+-- Messaging helpers (need the chat tables, so they come after them) ----------
+-- Can the signed-in user read this channel? Public channels: anyone in the brokerage.
+-- Private channels (and legacy messages whose channel row is gone): members and admins.
+create or replace function public.can_see_channel(p_brokerage text, p_channel text) returns boolean
+language sql stable security definer set search_path = public as $$
+  select p_brokerage = public.auth_brokerage_id() and (
+    public.is_brokerage_admin()
+    or exists (select 1 from public.channel c where c.brokerage_id = p_brokerage and c.name = p_channel and not coalesce(c.is_private, false))
+    or exists (select 1 from public.channel_member m where m.brokerage_id = p_brokerage and m.channel_id = p_channel and lower(m.user_email) = public.auth_email())
+  ) or public.is_super_admin()
+$$;
+-- Is the signed-in user in a group chat's member list ([{id, email, ...}])?
+create or replace function public.in_members(p_members jsonb) returns boolean
+language sql stable as $$
+  select exists (select 1 from jsonb_array_elements(coalesce(p_members, '[]'::jsonb)) m
+                 where lower(m->>'email') = public.auth_email() or m->>'id' = auth.uid()::text)
+$$;
+
 -- Security rules ------------------------------------------------------------
 drop policy if exists activity_event_access on public.activity_event;
 create policy activity_event_access on public.activity_event for select using ((brokerage_id = public.auth_brokerage_id() and (public.is_brokerage_admin() or public.has_perm('activity.account'))) or public.is_super_admin() or (transaction_id is not null and public.has_perm('activity.transaction') and exists (select 1 from public.transaction x where x.id = activity_event.transaction_id)));
@@ -2002,7 +2107,7 @@ create policy activity_event_access on public.activity_event for select using ((
 drop policy if exists activity_log_access on public.activity_log;
 create policy activity_log_access on public.activity_log for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 drop policy if exists admin_message_access on public.admin_message;
-create policy admin_message_access on public.admin_message for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+create policy admin_message_access on public.admin_message for all using ((brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin());
 drop policy if exists agent_private_access on public.agent_private;
 create policy agent_private_access on public.agent_private for select using (lower(user_email) = public.auth_email() or (brokerage_id = public.auth_brokerage_id() and (public.is_brokerage_admin() or public.has_perm('accounting.access'))) or public.is_super_admin());
 -- agent_private: written only by server routes.
@@ -2016,10 +2121,18 @@ drop policy if exists brokerage_settings_access on public.brokerage_settings;
 create policy brokerage_settings_access on public.brokerage_settings for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 drop policy if exists cmas_report_access on public.cmas_report;
 create policy cmas_report_access on public.cmas_report for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+drop policy if exists call_access on public.call;
+create policy call_access on public.call for select using (brokerage_id = public.auth_brokerage_id() and (lower(created_by_email) = public.auth_email() or coalesce(invitees, '[]'::jsonb) @> jsonb_build_array(jsonb_build_object('email', public.auth_email())) or (conversation_kind = 'channel' and public.can_see_channel(brokerage_id, conversation_key))) or public.is_super_admin());
 drop policy if exists channel_access on public.channel;
-create policy channel_access on public.channel for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+create policy channel_access on public.channel for select using (public.can_see_channel(brokerage_id, name));
+drop policy if exists channel_admin on public.channel;
+create policy channel_admin on public.channel for all using (brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) with check (brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin());
 drop policy if exists channel_member_access on public.channel_member;
-create policy channel_member_access on public.channel_member for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+create policy channel_member_access on public.channel_member for select using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+drop policy if exists channel_member_admin on public.channel_member;
+create policy channel_member_admin on public.channel_member for all using (brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) with check (brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin());
+drop policy if exists chat_read_state_access on public.chat_read_state;
+create policy chat_read_state_access on public.chat_read_state for all using (lower(user_email) = public.auth_email()) with check (lower(user_email) = public.auth_email());
 drop policy if exists checklist_access on public.checklist;
 create policy checklist_access on public.checklist for select using (lower(subject_email) = public.auth_email() or (subject_type = 'transaction' and exists (select 1 from public.transaction x where x.id = checklist.subject_id)) or (brokerage_id = public.auth_brokerage_id() and (public.is_brokerage_admin() or public.has_perm('docs.approve'))) or public.is_super_admin());
 -- checklist: changes go through the checklistAction server route (keeps approvals honest).
@@ -2047,7 +2160,7 @@ create policy compliance_question_admin on public.compliance_question for all us
 drop policy if exists compliance_training_access on public.compliance_training;
 create policy compliance_training_access on public.compliance_training for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 drop policy if exists conversation_access on public.conversation;
-create policy conversation_access on public.conversation for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+create policy conversation_access on public.conversation for all using (lower(agent_email) = public.auth_email() or (brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 drop policy if exists culture_calendar_entry_access on public.culture_calendar_entry;
 create policy culture_calendar_entry_access on public.culture_calendar_entry for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 drop policy if exists culture_calendar_rsvp_access on public.culture_calendar_rsvp;
@@ -2055,7 +2168,13 @@ create policy culture_calendar_rsvp_access on public.culture_calendar_rsvp for a
 drop policy if exists dashboard_announcement_access on public.dashboard_announcement;
 create policy dashboard_announcement_access on public.dashboard_announcement for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 drop policy if exists direct_message_access on public.direct_message;
-create policy direct_message_access on public.direct_message for all using (lower(sender_email) = public.auth_email() or lower(receiver_email) = public.auth_email() or public.is_super_admin()) with check (lower(sender_email) = public.auth_email() or lower(receiver_email) = public.auth_email());
+create policy direct_message_access on public.direct_message for select using (lower(sender_email) = public.auth_email() or lower(receiver_email) = public.auth_email() or public.is_super_admin());
+drop policy if exists direct_message_insert on public.direct_message;
+drop policy if exists direct_message_update on public.direct_message;
+drop policy if exists direct_message_delete on public.direct_message;
+create policy direct_message_insert on public.direct_message for insert with check (lower(sender_email) = public.auth_email() and brokerage_id = public.auth_brokerage_id());
+create policy direct_message_update on public.direct_message for update using (lower(sender_email) = public.auth_email()) with check (lower(sender_email) = public.auth_email());
+create policy direct_message_delete on public.direct_message for delete using (lower(sender_email) = public.auth_email());
 drop policy if exists document_template_access on public.document_template;
 create policy document_template_access on public.document_template for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 drop policy if exists esign_audit_log_access on public.esign_audit_log;
@@ -2077,15 +2196,27 @@ create policy file_repository_access on public.file_repository for all using (br
 drop policy if exists generated_contract_access on public.generated_contract;
 create policy generated_contract_access on public.generated_contract for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 drop policy if exists group_chat_access on public.group_chat;
-create policy group_chat_access on public.group_chat for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+create policy group_chat_access on public.group_chat for select using (public.in_members(members) or public.is_super_admin());
+drop policy if exists group_chat_insert on public.group_chat;
+drop policy if exists group_chat_update on public.group_chat;
+drop policy if exists group_chat_delete on public.group_chat;
+create policy group_chat_insert on public.group_chat for insert with check (brokerage_id = public.auth_brokerage_id() and public.in_members(members));
+create policy group_chat_update on public.group_chat for update using (public.in_members(members)) with check (brokerage_id = public.auth_brokerage_id());
+create policy group_chat_delete on public.group_chat for delete using (lower(created_by_email) = public.auth_email());
 drop policy if exists group_message_access on public.group_message;
-create policy group_message_access on public.group_message for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+create policy group_message_access on public.group_message for select using (exists (select 1 from public.group_chat g where g.id = group_message.group_id) or public.is_super_admin());
+drop policy if exists group_message_insert on public.group_message;
+drop policy if exists group_message_update on public.group_message;
+drop policy if exists group_message_delete on public.group_message;
+create policy group_message_insert on public.group_message for insert with check (lower(sender_email) = public.auth_email() and brokerage_id = public.auth_brokerage_id() and exists (select 1 from public.group_chat g where g.id = group_message.group_id));
+create policy group_message_update on public.group_message for update using (lower(sender_email) = public.auth_email() or false) with check (brokerage_id = public.auth_brokerage_id());
+create policy group_message_delete on public.group_message for delete using (lower(sender_email) = public.auth_email() or false);
 drop policy if exists idea_access on public.idea;
 create policy idea_access on public.idea for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 drop policy if exists idea_pad_note_access on public.idea_pad_note;
 create policy idea_pad_note_access on public.idea_pad_note for all using (lower(user_email) = public.auth_email()) with check (lower(user_email) = public.auth_email());
 drop policy if exists message_access on public.message;
-create policy message_access on public.message for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+create policy message_access on public.message for all using (exists (select 1 from public.conversation c where c.id = message.conversation_id) or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() and exists (select 1 from public.conversation c where c.id = message.conversation_id));
 drop policy if exists notification_access on public.notification;
 create policy notification_access on public.notification for all using (lower(user_email) = public.auth_email() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or lower(user_email) = public.auth_email() or public.is_super_admin());
 drop policy if exists offer_access on public.offer;
@@ -2102,13 +2233,25 @@ create policy scheduled_call_access on public.scheduled_call for all using (brok
 drop policy if exists signature_data_access on public.signature_data;
 create policy signature_data_access on public.signature_data for select using (public.is_super_admin() or exists (select 1 from public.esign_submission s where s.id = signature_data.submission_id and (s.brokerage_id = public.auth_brokerage_id() or exists (select 1 from public.esign_document d where d.id = s.document_id and d.brokerage_id = public.auth_brokerage_id()))));
 drop policy if exists social_message_access on public.social_message;
-create policy social_message_access on public.social_message for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+create policy social_message_access on public.social_message for select using (public.can_see_channel(brokerage_id, channel) or public.is_super_admin());
+drop policy if exists social_message_insert on public.social_message;
+drop policy if exists social_message_update on public.social_message;
+drop policy if exists social_message_delete on public.social_message;
+create policy social_message_insert on public.social_message for insert with check (lower(sender_email) = public.auth_email() and brokerage_id = public.auth_brokerage_id() and public.can_see_channel(brokerage_id, channel));
+create policy social_message_update on public.social_message for update using (lower(sender_email) = public.auth_email() or (brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin())) with check (brokerage_id = public.auth_brokerage_id());
+create policy social_message_delete on public.social_message for delete using (lower(sender_email) = public.auth_email() or (brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()));
 drop policy if exists team_access on public.team;
 create policy team_access on public.team for select using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 drop policy if exists team_admin on public.team;
 create policy team_admin on public.team for all using ((brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin()) with check ((brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin());
 drop policy if exists thread_reply_access on public.thread_reply;
-create policy thread_reply_access on public.thread_reply for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+create policy thread_reply_access on public.thread_reply for select using (exists (select 1 from public.social_message m where m.id = thread_reply.message_id) or public.is_super_admin());
+drop policy if exists thread_reply_insert on public.thread_reply;
+drop policy if exists thread_reply_update on public.thread_reply;
+drop policy if exists thread_reply_delete on public.thread_reply;
+create policy thread_reply_insert on public.thread_reply for insert with check (lower(sender_email) = public.auth_email() and brokerage_id = public.auth_brokerage_id() and exists (select 1 from public.social_message m where m.id = thread_reply.message_id));
+create policy thread_reply_update on public.thread_reply for update using (lower(sender_email) = public.auth_email() or (brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin())) with check (brokerage_id = public.auth_brokerage_id());
+create policy thread_reply_delete on public.thread_reply for delete using (lower(sender_email) = public.auth_email() or (brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()));
 drop policy if exists transaction_access on public.transaction;
 create policy transaction_access on public.transaction for all using (lower(agent_email) = public.auth_email() or lower(tc_email) = public.auth_email() or coalesce(co_agents, '[]'::jsonb) @> jsonb_build_array(jsonb_build_object('email', public.auth_email())) or (brokerage_id = public.auth_brokerage_id() and (public.is_brokerage_admin() or public.has_perm('tx.all') or public.leads_agent(agent_email))) or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
 drop policy if exists transaction_contact_access on public.transaction_contact;
@@ -2119,7 +2262,7 @@ create policy user_badge_access on public.user_badge for all using (brokerage_id
 
 -- Live updates (chat, notifications) ---------------------------------------
 do $$ declare t text; begin
-  foreach t in array array['notification','social_message','direct_message','group_message','message','thread_reply','conversation','admin_message','scheduled_call','culture_calendar_entry','profiles'] loop
+  foreach t in array array['notification','social_message','direct_message','group_message','message','thread_reply','conversation','admin_message','scheduled_call','culture_calendar_entry','profiles','channel','channel_member','group_chat','call'] loop
     begin execute format('alter publication supabase_realtime add table public.%I', t);
     exception when duplicate_object then null; end;
   end loop; end $$;

@@ -26,6 +26,7 @@ Do these in order. Budget about an hour.
    3. `supabase/migrations/0003_mls.sql`: MLS listings and the 15-minute sync
    4. `supabase/migrations/0004_backoffice.sql`: activity log, live updates for admins, license alerts, monthly statements, payout status sync
    5. `supabase/migrations/0005_default_checklists.sql`: adds "Add automatically" checklists to new deals and new agents
+   6. `supabase/migrations/0006_messaging.sql`: unread badges, read receipts, reactions, private channels and call history
 
    Every file is safe to run again, so after pulling new code just re-run them in order.
 4. Still in the SQL editor, run this once, with your real domain and a long random secret (you'll use the same secret as `HOOK_SECRET` in Vercel):
@@ -62,6 +63,8 @@ Do these in order. Budget about an hour.
    | `PAYLOAD_PROCESSING_ID` | Payload → your processing account id (the account payouts are paid from) |
 
    Without the two Payload values everything still works except the "Send direct deposit" button; you can still mark payouts paid by check.
+
+   For voice and video calls add `DAILY_API_KEY`: sign up at daily.co, then Developers → API keys. Free for the first 10,000 call minutes each month. Without it everything else works and the call buttons explain what's missing.
 
 3. Deploy, then open the preview URL and check that the sign-in page loads.
 
@@ -120,6 +123,10 @@ Another MLS later: add its id to `MLS_SOURCES` (e.g. `smartmls,njmls`) and the s
 4. **Settings:** fill in the CEO thank-you (name, message, YouTube link) and whether CDAs pay agents directly.
 
 Payout flow: save the commission on a deal (Finances) → payouts appear in **Payouts** waiting approval → approve → mark funds received from title on the deal → Send direct deposit. Statements email on the 1st of each month; license and E&O reminders go out 60, 30 and 7 days before expiry.
+
+### Messaging after the move
+- Channels you had in Base44 stay members-only, like before (except default ones, which become open to everyone). Admins can make any channel public or private from its settings (gear icon).
+- Desktop alerts: each person's browser asks once for permission to show notifications.
 
 ## 7. Switch the domain
 

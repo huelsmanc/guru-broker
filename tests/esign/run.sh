@@ -14,10 +14,11 @@ echo 'export class jsPDF {} export default jsPDF;' > .build/node_modules/jspdf/i
 echo '{"name":"jspdf","type":"module","main":"index.js"}' > .build/node_modules/jspdf/package.json
 echo '{"name":"pdfjs-dist","type":"module"}' > .build/node_modules/pdfjs-dist/package.json
 npx esbuild "../../api/fn/[name].js" --bundle --packages=external --platform=node --format=esm --outfile=.build/fn.mjs --log-level=error
-cp flow.test.mjs ai.test.mjs mls.test.mjs backoffice.test.mjs sample.pdf sig.png .build/
+cp flow.test.mjs ai.test.mjs mls.test.mjs backoffice.test.mjs chat.test.mjs sample.pdf sig.png .build/
 node .build/flow.test.mjs
 node .build/ai.test.mjs
 node .build/mls.test.mjs
 node .build/backoffice.test.mjs
+node .build/chat.test.mjs
 node ../entities.test.mjs
 node ../commission.test.mjs

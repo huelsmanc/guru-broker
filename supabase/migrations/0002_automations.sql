@@ -49,9 +49,8 @@ begin
   return coalesce(new, old);
 end $$;
 
+-- (No per-message notifications for channel chat; see 0006_messaging.sql.)
 drop trigger if exists automation_social_message on public.social_message;
-create trigger automation_social_message after insert on public.social_message
-  for each row execute function private.on_row_change();
 
 drop trigger if exists automation_compliance_training on public.compliance_training;
 create trigger automation_compliance_training after insert on public.compliance_training

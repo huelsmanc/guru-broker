@@ -41,7 +41,7 @@ const nameOf = (u) => u.display_name || u.full_name || u.name || u.email;
  * In-app notification + email to each person (deduplicated).
  * people: [{ email, name }], link: app path like '/Offers?open=123'
  */
-export async function notifyPeople(entities, { brokerageId, people, title, message, link, referenceId, referenceType, emailBody, attachments }) {
+export async function notifyPeople(entities, { brokerageId, people, title, message, link, referenceId, referenceType, emailBody, attachments, email: sendEmail = true }) {
   const seen = new Set();
   for (const p of people) {
     const email = String(p?.email || '').toLowerCase();
@@ -51,6 +51,7 @@ export async function notifyPeople(entities, { brokerageId, people, title, messa
       brokerage_id: brokerageId, user_email: email, title, description: message, type: referenceType?.toLowerCase() || 'info',
       action_url: link, reference_id: referenceId, reference_type: referenceType, read: false,
     }).catch((e) => console.error('notification failed', e.message));
+    if (!sendEmail) continue;
     await SendEmail({
       to: email,
       subject: title,

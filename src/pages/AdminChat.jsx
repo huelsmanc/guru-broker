@@ -19,9 +19,8 @@ export default function AdminChat() {
 
   const { data: messages = [] } = useQuery({
     queryKey: ['admin-messages'],
-    queryFn: () => base44.entities.AdminMessage.filter({ brokerage_id: brokerageId }, 'created_date', 100),
+    queryFn: async () => (await base44.entities.AdminMessage.filter({ brokerage_id: brokerageId }, '-created_date', 300)).reverse(), // newest 300, oldest first
     enabled: !!user && isAdmin && !!brokerageId,
-    refetchInterval: 3000,
   });
 
   useEffect(() => {
