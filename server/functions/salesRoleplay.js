@@ -8,7 +8,7 @@ import { createClientFromRequest } from '../lib/base44.js';
 import { InvokeLLM } from '../lib/integrations.js';
 import { SCENARIOS, DIFFICULTIES, scenarioCard, personaInstructions, callStats, SCORECARD_SCHEMA, scoringPrompt } from '../../shared/roleplay.js';
 
-const MAX_MINUTES = 20;
+const MAX_MINUTES = 5;
 
 // Try the configured models first, then known fallbacks (OpenAI renames these from time to time).
 async function mintClientSecret({ instructions, voice, email }) {

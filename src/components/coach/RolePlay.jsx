@@ -36,7 +36,7 @@ export default function RolePlay({ user }) {
   };
 
   if (phase === 'live' || phase === 'grading') {
-    return <LiveCall user={user} scenario={current} difficulty={difficulty} grading={phase === 'grading'} maxMinutes={meta?.max_minutes || 20}
+    return <LiveCall user={user} scenario={current} difficulty={difficulty} grading={phase === 'grading'} maxMinutes={meta?.max_minutes || 5}
       onGrading={() => setPhase('grading')} onDone={done} onFail={(msg) => { setError(msg); setPhase('pick'); }} />;
   }
   if (phase === 'result' && result) {
@@ -90,7 +90,7 @@ export default function RolePlay({ user }) {
           <Button size="lg" className="gap-2 rounded-xl h-12 px-6" disabled={!scenario} onClick={() => { setError(''); setPhase('live'); }}>
             <Phone className="w-5 h-5" /> {current ? `Call ${current.persona.split(' ')[0]}` : 'Start the call'}
           </Button>
-          <p className="text-xs text-muted-foreground">Allow the microphone when asked. Headphones work best. Calls end on their own after {meta?.max_minutes || 20} minutes.</p>
+          <p className="text-xs text-muted-foreground">Allow the microphone when asked. Headphones work best. Calls end on their own after {meta?.max_minutes || 5} minutes.</p>
         </div>
 
         <div className="rounded-2xl border bg-card">
@@ -241,7 +241,10 @@ function LiveCall({ user, scenario, difficulty, grading, maxMinutes, onGrading, 
       <div className="px-4 sm:px-6 pt-5 pb-3 text-center">
         <p className="text-xs uppercase tracking-wider text-emerald-300">{scenario?.title} · {difficulty}</p>
         <p className="text-2xl font-bold mt-1">{scenario?.persona}</p>
-        <p className="text-sm text-slate-400 mt-1">{grading ? 'Grading your call…' : status === 'connecting' ? 'Connecting…' : mmss(seconds)}</p>
+        <p className={`text-sm mt-1 ${status === 'live' && maxMinutes * 60 - seconds <= 60 ? 'text-amber-300 font-semibold' : 'text-slate-400'}`}>
+          {grading ? 'Grading your call…' : status === 'connecting' ? 'Connecting…' : `${mmss(seconds)} · ${mmss(Math.max(0, maxMinutes * 60 - seconds))} left`}
+        </p>
+        {status === 'live' && !grading && maxMinutes * 60 - seconds <= 60 && <p className="text-xs text-amber-300 mt-0.5">Last minute: go for the next step.</p>}
       </div>
 
       <div className="flex justify-center py-4">
