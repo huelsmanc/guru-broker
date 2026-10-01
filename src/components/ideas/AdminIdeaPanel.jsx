@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { X } from 'lucide-react';
+import { X, Trash2, Loader2 } from 'lucide-react';
 
 const STATUS_OPTIONS = [
   { id: 'under_review', label: 'Under Review' },
@@ -36,6 +36,19 @@ export default function AdminIdeaPanel({ idea, onClose }) {
       onClose();
     },
   });
+
+  const [deleting, setDeleting] = useState(false);
+  const deleteIdea = async () => {
+    if (!window.confirm(`Delete "${idea.title}"? Its votes and comments go with it. This can't be undone.`)) return;
+    setDeleting(true);
+    try {
+      const comments = await base44.entities.Comment.filter({ idea_id: idea.id }, 'created_date', 500).catch(() => []);
+      await Promise.all(comments.map((c) => base44.entities.Comment.delete(c.id).catch(() => {})));
+      await base44.entities.Idea.delete(idea.id);
+      queryClient.invalidateQueries({ queryKey: ['ideas'] });
+      onClose();
+    } catch (err) { window.alert(err.message); setDeleting(false); }
+  };
 
   const handleSave = (e) => {
     e.preventDefault();
@@ -85,6 +98,9 @@ export default function AdminIdeaPanel({ idea, onClose }) {
           </div>
 
           <div className="flex gap-2 justify-end pt-4">
+            <Button type="button" variant="ghost" className="mr-auto gap-1.5 text-red-600 hover:text-red-700 hover:bg-red-50" onClick={deleteIdea} disabled={deleting}>
+              {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />} Delete idea
+            </Button>
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>

@@ -43,7 +43,7 @@ export default function IdeaCard({ idea, onUpvote, onDownvote, currentUserEmail,
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-2">
             <span className="text-xl">{CATEGORY_EMOJIS[idea.category]}</span>
-            <Badge className={cn('text-xs', colors.badge)}>
+            <Badge className={cn('text-xs border-transparent shadow-none hover:opacity-90', colors.badge, colors.text)}>
               {idea.status.replace('_', ' ').toUpperCase()}
             </Badge>
             {idea.is_anonymous && (
