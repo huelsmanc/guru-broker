@@ -13,6 +13,7 @@ import FileCheck from '@/components/transactions/FileCheck';
 import TransactionESign from '@/components/transactions/TransactionESign';
 import DocIntake from './DocIntake';
 import InspectionRequest from './InspectionRequest';
+import CloseDeal from './CloseDeal';
 import { changeField, setDeadlineDone, postUpdate } from '@/lib/dealActions';
 
 const STATUSES = [['active', 'Active'], ['pending', 'Pending'], ['clear_to_close', 'Clear to close'], ['closed', 'Closed'], ['cancelled', 'Cancelled']];
@@ -40,6 +41,16 @@ export default function WorkspaceOverview({ tx, user, refresh, canEdit, admin, o
   const doneItems = items.filter((i) => ['approved', 'exempt', 'done'].includes(i.status)).length;
   const [posting, setPosting] = useState(false);
   const [inspecting, setInspecting] = useState(false);
+  const [closingDeal, setClosingDeal] = useState(false);
+  const canClose = admin || can(user, 'tx.close');
+  const canReopen = admin || can(user, 'tx.reopen');
+  const isClosed = ['closed', 'cancelled'].includes(tx.status);
+  const reopen = async () => {
+    if (!window.confirm('Re-open this deal? It goes back to Clear to close and stops counting as a closed sale.')) return;
+    await base44.entities.Transaction.update(tx.id, { status: 'clear_to_close' });
+    await postUpdate(tx, user, 'Deal re-opened.', { milestone: 'Re-opened' }).catch(() => {});
+    refresh();
+  };
   const goTab = (t) => setParams({ tab: t });
   const buyerSide = (tx.deal_type || 'buyer') !== 'listing';
 
@@ -77,9 +88,12 @@ export default function WorkspaceOverview({ tx, user, refresh, canEdit, admin, o
           {canEdit && <QuickAction icon={Megaphone} label="Post update" onClick={() => setPosting(true)} />}
           <QuickAction icon={ListChecks} label={`Checklist ${items.length ? `${doneItems}/${items.length}` : ''}`} onClick={() => goTab('checklists')} />
           <QuickAction icon={MessagesSquare} label="Deal chat" onClick={() => goTab('chat')} />
+          {canClose && !isClosed && <QuickAction icon={CheckCircle2} label="Close deal" onClick={() => setClosingDeal(true)} success />}
+          {canReopen && tx.status === 'closed' && <QuickAction icon={RefreshCw} label="Re-open deal" onClick={reopen} />}
         </div>
         {posting && <PostUpdate tx={tx} user={user} onDone={() => { setPosting(false); refresh(); }} />}
       </div>
+      {closingDeal && <CloseDeal tx={tx} user={user} items={items} onClose={() => setClosingDeal(false)} onClosed={refresh} goFinances={() => goTab('finances')} canSeeFinances={admin || can(user, 'tx.view_commissions')} />}
       {inspecting && <InspectionRequest tx={tx} user={user} contacts={contacts} refresh={refresh} onClose={() => setInspecting(false)} />}
 
       <div className="grid lg:grid-cols-[minmax(0,1fr)_340px] gap-5">
@@ -160,10 +174,10 @@ function Stepper({ stage }) {
   );
 }
 
-function QuickAction({ icon: Icon, label, onClick, accent }) {
+function QuickAction({ icon: Icon, label, onClick, accent, success }) {
   return (
     <button type="button" onClick={onClick}
-      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm border ${accent ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white border-transparent' : 'bg-background hover:border-primary'}`}>
+      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm border ${accent ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white border-transparent' : success ? 'bg-emerald-600 text-white border-transparent hover:bg-emerald-700' : 'bg-background hover:border-primary'}`}>
       <Icon className="w-4 h-4" /> {label}
     </button>
   );
