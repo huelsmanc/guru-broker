@@ -32,6 +32,7 @@ const ESignAdmin = lazy(() => import('@/pages/ESignAdmin'));
 const CustomESign = lazy(() => import('@/pages/CustomESign'));
 const CustomSign = lazy(() => import('@/pages/CustomSign'));
 const PublicSigner = lazy(() => import('@/pages/PublicSigner.jsx'));
+const VerifyDocument = lazy(() => import('@/pages/VerifyDocument.jsx'));
 const BulkSign = lazy(() => import('@/pages/BulkSign'));
 const Recognition = lazy(() => import('@/pages/Recognition'));
 const IdeaHub = lazy(() => import('@/pages/IdeaHub'));
@@ -78,7 +79,7 @@ const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
   const location = useLocation();
 
-  const isPublicRoute = ['/sign', '/custom-sign', '/BulkSign', '/review', '/login', '/reset-password', '/status'].includes(location.pathname);
+  const isPublicRoute = ['/sign', '/verify', '/custom-sign', '/BulkSign', '/review', '/login', '/reset-password', '/status'].includes(location.pathname);
 
   // Always render public routes immediately - no auth required
   if (isPublicRoute) {
@@ -86,6 +87,7 @@ const AuthenticatedApp = () => {
       <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="/sign" element={<PublicSigner />} />
+          <Route path="/verify" element={<VerifyDocument />} />
           <Route path="/custom-sign" element={<CustomSign />} />
           <Route path="/BulkSign" element={<BulkSign />} />
           <Route path="/review" element={<PublicReview />} />
@@ -122,6 +124,7 @@ const AuthenticatedApp = () => {
       <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="/sign" element={<PublicSigner />} />
+          <Route path="/verify" element={<VerifyDocument />} />
           <Route path="/custom-sign" element={<CustomSign />} />
           <Route path="/BulkSign" element={<BulkSign />} />
           <Route path="/review" element={<PublicReview />} />

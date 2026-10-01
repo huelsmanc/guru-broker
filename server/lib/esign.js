@@ -699,6 +699,7 @@ export async function finalize({ entities, sub, doc }) {
   }
 
   // Put the signed copy on the checklist item it was sent from.
+  let onChecklist = false;
   if (doc.checklist_id && doc.checklist_item_id) {
     try {
       const [cl] = await entities.Checklist.filter({ id: doc.checklist_id }, '-created_date', 1);
@@ -710,6 +711,7 @@ export async function finalize({ entities, sub, doc }) {
           history: [...(i.history || []), { at, by: 'e-sign', what: 'signed copy attached' }],
         }));
         await entities.Checklist.update(cl.id, { items });
+        onChecklist = true;
       }
     } catch (err) {
       console.error('Could not attach to checklist:', err.message);
@@ -734,8 +736,18 @@ export async function finalize({ entities, sub, doc }) {
         const at = new Date().toISOString();
         await entities.Checklist.update(cl.id, { items: cl.items.map((i) => (i.id !== it.id ? i : { ...i, document_url: link, document_name: `${doc.title} (signed)`, uploaded_by: 'e-sign', uploaded_at: at, status: 'uploaded', history: [...(i.history || []), { at, by: 'e-sign', what: 'signed copy attached' }] })) });
         filedTo = it.title;
+        onChecklist = true;
       }
     } catch (err) { console.error('Checklist match failed:', err.message); }
+  }
+
+  // Filed on a checklist item: it's sorted, so take it out of the deal's Unsorted list.
+  if (onChecklist && sub.transaction_id) {
+    try {
+      const tx = await entities.Transaction.get(sub.transaction_id);
+      const docs = (tx.documents || []).filter((d) => d.submission_id !== sub.id);
+      if (docs.length !== (tx.documents || []).length) await entities.Transaction.update(tx.id, { documents: docs });
+    } catch (err) { console.error('Unsorted cleanup failed:', err.message); }
   }
 
   // Files signers attached go on the deal too.

@@ -3,7 +3,7 @@ import { base44, supabase } from '@/api/base44Client';
 
 const AuthContext = createContext();
 
-const PUBLIC_PATHS = ['/sign', '/custom-sign', '/BulkSign', '/review', '/login', '/reset-password', '/status'];
+const PUBLIC_PATHS = ['/sign', '/verify', '/custom-sign', '/BulkSign', '/review', '/login', '/reset-password', '/status'];
 
 // Records a sign-in in the admin Activity feed (at most once every 8 hours per browser,
 // since Supabase also reports SIGNED_IN when a tab wakes up).

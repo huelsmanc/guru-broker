@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { isPdfUrl } from './PDFPageRenderer';
 import { autoDetectFields } from './autoDetectFields';
 import { useOutletContext } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AlertCircle, Loader2, Upload, Edit2, Users, Send } from 'lucide-react';
+import { AlertCircle, Loader2, Upload, Edit2, Users, Send, FileText, LayoutTemplate, X, ShieldCheck, Bell, ListOrdered, Sparkles, CheckCircle2, AlertTriangle, Info } from 'lucide-react';
 import { motion } from 'framer-motion';
 import ESignFieldEditor from './ESignFieldEditor';
 import SignerManagementDashboard from './SignerManagementDashboard';
@@ -38,6 +38,7 @@ export default function UnifiedESignCreator({
   const queryClient = useQueryClient();
 
   const [step, setStep] = useState('upload');
+  const [dealId, setDealId] = useState(transactionId || '');
   const [title, setTitle] = useState(initialTitle);
   const [documentUrl, setDocumentUrl] = useState(initialDocumentUrl);
   const [signers, setSigners] = useState(initialSigners);
@@ -49,25 +50,59 @@ export default function UnifiedESignCreator({
   const [currentDoc, setCurrentDoc] = useState(null);
   const [sequential, setSequential] = useState(false);
   const [message, setMessage] = useState('');
+  // Files and templates that make up the document (more than one becomes a packet).
+  const [parts, setParts] = useState(() => (initialDocumentUrl ? [{ kind: 'file', url: initialDocumentUrl, name: initialTitle || 'Document' }] : []));
+  const [builtKey, setBuiltKey] = useState(null);
+  const [building, setBuilding] = useState(false);
+  const [remindDays, setRemindDays] = useState(2);
+  const [requireCode, setRequireCode] = useState(false);
+  const [preflight, setPreflight] = useState(null); // { issues, ai } | 'loading'
+
+  const { data: templates = [] } = useQuery({
+    queryKey: ['esign-templates', brokerageId],
+    enabled: !!brokerageId,
+    queryFn: () => base44.entities.ESignTemplate.filter({ brokerage_id: brokerageId }, '-created_date', 100),
+  });
+  const { data: myDeals = [] } = useQuery({
+    queryKey: ['esign-my-deals', brokerageId],
+    enabled: !!brokerageId && !transactionId,
+    queryFn: () => base44.entities.Transaction.filter({ brokerage_id: brokerageId }, '-created_date', 200).catch(() => []),
+  });
+  const { data: deal = null } = useQuery({
+    queryKey: ['esign-deal', dealId],
+    enabled: !!dealId,
+    queryFn: () => base44.entities.Transaction.get(dealId).catch(() => null),
+  });
+
+  // Check the document whenever the Send step opens.
+  useEffect(() => {
+    if (step !== 'send' || !currentDoc) return;
+    let live = true;
+    setPreflight('loading');
+    base44.functions.invoke('esignPreflight', { documentId: currentDoc.id, signers: signers.filter((s) => s.email || s.name), transactionId: dealId || undefined })
+      .then((r) => live && setPreflight(r.data))
+      .catch(() => live && setPreflight(null));
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, currentDoc?.id]);
 
   const handleFileUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+    const files = [...(e.target.files || [])];
+    e.target.value = '';
+    if (!files.length) return;
     setUploading(true);
     setError(null);
-    // Name the document after the file unless a title was typed.
-    if (!title.trim()) setTitle(file.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim());
-    setFileName(file.name);
-
+    // Name the document after the first file unless a title was typed.
+    if (!title.trim()) setTitle(files[0].name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim());
+    setFileName(files[0].name);
     try {
-      // Private: to the deal when sent from one, otherwise to the sender (and admins).
-      const response = await base44.integrations.Core.UploadFile({ file, scope: transactionId ? { kind: 'tx', id: transactionId } : { kind: 'user', id: user?.id } });
-      const url = response?.file_url || response?.data?.file_url;
-      if (url) {
+      for (const file of files) {
+        // Private: to the deal when sent from one, otherwise to the sender (and admins).
+        const response = await base44.integrations.Core.UploadFile({ file, scope: dealId ? { kind: 'tx', id: dealId } : { kind: 'user', id: user?.id } });
+        const url = response?.file_url || response?.data?.file_url;
+        if (!url) throw new Error('no link came back');
+        setParts((p) => [...p, { kind: 'file', url, name: file.name }]);
         setDocumentUrl(url);
-      } else {
-        setError('Upload succeeded but no URL returned');
       }
     } catch (err) {
       setError('Failed to upload document: ' + (err.message || err));
@@ -76,9 +111,31 @@ export default function UnifiedESignCreator({
     }
   };
 
+  const addTemplate = (t) => {
+    setParts((p) => [...p, { kind: 'template', id: t.id, name: t.title, roles: t.roles || [], url: t.document_url }]);
+    if (!title.trim()) setTitle(t.title || '');
+    // Template roles become empty signer rows to fill in (Buyer 1, Buyer 2...).
+    if (!signers.length && (t.roles || []).length) setSigners(t.roles.map((r, i) => ({ id: `role-${i}-${Date.now()}`, role: r, name: '', email: '' })));
+  };
+  const removePart = (i) => setParts((p) => p.filter((_, j) => j !== i));
+
+  // One file: used as is. One template: its file and boxes. Several: merged into one packet.
+  const buildDocument = async () => {
+    if (parts.length === 1 && parts[0].kind === 'file') return { document_url: parts[0].url, fields: null };
+    if (parts.length === 1 && parts[0].kind === 'template') {
+      const t = templates.find((x) => x.id === parts[0].id);
+      return { document_url: t?.document_url || parts[0].url, fields: (t?.fields || []).map((f, i) => ({ ...f, id: f.id || `field-${i}-${Date.now()}` })) };
+    }
+    const res = await base44.functions.invoke('esignPacket', {
+      title, transactionId: dealId || undefined,
+      parts: parts.map((p) => (p.kind === 'template' ? { templateId: p.id } : { url: p.url })),
+    });
+    return { document_url: res.data.document_url, fields: res.data.fields || [] };
+  };
+
   const canProceed = () => {
-    if (step === 'upload') return title.trim() && documentUrl;
-    if (step === 'signers') return signers.length > 0;
+    if (step === 'upload') return title.trim() && parts.length > 0;
+    if (step === 'signers') return signers.length > 0 && signers.every((s) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.email || ''));
     if (step === 'fields') return currentDoc?.fields?.length > 0;
     return true;
   };
@@ -105,9 +162,8 @@ export default function UnifiedESignCreator({
         signers: signers.filter(s => s.email),
         sequenceType: sequential ? 'sequential' : 'all_at_once',
         message: message.trim() || undefined,
-        transactionId,
-        createdByEmail: user.email,
-        createdByName: user.full_name,
+        transactionId: dealId || undefined,
+        options: { verify: requireCode ? 'email' : null, remindDays },
       });
 
       await queryClient.invalidateQueries({ queryKey: ['esign-documents', brokerageId] });
@@ -126,9 +182,20 @@ export default function UnifiedESignCreator({
   const handleNextStep = async () => {
     if (step === 'upload') {
       setError(null);
+      setBuilding(true);
       try {
+        const key = JSON.stringify(parts.map((p) => p.id || p.url));
+        if (currentDoc && key === builtKey) {
+          const updated = await base44.entities.ESignDocument.update(currentDoc.id, { title, transaction_id: dealId || null });
+          setCurrentDoc(updated);
+          setStep('signers');
+          return;
+        }
+        const built = await buildDocument();
+        setDocumentUrl(built.document_url);
+        setBuiltKey(key);
         if (currentDoc) {
-          const updated = await base44.entities.ESignDocument.update(currentDoc.id, { title, document_url: documentUrl });
+          const updated = await base44.entities.ESignDocument.update(currentDoc.id, { title, transaction_id: dealId || null, document_url: built.document_url, ...(built.fields ? { fields: built.fields } : {}) });
           setCurrentDoc(updated);
           setStep('signers');
           return;
@@ -136,10 +203,10 @@ export default function UnifiedESignCreator({
         const doc = await base44.entities.ESignDocument.create({
           brokerage_id: brokerageId,
           title,
-          ...(transactionId ? { transaction_id: transactionId } : {}),
+          ...(dealId ? { transaction_id: dealId } : {}),
           ...(checklistLink ? { checklist_id: checklistLink.checklist_id, checklist_item_id: checklistLink.item_id } : {}),
-          document_url: documentUrl,
-          fields: [],
+          document_url: built.document_url,
+          fields: built.fields || [],
           signers: [],
           created_by_email: user.email,
           created_by_name: user.full_name,
@@ -148,12 +215,14 @@ export default function UnifiedESignCreator({
         setStep('signers');
       } catch (err) {
         setError('Failed to create document: ' + (err.message || err));
+      } finally {
+        setBuilding(false);
       }
     } else if (step === 'signers') {
       // Save signers to document
       try {
         const updated = await base44.entities.ESignDocument.update(currentDoc.id, {
-          signers: signers.map(({ id, ...rest }) => rest),
+          signers: signers.map(({ id, ...rest }) => ({ ...rest, email: (rest.email || '').trim().toLowerCase() })),
         });
         setCurrentDoc(updated);
         setStep('fields');
@@ -224,39 +293,61 @@ export default function UnifiedESignCreator({
               />
             </div>
 
+            {!transactionId && (
+              <div>
+                <label className="text-sm font-medium text-foreground block mb-2">Deal (optional)</label>
+                <select value={dealId} onChange={(e) => setDealId(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm">
+                  <option value="">Not for a deal</option>
+                  {myDeals.map((t) => <option key={t.id} value={t.id}>{t.property_address || 'Untitled deal'}{t.status ? ` (${t.status})` : ''}</option>)}
+                </select>
+                <p className="text-xs text-muted-foreground mt-1">The signed copy goes into that deal's Unsorted documents, ready to sort onto a checklist.</p>
+              </div>
+            )}
+
             <div>
-              <label className="text-sm font-medium text-foreground block mb-2">
-                Upload PDF or Image *
-              </label>
+              <label className="text-sm font-medium text-foreground block mb-2">Files *</label>
               <label className="block cursor-pointer">
-                <input
-                  type="file"
-                  accept=".pdf,.png,.jpg,.jpeg"
-                  onChange={handleFileUpload}
-                  disabled={uploading}
-                  className="hidden"
-                />
-                <div className="border-2 border-dashed border-border/40 rounded-lg p-8 text-center hover:border-primary/50 transition-colors">
+                <input type="file" multiple accept=".pdf,.png,.jpg,.jpeg" onChange={handleFileUpload} disabled={uploading} className="hidden" />
+                <div className="border-2 border-dashed border-border/40 rounded-lg p-6 text-center hover:border-primary/50 transition-colors">
                   {uploading ? (
-                    <>
-                      <Loader2 className="w-8 h-8 animate-spin mx-auto text-primary mb-2" />
-                      <p className="text-sm text-muted-foreground">Uploading...</p>
-                    </>
-                  ) : documentUrl ? (
-                    <>
-                      <p className="text-sm font-medium text-foreground mb-1">Document uploaded ✓</p>
-                      <p className="text-xs text-muted-foreground">{fileName || 'Click to replace it'}</p>
-                    </>
+                    <><Loader2 className="w-7 h-7 animate-spin mx-auto text-primary mb-2" /><p className="text-sm text-muted-foreground">Uploading {fileName}…</p></>
                   ) : (
-                    <>
-                      <Upload className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
-                      <p className="text-sm font-medium text-foreground">Click to upload</p>
-                      <p className="text-xs text-muted-foreground mt-1">PDF, PNG, or JPG</p>
-                    </>
+                    <><Upload className="w-7 h-7 mx-auto text-muted-foreground mb-2" />
+                      <p className="text-sm font-medium text-foreground">{parts.length ? 'Add another file' : 'Click to upload'}</p>
+                      <p className="text-xs text-muted-foreground mt-1">PDF, PNG or JPG. Pick several to send them as one packet.</p></>
                   )}
                 </div>
               </label>
             </div>
+
+            {templates.length > 0 && (
+              <div>
+                <p className="text-sm font-medium mb-2 flex items-center gap-1.5"><LayoutTemplate className="w-4 h-4" /> Start from a template</p>
+                <div className="flex flex-wrap gap-2">
+                  {templates.map((t) => (
+                    <button key={t.id} type="button" onClick={() => addTemplate(t)}
+                      className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs hover:border-primary hover:text-primary">
+                      + {t.title || 'Template'} <span className="text-muted-foreground">({(t.fields || []).length} boxes)</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {parts.length > 0 && (
+              <div className="rounded-lg border border-border/60 divide-y">
+                {parts.map((p, i) => (
+                  <div key={`${p.id || p.url}-${i}`} className="flex items-center gap-2 px-3 py-2 text-sm">
+                    {p.kind === 'template' ? <LayoutTemplate className="w-4 h-4 text-purple-600" /> : <FileText className="w-4 h-4 text-blue-600" />}
+                    <span className="flex-1 truncate">{p.name}</span>
+                    {p.kind === 'template' && <span className="text-[10px] uppercase text-purple-600">template</span>}
+                    <button type="button" onClick={() => removePart(i)} className="p-1 rounded hover:bg-muted" aria-label="Remove"><X className="w-4 h-4" /></button>
+                  </div>
+                ))}
+                {parts.length > 1 && <p className="px-3 py-2 text-xs text-muted-foreground">These {parts.length} will be joined in this order into one document, signed once.</p>}
+              </div>
+            )}
           </motion.div>
         )}
 
@@ -266,6 +357,7 @@ export default function UnifiedESignCreator({
             <ESignFieldEditor
               onAutoDetect={isPdfUrl(currentDoc.document_url) ? autoDetectFields : undefined}
               doc={currentDoc}
+              deal={deal}
               onChange={(fields) => setCurrentDoc((d) => (d ? { ...d, fields } : d))}
               onComplete={handleFieldsComplete}
             />
@@ -280,6 +372,8 @@ export default function UnifiedESignCreator({
               submissions={[]}
               onSignersChange={setSigners}
               initialSigners={signers}
+              transactionId={dealId}
+              me={user}
             />
           </motion.div>
         )}
@@ -305,20 +399,56 @@ export default function UnifiedESignCreator({
               </div>
             </div>
 
-            {signers.length > 1 && (
+            <div className="grid sm:grid-cols-2 gap-3">
+              {signers.length > 1 && (
+                <label className="flex items-start gap-3 rounded-lg border border-border/60 p-3 text-sm cursor-pointer">
+                  <input type="checkbox" className="mt-0.5" checked={sequential} onChange={(e) => setSequential(e.target.checked)} />
+                  <span><span className="font-medium flex items-center gap-1.5"><ListOrdered className="w-4 h-4" /> Sign in order</span>
+                    <span className="block text-muted-foreground text-xs">Each person is emailed after the one before them signs.</span></span>
+                </label>
+              )}
               <label className="flex items-start gap-3 rounded-lg border border-border/60 p-3 text-sm cursor-pointer">
-                <input type="checkbox" className="mt-0.5" checked={sequential} onChange={(e) => setSequential(e.target.checked)} />
-                <span>
-                  <span className="font-medium">Sign in order</span>
-                  <span className="block text-muted-foreground text-xs">Each person gets the email only after the one before them signs, in the order listed.</span>
-                </span>
+                <input type="checkbox" className="mt-0.5" checked={requireCode} onChange={(e) => setRequireCode(e.target.checked)} />
+                <span><span className="font-medium flex items-center gap-1.5"><ShieldCheck className="w-4 h-4" /> Confirm identity</span>
+                  <span className="block text-muted-foreground text-xs">Signers enter a code we email them before they can open it.</span></span>
               </label>
-            )}
+              <label className="flex items-start gap-3 rounded-lg border border-border/60 p-3 text-sm">
+                <Bell className="w-4 h-4 mt-0.5" />
+                <span className="flex-1"><span className="font-medium">Automatic reminders</span>
+                  <select className="mt-1 block w-full rounded-md border border-border bg-background px-2 py-1 text-sm" value={remindDays} onChange={(e) => setRemindDays(Number(e.target.value))}>
+                    <option value={1}>Every day</option><option value={2}>Every 2 days</option><option value={3}>Every 3 days</option><option value={7}>Every week</option><option value={0}>Off</option>
+                  </select></span>
+              </label>
+            </div>
             <label className="block text-sm">
               <span className="font-medium">Message to signers (optional)</span>
               <textarea className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm" rows={3}
                 value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Please review and sign at your earliest convenience." />
             </label>
+
+            <div className="rounded-lg border border-border/60 p-3">
+              <p className="text-sm font-medium flex items-center gap-1.5 mb-2"><Sparkles className="w-4 h-4 text-purple-600" /> Pre-send check</p>
+              {preflight === 'loading' ? (
+                <p className="text-xs text-muted-foreground flex items-center gap-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Checking the document, signers and deal…</p>
+              ) : !preflight ? (
+                <p className="text-xs text-muted-foreground">The check isn't available right now. You can still send.</p>
+              ) : preflight.issues?.length ? (
+                <ul className="space-y-1.5">
+                  {preflight.issues.map((it, i) => {
+                    const Icon = it.severity === 'critical' ? AlertCircle : it.severity === 'warning' ? AlertTriangle : Info;
+                    const color = it.severity === 'critical' ? 'text-red-600' : it.severity === 'warning' ? 'text-amber-600' : 'text-blue-600';
+                    return (
+                      <li key={i} className="flex gap-2 text-sm">
+                        <Icon className={`w-4 h-4 mt-0.5 flex-shrink-0 ${color}`} />
+                        <span><span className="font-medium">{it.title}</span>{it.ai && <span className="ml-1 text-[10px] text-purple-600">AI</span>}<span className="block text-xs text-muted-foreground">{it.detail}</span></span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <p className="text-sm text-green-700 flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4" /> Looks good{preflight.ai ? ', including an AI read of the document' : ''}.</p>
+              )}
+            </div>
             {missingSignature.length > 0 ? (
               <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 text-sm text-amber-900">
                 {missingSignature.join(', ')} {missingSignature.length === 1 ? 'has' : 'have'} no signature or initials field.
@@ -361,16 +491,16 @@ export default function UnifiedESignCreator({
 
         {step !== 'send' && !canProceed() && !uploading && (
           <p className="text-xs text-muted-foreground self-center ml-auto">
-            {step === 'upload' ? (!documentUrl ? 'Upload the document to continue.' : 'Add a title to continue.') : step === 'signers' ? 'Add at least one signer.' : step === 'fields' ? 'Place at least one field.' : ''}
+            {step === 'upload' ? (!parts.length ? 'Upload a file or pick a template to continue.' : 'Add a title to continue.') : step === 'signers' ? (signers.length ? 'Every signer needs an email address.' : 'Add at least one signer.') : step === 'fields' ? 'Place at least one field.' : ''}
           </p>
         )}
         {step !== 'send' && (
           <Button
             onClick={handleNextStep}
-            disabled={!canProceed() || uploading || creating}
+            disabled={!canProceed() || uploading || creating || building}
             className="gap-2"
           >
-            {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+            {creating || building ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
             Next: {STEPS[currentStepIndex + 1]?.label || 'Complete'}
           </Button>
         )}

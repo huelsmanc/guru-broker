@@ -22,7 +22,7 @@ globalThis.__db = {
     { id: 'u9', email: 'zed@y.com', full_name: 'Zed', role: 'user', brokerage_id: 'B2', extra: {} },
   ],
   checklist: [{ id: 'cl1', brokerage_id: 'B1', subject_type: 'transaction', subject_id: 'tx1', items: [{ id: 'ad', title: 'Addendum', requires_document: true, status: 'open', history: [] }], extra: {} }],
-  esign_document: [{ id: 'doc2', brokerage_id: 'B1', title: 'Addendum', document_url: 'https://files/original.pdf', transaction_id: 'tx1',
+  esign_document: [{ id: 'doc2', brokerage_id: 'B1', created_by_email: 'ann@x.com', title: 'Addendum', document_url: 'https://files/original.pdf', transaction_id: 'tx1',
     signers: [{ name: 'Bob', email: 'bob@x.com' }],
     fields: [
       { id: 's', type: 'signature', x: 10, y: 30, width: 30, hPct: 2, signer_index: 0 },
@@ -146,6 +146,15 @@ const crypto = await import('node:crypto');
 assert.equal(crypto.createHash('sha256').update(pdf).digest('hex'), done.extra.final_sha256, 'fingerprint matches the stored file');
 r = await call('esignVerify', { id: 'nope' });
 assert.equal(r.status, 404);
+
+// Link to a deal afterwards: the signed copy lands in the deal's Unsorted documents
+const before = globalThis.__db.transaction[0].documents.filter((d) => d.submission_id === done.id).length;
+assert.equal(before, 0, 'auto-filed to its checklist item, so not in Unsorted');
+r = await call('esignLinkDeal', { documentId: 'doc2', transactionId: 'tx1' }, { authorization: 'Bearer otherTok' });
+assert.equal(r.status, 403);
+r = await call('esignLinkDeal', { documentId: 'doc2', transactionId: 'tx1' }, agent);
+assert.equal(r.status, 200); assert.equal(r.body.filed, 1);
+assert.ok(globalThis.__db.transaction[0].documents.some((d) => d.submission_id === done.id), 'now in Unsorted');
 
 // Packet: template fields move to their place in the merged file
 globalThis.__storage['private-files/scoped/B1/tx/tx1/a.pdf'] = original;

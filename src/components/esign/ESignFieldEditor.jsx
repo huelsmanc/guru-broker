@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
-import { Loader2, AlertCircle, Trash2, PenTool, Calendar, Type, CaseSensitive, Sparkles, Strikethrough } from 'lucide-react';
+import { Loader2, AlertCircle, Trash2, PenTool, Calendar, Type, CaseSensitive, Sparkles, Strikethrough, CheckSquare, CircleDot, ListChecks, Paperclip, Copy, Home, Check } from 'lucide-react';
 import PDFPageRenderer from './PDFPageRenderer';
 import { fieldStyle, heightPct, fieldSignerIndex, textPx } from '../../../shared/esignGeometry.js';
 
@@ -10,8 +10,42 @@ export const FIELD_TYPES = [
   { id: 'initial', label: 'Initials', icon: CaseSensitive, w: 0.09, h: 0.045 },
   { id: 'date', label: 'Date signed', icon: Calendar, w: 0.18, h: 0.03 },
   { id: 'text', label: 'Text', icon: Type, w: 0.30, h: 0.03 },
+  { id: 'checkbox', label: 'Checkbox', icon: CheckSquare, w: 0.028, h: 0.028 },
+  { id: 'radio', label: 'Choose one', icon: CircleDot, w: 0.028, h: 0.028 },
+  { id: 'dropdown', label: 'Dropdown', icon: ListChecks, w: 0.22, h: 0.03 },
+  { id: 'attachment', label: 'Attach a file', icon: Paperclip, w: 0.28, h: 0.03 },
   { id: 'strike', label: 'Strike out', icon: Strikethrough, w: 0.30, h: 0.012 },
 ];
+
+const money = (v) => (v == null || v === '' ? '' : `$${Number(v).toLocaleString('en-US', { maximumFractionDigits: 2 })}`);
+const usDate = (d) => { if (!d) return ''; const [y, m, day] = String(d).slice(0, 10).split('-'); return y && m && day ? `${m}/${day}/${y}` : String(d); };
+const listOf = (v) => (Array.isArray(v) ? v.filter(Boolean).join(', ') : v || '');
+
+/** Facts from the deal that can be dropped onto the document as pre-filled text. */
+export function dealFacts(deal) {
+  if (!deal) return [];
+  return [
+    ['Property address', deal.property_address],
+    ['Price', money(deal.sale_price)],
+    ['Buyer(s)', listOf(deal.buyers) || deal.buyer_name],
+    ['Seller(s)', listOf(deal.sellers) || deal.seller_name],
+    ['Closing date', usDate(deal.closing_date)],
+    ['Acceptance date', usDate(deal.acceptance_date)],
+    ['Inspection deadline', usDate(deal.inspection_contingency_date || deal.inspection_date)],
+    ['Agent', deal.agent_name],
+    ['Earnest money', money(deal.earnest_money)],
+  ].filter(([, v]) => v).map(([label, value]) => ({ label, value: String(value) }));
+}
+
+// A small preview of each field type inside its box.
+function FieldPreview({ field, color, label }) {
+  if (field.type === 'checkbox') return <span className="w-full h-full flex items-center justify-center pointer-events-none"><Check className="w-3/4 h-3/4 opacity-30" style={{ color }} /></span>;
+  if (field.type === 'radio') return <span className="w-3/4 h-3/4 rounded-full border-2 pointer-events-none" style={{ borderColor: color }} />;
+  const text = field.type === 'dropdown' ? `▾ ${(field.options || []).filter(Boolean)[0] || 'Dropdown'}`
+    : field.type === 'attachment' ? `📎 ${field.label || 'Attach a file'}`
+    : label;
+  return <span className="text-[11px] font-semibold truncate px-1 pointer-events-none" style={{ color }}>{text}</span>;
+}
 
 // Text typed into a field, shown at the size it will print. Grows the box downward when the
 // text needs more lines, so nothing is cut off.
@@ -47,11 +81,14 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
  * Works with mouse and touch. Every field is assigned to a signer; the sidebar
  * shows which signers still have nothing to sign.
  */
-export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChange }) {
+export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChange, deal }) {
   const signers = doc.signers || [];
   const [fields, setFields] = useState(() => (doc.fields || []).map((f, i) => ({ ...f, id: f.id || `field-${i}-${Date.now()}` })));
   const [layout, setLayout] = useState(null); // { width, height, ratio }
   const [placing, setPlacing] = useState(null); // field type id
+  const [placingValue, setPlacingValue] = useState(null); // deal fact being placed as text
+  const [radioGroup, setRadioGroup] = useState(null); // keeps adding options to this group
+  const [templateMsg, setTemplateMsg] = useState(null);
   const [activeSigner, setActiveSigner] = useState(0);
   const [selectedId, setSelectedId] = useState(null);
   const [editingId, setEditingId] = useState(null);
@@ -105,13 +142,58 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChan
       y: clamp(yPct, 0, 100 - hPct),
       width: wPct,
       hPct,
-      required: true,
-      value: '',
+      required: placing !== 'checkbox' && placing !== 'attachment',
+      value: placingValue || '',
+      ...(placingValue ? { from_deal: true } : {}),
       signer_index: activeSigner,
     };
+    if (placing === 'dropdown') field.options = ['Option 1', 'Option 2'];
+    if (placing === 'attachment') field.label = 'Attach a file';
+    if (placing === 'radio') {
+      // Tap several times to add choices to the same group.
+      const group = radioGroup || `group-${Date.now().toString(36)}`;
+      const count = fields.filter((f) => f.type === 'radio' && f.group === group).length;
+      Object.assign(field, { group, label: `Option ${count + 1}` });
+      setRadioGroup(group);
+      setFields((prev) => [...prev, field]);
+      setSelectedId(field.id);
+      return; // stay in "choose one" mode until Done
+    }
     setFields((prev) => [...prev, field]);
     setSelectedId(field.id);
     setPlacing(null);
+    setPlacingValue(null);
+  };
+
+  const stopPlacing = () => { setPlacing(null); setPlacingValue(null); setRadioGroup(null); };
+
+  // Drop a deal fact: into the selected text box, or as a new pre-filled text box.
+  const applyFact = (fact) => {
+    if (selected?.type === 'text') { updateField(selected.id, { value: fact.value, from_deal: true }); return; }
+    setRadioGroup(null);
+    setPlacing('text');
+    setPlacingValue(fact.value);
+  };
+
+  // An initials box near the bottom right of every page for the chosen signer.
+  const initialsEveryPage = () => {
+    if (!layout?.pages?.length) return;
+    setError(null);
+    const ratio = layout.ratio;
+    const hPct = (0.04 / ratio) * 100;
+    let offset = 0;
+    const add = [];
+    layout.pages.forEach((p, i) => {
+      const top = offset;
+      const bottom = offset + p.height / p.width;
+      offset = bottom;
+      const has = fields.some((f) => f.type === 'initial' && fieldSignerIndex(f) === activeSigner && (f.y / 100) * ratio >= top && (f.y / 100) * ratio < bottom);
+      if (has) return;
+      const x = Math.max(4, 84 - (activeSigner % 6) * 11);
+      add.push({ id: `field-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 5)}`, type: 'initial', x, y: ((bottom - 0.075) / ratio) * 100, width: 9, hPct, required: true, value: '', signer_index: activeSigner });
+    });
+    if (add.length) setFields((prev) => [...prev, ...add]);
+    else setError('Every page already has initials for this signer.');
   };
 
   // Drag to move / drag the corner to resize.
@@ -184,13 +266,18 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChan
     setSaving(true);
     setError(null);
     try {
+      const name = window.prompt('Name this template', doc.title || 'Template');
+      if (!name) return;
       await base44.entities.ESignTemplate.create({
         brokerage_id: doc.brokerage_id,
-        title: doc.title,
+        title: name.trim(),
         document_url: doc.document_url,
-        fields: fields.map(({ id, ...rest }) => rest),
+        // Pre-filled deal facts are specific to this deal; keep the boxes but empty them.
+        fields: fields.map((f) => ({ ...f, value: f.from_deal ? '' : f.value })),
+        roles: signers.map((s, i) => s.role || `Signer ${i + 1}`),
         created_by_email: doc.created_by_email,
       });
+      setTemplateMsg(`Saved "${name.trim()}". Pick it next time under "Start from a template".`);
     } catch (err) {
       setError('Failed to save template: ' + (err.message || err));
     } finally {
@@ -218,8 +305,11 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChan
       <div className="lg:col-span-2 space-y-2">
         {placing && (
           <div className="rounded-lg bg-blue-50 border border-blue-200 px-3 py-2 text-sm text-blue-800 flex justify-between items-center">
-            <span>{placing === 'strike' ? 'Tap the text you want to strike out, then drag the corner to cover it.' : `Tap the document where the ${FIELD_TYPES.find((t) => t.id === placing)?.label.toLowerCase()} should go.`}</span>
-            <button className="text-blue-700 underline text-xs" onClick={() => setPlacing(null)}>Cancel</button>
+            <span>{placing === 'strike' ? 'Tap the text you want to strike out, then drag the corner to cover it.'
+              : placing === 'radio' ? 'Tap each choice on the document. The signer can pick only one of them.'
+              : placingValue ? `Tap where "${placingValue.slice(0, 40)}" should go.`
+              : `Tap the document where the ${FIELD_TYPES.find((t) => t.id === placing)?.label.toLowerCase()} should go.`}</span>
+            <button type="button" className="text-blue-700 underline text-xs" onClick={stopPlacing}>{placing === 'radio' ? 'Done' : 'Cancel'}</button>
           </div>
         )}
         <div className="border border-border/50 rounded-lg overflow-auto bg-slate-100" style={{ maxHeight: '72vh' }}>
@@ -258,10 +348,9 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChan
                       onGrow={(h) => updateField(field.id, { hPct: Math.min(h, 100 - field.y) })}
                       onDone={() => setEditingId(null)} />
                   ) : (
-                    <span className="text-[11px] font-semibold truncate px-1 pointer-events-none" style={{ color }}>
-                      {def?.label || field.type}
-                    </span>
+                    <FieldPreview field={field} color={color} label={field.label || def?.label || field.type} />
                   )}
+                  {field.show_if && <span className="absolute -top-2 -left-2 text-[9px] px-1 rounded bg-amber-400 text-white pointer-events-none" title="Only shows when another box is filled">if</span>}
                   {isSel && (
                     <>
                       <button
@@ -313,13 +402,16 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChan
             {FIELD_TYPES.map((t) => {
               const Icon = t.icon;
               return (
-                <button key={t.id} disabled={!layout} onClick={() => setPlacing(placing === t.id ? null : t.id)}
+                <button key={t.id} type="button" disabled={!layout} onClick={() => { setPlacingValue(null); setRadioGroup(null); setPlacing(placing === t.id ? null : t.id); }}
                   className={`px-3 py-2 rounded-lg border text-sm flex items-center gap-2 disabled:opacity-40 ${placing === t.id ? 'bg-primary text-primary-foreground border-primary' : 'bg-muted border-border/40 hover:border-foreground/40'}`}>
                   <Icon className="w-4 h-4" /> {t.label}
                 </button>
               );
             })}
           </div>
+          <Button type="button" variant="outline" size="sm" className="w-full mt-2 gap-2" disabled={!layout?.pages?.length} onClick={initialsEveryPage}>
+            <Copy className="w-4 h-4" /> <span className="truncate">Initials on every page{signers[activeSigner] ? ` for ${signers[activeSigner].name || signers[activeSigner].email}` : ''}</span>
+          </Button>
           {onAutoDetect && (
             <Button variant="outline" className="w-full mt-2 gap-2" disabled={!layout || detecting} onClick={autoDetect}>
               {detecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
@@ -327,6 +419,21 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChan
             </Button>
           )}
         </div>
+
+        {dealFacts(deal).length > 0 && (
+          <div>
+            <p className="text-sm font-medium mb-1 flex items-center gap-1.5"><Home className="w-4 h-4" /> Fill from the deal</p>
+            <p className="text-xs text-muted-foreground mb-2">{selected?.type === 'text' ? 'Tap to put it in the selected text box.' : 'Tap one, then tap the document.'}</p>
+            <div className="flex flex-wrap gap-1.5">
+              {dealFacts(deal).map((f) => (
+                <button key={f.label} type="button" disabled={!layout} onClick={() => applyFact(f)} title={f.value}
+                  className="rounded-full border border-border bg-background px-2.5 py-1 text-xs hover:border-primary hover:text-primary disabled:opacity-40">
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {selected && (
           <div className="rounded-lg border border-border/60 p-3 space-y-3">
@@ -357,6 +464,51 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChan
                   onChange={(e) => updateField(selected.id, { value: e.target.value })} />
               </label>
             )}
+            {['checkbox', 'radio', 'dropdown', 'attachment', 'text'].includes(selected.type) && (
+              <label className="block text-xs text-muted-foreground">
+                {selected.type === 'radio' ? 'This choice' : selected.type === 'attachment' ? 'What to attach' : 'Label for the signer (optional)'}
+                <input className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm text-foreground"
+                  value={selected.label || ''} placeholder={selected.type === 'attachment' ? 'e.g. Proof of funds' : selected.type === 'radio' ? 'e.g. Cash' : 'e.g. Lender name'}
+                  onChange={(e) => updateField(selected.id, { label: e.target.value.slice(0, 80) })} />
+              </label>
+            )}
+            {selected.type === 'radio' && (
+              <div className="text-xs text-muted-foreground space-y-1">
+                <p>Choices in this group: {fields.filter((f) => f.type === 'radio' && f.group === selected.group).map((f) => f.label || '?').join(' / ')}</p>
+                <button type="button" className="text-primary underline" onClick={() => { setRadioGroup(selected.group); setActiveSigner(fieldSignerIndex(selected)); setPlacing('radio'); }}>Add another choice to this group</button>
+              </div>
+            )}
+            {selected.type === 'dropdown' && (
+              <label className="block text-xs text-muted-foreground">
+                Choices (one per line)
+                <textarea rows={4} className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm text-foreground resize-y"
+                  value={(selected.options || []).join('\n')}
+                  onChange={(e) => updateField(selected.id, { options: e.target.value.split('\n').map((o) => o.slice(0, 80)).slice(0, 30) })}
+                  onBlur={(e) => updateField(selected.id, { options: e.target.value.split('\n').map((o) => o.trim()).filter(Boolean) })} />
+              </label>
+            )}
+            {selected.type !== 'strike' && (() => {
+              // "Only show when...": a box of the same signer that's ticked, or a dropdown choice.
+              const sameSigner = fields.filter((f) => f.id !== selected.id && fieldSignerIndex(f) === fieldSignerIndex(selected));
+              const opts = [];
+              for (const f of sameSigner) {
+                if (f.type === 'checkbox') opts.push({ key: f.id, label: `"${f.label || 'Checkbox'}" is ticked`, cond: { field_id: f.id } });
+                if (f.type === 'radio') opts.push({ key: f.id, label: `"${f.label || 'Choice'}" is picked`, cond: { field_id: f.id } });
+                if (f.type === 'dropdown') for (const o of (f.options || []).filter(Boolean)) opts.push({ key: `${f.id}::${o}`, label: `Dropdown is "${o}"`, cond: { field_id: f.id, equals: o } });
+              }
+              if (!opts.length && !selected.show_if) return null;
+              const cur = selected.show_if ? `${selected.show_if.field_id}${selected.show_if.equals ? `::${selected.show_if.equals}` : ''}` : '';
+              return (
+                <label className="block text-xs text-muted-foreground">
+                  Only show when
+                  <select className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm text-foreground" value={cur}
+                    onChange={(e) => updateField(selected.id, { show_if: opts.find((o) => o.key === e.target.value)?.cond || null })}>
+                    <option value="">Always show</option>
+                    {opts.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+                  </select>
+                </label>
+              );
+            })()}
             {selected.type !== 'strike' && <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={selected.required !== false}
                 onChange={(e) => updateField(selected.id, { required: e.target.checked })} />
@@ -388,6 +540,7 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChan
             {saving && <Loader2 className="w-4 h-4 animate-spin" />} Done
           </Button>
           <Button variant="outline" onClick={saveAsTemplate} disabled={saving || fields.length === 0}>Save as template</Button>
+          {templateMsg && <p className="text-xs text-green-700">{templateMsg}</p>}
         </div>
       </div>
     </div>

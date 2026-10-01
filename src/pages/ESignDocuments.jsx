@@ -9,7 +9,7 @@ import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { FileText, Plus, Clock, Eye, Edit2, Trash2, Loader2, ChevronDown, Archive, CheckCircle, ExternalLink, Users } from 'lucide-react';
+import { FileText, Plus, Clock, Eye, Edit2, Trash2, Loader2, ChevronDown, Archive, CheckCircle, ExternalLink, Users, KanbanSquare } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { format } from 'date-fns';
 import UnifiedESignCreator from '@/components/esign/UnifiedESignCreator.jsx';
@@ -20,6 +20,9 @@ import ESignActivityLog from '@/components/esign/ESignActivityLog.jsx';
 import SigningRequestStatus from '@/components/esign/SigningRequestStatus.jsx';
 import ESignTemplateManager from '@/components/esign/ESignTemplateManager.jsx';
 import SignerManagementDashboard from '@/components/esign/SignerManagementDashboard.jsx';
+import ESignBoard from '@/components/esign/ESignBoard.jsx';
+import LinkDealPicker from '@/components/esign/LinkDealPicker.jsx';
+import { useLiveTable } from '@/hooks/useLiveTable';
 import { isAdminRole, normalizeRole, can } from '../../shared/permissions.generated.js';
 
 export default function ESignDocuments() {
@@ -32,7 +35,7 @@ export default function ESignDocuments() {
   const [selectedDoc, setSelectedDoc] = useState(null);
   const [viewingDocUrl, setViewingDocUrl] = useState(null);
   const [expandedLogs, setExpandedLogs] = useState({});
-  const [activeTab, setActiveTab] = useState('documents');
+  const [activeTab, setActiveTab] = useState('board');
   const isAdmin = isAdminRole(user?.role);
 
   const { data: documents = [], isLoading } = useQuery({
@@ -59,6 +62,10 @@ export default function ESignDocuments() {
     enabled: !!brokerageId,
   });
 
+  // Live: the board and statuses update as signers open and sign.
+  useLiveTable('ESignSubmission', () => queryClient.invalidateQueries({ queryKey: ['esign-submissions', brokerageId] }));
+  useLiveTable('ESignDocument', () => queryClient.invalidateQueries({ queryKey: ['esign-documents', brokerageId] }));
+
   const deleteDoc = useMutation({
     mutationFn: async (doc) => {
       await base44.entities.ESignDocument.delete(doc.id);
@@ -79,7 +86,7 @@ export default function ESignDocuments() {
   return (
     <>
       <MobilePageHeader title="E-Sign" />
-      <div className="p-6 lg:p-10 max-w-5xl mx-auto">
+      <div className="p-6 lg:p-10 max-w-6xl mx-auto">
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-3">
             <FileText className="w-7 h-7 text-primary" />
@@ -94,7 +101,11 @@ export default function ESignDocuments() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="board" className="gap-2">
+              <KanbanSquare className="w-4 h-4" />
+              Board
+            </TabsTrigger>
             <TabsTrigger value="documents" className="gap-2">
               <FileText className="w-4 h-4" />
               Documents
@@ -104,6 +115,14 @@ export default function ESignDocuments() {
               Templates
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="board" className="mt-6">
+            {isLoading ? <Loader2 className="w-6 h-6 animate-spin text-muted-foreground mx-auto" /> : (
+              <ESignBoard documents={documents} submissions={submissions} brokerageId={brokerageId}
+                canManage={(doc) => doc.created_by_email === user?.email || isAdmin}
+                onOpenDraft={(doc) => { setSelectedDoc(doc); setShowFieldEditor(true); }} />
+            )}
+          </TabsContent>
 
           <TabsContent value="documents" className="mt-6">
             {/* Documents list */}
@@ -143,6 +162,8 @@ export default function ESignDocuments() {
                       </span>
                     </div>
                   </div>
+
+                  {(isCreator || isAdmin) && <div className="mb-3"><LinkDealPicker doc={doc} brokerageId={brokerageId} /></div>}
 
                   {/* Signing requests: who has signed, resend, cancel, signed PDF */}
                   {submissions.filter(s => s.document_id === doc.id).length > 0 && (

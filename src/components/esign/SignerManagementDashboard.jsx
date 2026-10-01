@@ -1,249 +1,157 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Plus, Trash2, CheckCircle2, Clock, AlertCircle, GripVertical } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Plus, Trash2, ArrowUp, ArrowDown, UserPlus, CheckCircle2, Clock } from 'lucide-react';
+import { SIGNER_COLORS } from './ESignFieldEditor';
 
-const STATUS_CONFIG = {
-  pending: { icon: Clock, color: 'bg-yellow-500', label: 'Pending' },
-  in_progress: { icon: Clock, color: 'bg-blue-500', label: 'In Progress' },
-  completed: { icon: CheckCircle2, color: 'bg-green-500', label: 'Completed' },
-  declined: { icon: AlertCircle, color: 'bg-red-500', label: 'Declined' },
-};
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const newId = () => `signer-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
-export default function SignerManagementDashboard({ document, submissions = [], onSignersChange, initialSigners = [] }) {
-  const [signers, setSigners] = useState(initialSigners.length > 0 ? initialSigners : document?.signers || []);
-  const [newSigner, setNewSigner] = useState({ email: '', name: '' });
-  const [sequenceType, setSequenceType] = useState('all_at_once');
+/**
+ * Who signs. Each row is one signer, in signing order (used when "sign in order" is on).
+ * transactionId: offers the deal's people (contacts, agent, TC) as one-tap adds.
+ * me: the sender, so they can add themselves.
+ * Rows from a template keep their role ("Buyer 1") until a real person is filled in.
+ * Without onSignersChange the list is read-only (shows who has signed).
+ */
+export default function SignerManagementDashboard({ document, submissions = [], onSignersChange, initialSigners = [], transactionId, me }) {
+  const [signers, setSigners] = useState(() => (initialSigners.length ? initialSigners : document?.signers || []).map((s) => ({ id: s.id || newId(), ...s })));
+  const [draft, setDraft] = useState({ email: '', name: '' });
+  const readOnly = !onSignersChange;
 
-  // Notify parent when signers change
-  useEffect(() => {
-    if (onSignersChange) {
-      onSignersChange(signers);
-    }
-  }, [signers, onSignersChange]);
+  useEffect(() => { onSignersChange?.(signers); }, [signers, onSignersChange]);
 
-  // Get signer status from submissions
-  const getSignerStatus = (signerEmail) => {
-    const submission = submissions.find(s => s.document_id === document.id);
-    if (!submission) return 'pending';
-    
-    const signer = submission.signers?.find(s => s.email === signerEmail);
-    if (!signer) return 'pending';
-    return signer.signed ? 'completed' : 'in_progress';
+  const txId = transactionId || document?.transaction_id;
+  const { data: dealPeople = [] } = useQuery({
+    queryKey: ['esign-deal-people', txId],
+    enabled: !!txId && !readOnly,
+    queryFn: async () => {
+      const [tx, contacts] = await Promise.all([
+        base44.entities.Transaction.get(txId).catch(() => null),
+        base44.entities.TransactionContact.filter({ transaction_id: txId }, 'created_date', 50).catch(() => []),
+      ]);
+      const out = [];
+      for (const c of contacts || []) if (c.email) out.push({ name: c.name || '', email: c.email, role: c.role || 'Contact' });
+      if (tx?.agent_email) out.push({ name: tx.agent_name || '', email: tx.agent_email, role: 'Agent' });
+      if (tx?.tc_email) out.push({ name: tx.tc_name || '', email: tx.tc_email, role: 'TC' });
+      // Buyers/sellers named on the deal without an email: offer them so only the email is needed.
+      const known = new Set(out.map((p) => String(p.name).toLowerCase()));
+      for (const n of (tx?.buyers || []).filter(Boolean)) if (!known.has(String(n).toLowerCase())) out.push({ name: n, email: '', role: 'Buyer' });
+      for (const n of (tx?.sellers || []).filter(Boolean)) if (!known.has(String(n).toLowerCase())) out.push({ name: n, email: '', role: 'Seller' });
+      return out;
+    },
+  });
+
+  const statusOf = (email) => {
+    const sub = submissions.find((s) => s.document_id === document?.id);
+    const s = sub?.signers?.find((x) => x.email === email);
+    return s?.signed ? 'signed' : 'waiting';
   };
 
-  const addSigner = () => {
-    if (!newSigner.email.trim()) return;
-    
-    const signer = {
-      id: `signer-${Date.now()}`,
-      email: newSigner.email,
-      name: newSigner.name || newSigner.email,
-      order: sequenceType === 'sequential' ? signers.length + 1 : 0,
-    };
-    
-    setSigners([...signers, signer]);
-    setNewSigner({ email: '', name: '' });
+  const add = (p) => {
+    // Fill the first empty template role before adding a new row.
+    setSigners((prev) => {
+      const open = prev.findIndex((s) => !s.email);
+      if (open >= 0 && p.email) return prev.map((s, i) => (i === open ? { ...s, name: p.name || s.name, email: p.email } : s));
+      return [...prev, { id: newId(), name: p.name || '', email: p.email || '', role: p.role === 'Me' ? undefined : p.role }];
+    });
   };
+  const addDraft = () => {
+    if (!EMAIL.test(draft.email.trim())) return;
+    add({ email: draft.email.trim(), name: draft.name.trim() || draft.email.split('@')[0] });
+    setDraft({ email: '', name: '' });
+  };
+  const update = (id, patch) => setSigners((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+  const remove = (id) => setSigners((prev) => prev.filter((s) => s.id !== id));
+  const move = (i, d) => setSigners((prev) => {
+    const j = i + d;
+    if (j < 0 || j >= prev.length) return prev;
+    const next = [...prev];
+    [next[i], next[j]] = [next[j], next[i]];
+    return next;
+  });
 
-  const removeSigner = (id) => {
-    setSigners(signers.filter(s => s.id !== id));
-  };
-
-  const updateSignerOrder = (id, order) => {
-    setSigners(signers.map(s => s.id === id ? { ...s, order } : s));
-  };
-
-  const updateSigner = (id, field, value) => {
-    setSigners(signers.map(s => s.id === id ? { ...s, [field]: value } : s));
-  };
-
-  const updateSequenceType = (type) => {
-    setSequenceType(type);
-    if (type === 'sequential') {
-      setSigners(signers.map((s, idx) => ({ ...s, order: idx + 1 })));
-    } else {
-      setSigners(signers.map(s => ({ ...s, order: 0 })));
-    }
-  };
+  const already = new Set(signers.map((s) => String(s.email || '').toLowerCase()).filter(Boolean));
+  const offers = [
+    ...(me?.email ? [{ name: me.full_name || '', email: me.email, role: 'Me' }] : []),
+    ...dealPeople,
+  ].filter((p) => !p.email || !already.has(p.email.toLowerCase()));
 
   return (
-    <div className="space-y-6">
-      {/* Sequence Type Selection */}
-      <div>
-        <label className="text-sm font-semibold text-foreground block mb-3">Signing Sequence</label>
-        <div className="flex gap-3">
-          <button
-            type="button"
-            onClick={() => updateSequenceType('all_at_once')}
-            className={`flex-1 px-4 py-2.5 rounded-lg border-2 transition-all font-medium ${
-              sequenceType === 'all_at_once'
-                ? 'bg-primary text-primary-foreground border-primary'
-                : 'bg-background border-border/40 text-foreground hover:border-foreground/50'
-            }`}
-          >
-            All at Once
-          </button>
-          <button
-            type="button"
-            onClick={() => updateSequenceType('sequential')}
-            className={`flex-1 px-4 py-2.5 rounded-lg border-2 transition-all font-medium ${
-              sequenceType === 'sequential'
-                ? 'bg-primary text-primary-foreground border-primary'
-                : 'bg-background border-border/40 text-foreground hover:border-foreground/50'
-            }`}
-          >
-            Sequential
-          </button>
-        </div>
-        <p className="text-xs text-muted-foreground mt-2">
-          {sequenceType === 'all_at_once'
-            ? 'All signers receive invitations simultaneously'
-            : 'Each signer must complete before the next receives an invitation'}
-        </p>
-      </div>
-
-      {/* Add Signer Form */}
-      <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-        <label className="text-sm font-semibold text-foreground block">Add Recipient</label>
-        <div className="flex flex-col gap-2">
-          <Input
-            type="email"
-            placeholder="Email address"
-            value={newSigner.email}
-            onChange={(e) => setNewSigner({ ...newSigner, email: e.target.value })}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSigner(); } }}
-            className="h-9"
-          />
-          <Input
-            placeholder="Name (optional)"
-            value={newSigner.name}
-            onChange={(e) => setNewSigner({ ...newSigner, name: e.target.value })}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSigner(); } }}
-            className="h-9"
-          />
-          <Button
-            type="button"
-            onClick={addSigner}
-            disabled={!newSigner.email.trim()}
-            className="gap-2 h-9 rounded-lg"
-          >
-            <Plus className="w-4 h-4" /> Add Signer
-          </Button>
-        </div>
-      </div>
-
-      {/* Signers List */}
-      <div>
-        <label className="text-sm font-semibold text-foreground block mb-3">
-          Recipients ({signers.length})
-        </label>
-        {signers.length === 0 ? (
-          <div className="text-center py-8 bg-muted/30 rounded-lg border border-border/40">
-            <p className="text-muted-foreground text-sm">No recipients added yet</p>
+    <div className="space-y-5">
+      {!readOnly && offers.length > 0 && (
+        <div>
+          <p className="text-sm font-semibold mb-2">{txId ? 'From this deal' : 'Quick add'}</p>
+          <div className="flex flex-wrap gap-2">
+            {offers.map((p, i) => (
+              <button key={`${p.email}-${p.name}-${i}`} type="button"
+                onClick={() => (p.email ? add(p) : setDraft({ email: '', name: p.name }))}
+                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1.5 text-xs hover:border-primary hover:text-primary">
+                <UserPlus className="w-3.5 h-3.5" />
+                <span className="font-medium">{p.name || p.email}</span>
+                <span className="text-muted-foreground">· {p.role}{p.email ? '' : ' (add email)'}</span>
+              </button>
+            ))}
           </div>
+        </div>
+      )}
+
+      {!readOnly && (
+        <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+          <p className="text-sm font-semibold">Add someone</p>
+          <div className="grid sm:grid-cols-[1fr_1fr_auto] gap-2">
+            <Input placeholder="Name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addDraft(); } }} className="h-9" />
+            <Input type="email" placeholder="Email address" value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addDraft(); } }} className="h-9" />
+            <Button type="button" onClick={addDraft} disabled={!EMAIL.test(draft.email.trim())} className="gap-1.5 h-9"><Plus className="w-4 h-4" /> Add</Button>
+          </div>
+        </div>
+      )}
+
+      <div>
+        <p className="text-sm font-semibold mb-2">Signers ({signers.length})</p>
+        {signers.length === 0 ? (
+          <div className="text-center py-8 bg-muted/30 rounded-lg border border-border/40 text-sm text-muted-foreground">No one added yet</div>
         ) : (
           <div className="space-y-2">
-            <AnimatePresence>
-              {signers.map((signer, idx) => {
-                const status = getSignerStatus(signer.email);
-                const statusConfig = STATUS_CONFIG[status];
-                const StatusIcon = statusConfig.icon;
-
-                return (
-                  <motion.div
-                    key={signer.id}
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    className="bg-card border border-border rounded-lg p-4 flex items-start gap-4"
-                  >
-                    {/* Order/Drag Handle */}
-                    {sequenceType === 'sequential' && (
-                      <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-muted text-muted-foreground flex-shrink-0 mt-0.5">
-                        <GripVertical className="w-4 h-4" />
-                      </div>
-                    )}
-
-                    {/* Signer Info - Editable */}
-                    <div className="flex-1 min-w-0 space-y-2">
-                      <input
-                        type="text"
-                        value={signer.name}
-                        onChange={(e) => updateSigner(signer.id, 'name', e.target.value)}
-                        placeholder="Signer name"
-                        className="w-full px-2 py-1.5 text-sm border border-border rounded bg-background text-foreground placeholder-muted-foreground"
-                      />
-                      <input
-                        type="email"
-                        value={signer.email}
-                        onChange={(e) => updateSigner(signer.id, 'email', e.target.value)}
-                        placeholder="Signer email"
-                        className="w-full px-2 py-1.5 text-sm border border-border rounded bg-background text-foreground placeholder-muted-foreground"
-                      />
-                      {sequenceType === 'sequential' && (
-                        <div className="flex items-center gap-2">
-                          <label className="text-xs text-muted-foreground">Order:</label>
-                          <input
-                            type="number"
-                            min="1"
-                            max={signers.length}
-                            value={signer.order}
-                            onChange={(e) => updateSignerOrder(signer.id, parseInt(e.target.value))}
-                            className="w-12 px-2 py-1 text-xs border border-border rounded bg-background text-foreground"
-                          />
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Status Badge */}
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <div className={`flex items-center gap-1.5 ${statusConfig.color} text-white px-2.5 py-1 rounded-lg`}>
-                        <StatusIcon className="w-3.5 h-3.5" />
-                        <span className="text-xs font-medium">{statusConfig.label}</span>
-                      </div>
-
-                      {/* Delete Button */}
-                      <button
-                        onClick={() => removeSigner(signer.id)}
-                        className="p-2 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors flex-shrink-0"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </motion.div>
-                );
-              })}
-            </AnimatePresence>
-          </div>
-        )}
-      </div>
-
-      {/* Progress Summary */}
-      {signers.length > 0 && (
-        <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-          <h3 className="font-semibold text-foreground text-sm">Progress</h3>
-          <div className="space-y-2">
-            {Object.entries(STATUS_CONFIG).map(([status, config]) => {
-              const StatusIcon = config.icon;
-              const count = signers.filter(s => getSignerStatus(s.email) === status).length;
+            {signers.map((s, i) => {
+              const color = SIGNER_COLORS[i % SIGNER_COLORS.length];
+              const badEmail = !s.email || !EMAIL.test(s.email);
               return (
-                <div key={status} className="flex items-center justify-between text-sm">
-                  <div className="flex items-center gap-2">
-                    <div className={`${config.color} text-white p-1 rounded`}>
-                      <StatusIcon className="w-3 h-3" />
+                <div key={s.id} className="bg-card border border-border rounded-lg p-3 flex items-center gap-3" style={{ borderLeft: `4px solid ${color}` }}>
+                  <span className="w-6 h-6 rounded-full text-white text-xs font-bold flex items-center justify-center flex-shrink-0" style={{ background: color }}>{i + 1}</span>
+                  <div className="flex-1 min-w-0 grid sm:grid-cols-2 gap-2">
+                    <div>
+                      {s.role && <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{s.role}</p>}
+                      <input value={s.name || ''} disabled={readOnly} onChange={(e) => update(s.id, { name: e.target.value })} placeholder="Name"
+                        className="w-full px-2 py-1.5 text-sm border border-border rounded bg-background" />
                     </div>
-                    <span className="text-foreground">{config.label}</span>
+                    <div className="self-end">
+                      <input type="email" value={s.email || ''} disabled={readOnly} onChange={(e) => update(s.id, { email: e.target.value.trim() })} placeholder="Email"
+                        className={`w-full px-2 py-1.5 text-sm border rounded bg-background ${badEmail && !readOnly ? 'border-amber-400' : 'border-border'}`} />
+                    </div>
                   </div>
-                  <Badge variant="outline">{count}</Badge>
+                  {readOnly ? (
+                    statusOf(s.email) === 'signed'
+                      ? <CheckCircle2 className="w-5 h-5 text-green-600" />
+                      : <Clock className="w-5 h-5 text-amber-500" />
+                  ) : (
+                    <div className="flex items-center gap-0.5 flex-shrink-0">
+                      <button type="button" onClick={() => move(i, -1)} disabled={i === 0} className="p-1.5 rounded hover:bg-muted disabled:opacity-30" aria-label="Move up"><ArrowUp className="w-4 h-4" /></button>
+                      <button type="button" onClick={() => move(i, 1)} disabled={i === signers.length - 1} className="p-1.5 rounded hover:bg-muted disabled:opacity-30" aria-label="Move down"><ArrowDown className="w-4 h-4" /></button>
+                      <button type="button" onClick={() => remove(s.id)} className="p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive" aria-label="Remove"><Trash2 className="w-4 h-4" /></button>
+                    </div>
+                  )}
                 </div>
               );
             })}
           </div>
-        </div>
-      )}
+        )}
+        {!readOnly && signers.length > 1 && <p className="text-xs text-muted-foreground mt-2">This is the signing order if you choose "Sign in order" when sending. Place fields after the order is set.</p>}
+      </div>
     </div>
   );
 }

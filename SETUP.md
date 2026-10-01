@@ -132,6 +132,12 @@ When the preview looks right: Vercel → Settings → Domains → add `gurubroke
 
 ---
 
+## E-sign extras (nothing to set up)
+
+- **Seal:** every fully signed PDF is digitally sealed. The app makes its own seal certificate the first time, so Adobe shows the signer as "unknown" but still flags any later change. To show your company name instead, buy a document-signing certificate and put its key and certificate (PEM) in Vercel as `ESIGN_SEAL_KEY` and `ESIGN_SEAL_CERT`.
+- **Verify page:** the QR code on each certificate opens `/verify?id=...`, which anyone can use to check a copy.
+- **Time zone:** dates for statements and closings use US Eastern. Set `APP_TIMEZONE` (e.g. `America/Chicago`) in Vercel to change it.
+
 ## What changed from Base44
 
 - **E-sign rebuilt.** Fields line up everywhere, the editor works with mouse and touch, signing in order is enforced, and a real signed PDF with a certificate page is emailed to everyone and attached to the transaction. Old emailed links still work. DocuSeal is removed.

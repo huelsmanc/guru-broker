@@ -37,6 +37,7 @@ export const FUNCTIONS = {
   esignCode: () => import('./esignCode.js'),
   esignExplain: () => import('./esignExplain.js'),
   esignInPerson: () => import('./esignInPerson.js'),
+  esignLinkDeal: () => import('./esignLinkDeal.js'),
   esignManage: () => import('./esignManage.js'),
   esignPacket: () => import('./esignPacket.js'),
   esignPreflight: () => import('./esignPreflight.js'),
