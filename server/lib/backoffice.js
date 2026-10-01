@@ -125,6 +125,9 @@ export async function calculateForTransaction(entities, tx, input = {}) {
  */
 export async function finalizeCommission(entities, tx, calc, approver) {
   const existing = await entities.CommissionRecord.filter({ transaction_id: tx.id }, '-created_date', 50);
+  if (existing.some((r) => r.imported && r.status === 'paid')) {
+    throw Object.assign(new Error("This deal came from your Brokermint history and was already paid there, so its commission can't be saved again here."), { status: 409 });
+  }
   const oldPayouts = await entities.Payout.filter({ transaction_id: tx.id }, '-created_date', 200);
   if (oldPayouts.some((p) => ['sending', 'sent', 'paid'].includes(p.status))) {
     throw Object.assign(new Error('Payouts for this deal were already sent. Void them before recalculating.'), { status: 409 });

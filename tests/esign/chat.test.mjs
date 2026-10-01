@@ -141,7 +141,15 @@ assert.equal(r.status, 200, 'deal chats can call too');
 
 // Push: a new DM reaches the receiver's phone; dead subscriptions are cleaned up; calls ring phones.
 const { makeVapidKeys } = await import('../../../server/lib/push.js');
-const vk = makeVapidKeys(); process.env.VAPID_PUBLIC_KEY = vk.publicKey; process.env.VAPID_PRIVATE_KEY = vk.privateKey;
+// No keys set in Vercel: the app makes its own once and reuses them.
+delete process.env.VAPID_PUBLIC_KEY; delete process.env.VAPID_PRIVATE_KEY;
+let pk = await as('ann')('pushKey', {});
+assert.equal(pk.status, 200, JSON.stringify(pk.body));
+assert.match(pk.body.publicKey, /^[A-Za-z0-9_-]{80,}$/);
+assert.equal(globalThis.__db.app_secret.length, 1);
+const pk2 = await as('bob')('pushKey', {});
+assert.equal(pk2.body.publicKey, pk.body.publicKey, 'same keys every time');
+assert.ok(makeVapidKeys);
 const crypto = await import('node:crypto');
 const ua = crypto.createECDH('prime256v1'); const keys = { p256dh: ua.generateKeys().toString('base64url'), auth: crypto.randomBytes(16).toString('base64url') };
 globalThis.__db.push_subscription = [

@@ -52,7 +52,7 @@ export default function ChecklistTemplates() {
   const uploadForm = async (i, file) => {
     if (!file) return;
     setUploading(i);
-    try { const { file_url } = await base44.integrations.Core.UploadFile({ file }); setItem(i, { form_url: file_url, form_name: file.name }); }
+    try { const { file_url } = await base44.integrations.Core.UploadFile({ file, scope: { kind: 'misc' } }); setItem(i, { form_url: file_url, form_name: file.name }); }
     catch (err) { window.alert(err.message); } finally { setUploading(null); }
   };
   const move = (i, d) => setEdit((e) => { const items = [...e.items]; const [x] = items.splice(i, 1); items.splice(i + d, 0, x); return { ...e, items }; });

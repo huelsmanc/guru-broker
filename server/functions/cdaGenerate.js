@@ -4,6 +4,7 @@
 import { createClientFromRequest, adminClient } from '../lib/base44.js';
 import { isAdminRole, can } from '../lib/team.js';
 import { createDoc, money } from '../lib/pdfdoc.js';
+import { storePrivate, scopeFolder } from '../lib/files.js';
 
 export default async (req) => {
   try {
@@ -48,10 +49,8 @@ export default async (req) => {
     doc.signatureLine(`Broker, ${brokerageName}`);
 
     const bytes = await doc.save();
-    const path = `cda/${tx.id}-${Date.now()}.pdf`;
-    const pub = adminClient().storage.from('public-files');
-    await pub.upload(path, bytes, { contentType: 'application/pdf', upsert: true });
-    const url = pub.getPublicUrl(path).data.publicUrl;
+    // Private to the deal: only people who can see this transaction can open it.
+    const url = await storePrivate(scopeFolder(tx.brokerage_id, { kind: 'tx', id: tx.id }), `CDA-${String(tx.property_address || tx.id).split(',')[0]}.pdf`, bytes, 'application/pdf');
     const docs = Array.isArray(tx.documents) ? tx.documents : [];
     await entities.Transaction.update(tx.id, { documents: [...docs, { name: 'CDA (commission disbursement authorization)', url, uploaded_at: new Date().toISOString(), uploaded_by: me.full_name || me.email }] });
     return Response.json({ status: 'success', url });

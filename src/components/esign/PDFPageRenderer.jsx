@@ -15,8 +15,10 @@ function loadPdfjs() {
 }
 
 export function isPdfUrl(url = '') {
-  const clean = url.split('?')[0].toLowerCase();
-  return clean.endsWith('.pdf') || url.includes('application/pdf');
+  // Private files are /api/file?p=<path>; look at the stored file name.
+  const m = String(url).match(/\/api\/file\?(?:[^#]*&)?p=([^&#]+)/);
+  const clean = (m ? decodeURIComponent(m[1]) : String(url).split('?')[0]).toLowerCase();
+  return clean.endsWith('.pdf') || String(url).includes('application/pdf');
 }
 
 /**

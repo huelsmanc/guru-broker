@@ -191,7 +191,7 @@ export default function Settings() {
           </div>
           <div className="sm:col-span-2 border-t pt-5 mt-2">
             <h3 className="font-semibold">Closing thank-you from the CEO</h3>
-            <p className="text-xs text-muted-foreground mb-3">Admins send this from a closed deal's Finances tab to every contact marked as a client. Use {first_name}, {address} and {agent} in the message.</p>
+            <p className="text-xs text-muted-foreground mb-3">Admins send this from a closed deal's Finances tab to every contact marked as a client. Use {'{first_name}'}, {'{address}'} and {'{agent}'} in the message.</p>
             <div className="grid sm:grid-cols-2 gap-3">
               {[['ceo_name', 'CEO name'], ['ceo_title', 'Title', 'CEO'], ['ceo_email', 'Replies go to (email)'], ['thank_you_video_url', 'YouTube video link', 'https://youtu.be/...'], ['logo_url', 'Logo image URL'], ['ceo_signature_url', 'Signature image URL'], ['thank_you_subject', 'Email subject', 'Congratulations on your new home!']].map(([k, l, ph]) => (
                 <div key={k}><Label>{l}</Label><Input className="mt-1.5" placeholder={ph || ''} value={form[k] || ''} onChange={(e) => setForm({ ...form, [k]: e.target.value })} /></div>

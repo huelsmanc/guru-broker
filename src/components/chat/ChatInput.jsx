@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Send, X } from 'lucide-react';
 import VoiceMemoButton from './VoiceMemoButton';
 
-export default function ChatInput({ onSend, disabled }) {
+export default function ChatInput({ onSend, disabled, fileScope }) {
   const [text, setText] = useState('');
   const [voiceMemoUrl, setVoiceMemoUrl] = useState('');
 
@@ -57,7 +57,7 @@ export default function ChatInput({ onSend, disabled }) {
           rows={1}
           className="flex-1 resize-none bg-muted rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-muted-foreground/50 min-h-[44px] max-h-[120px] disabled:opacity-50"
         />
-        <VoiceMemoButton onSend={onSend} onStage={handleStageVoiceMemo} disabled={disabled || !!voiceMemoUrl} />
+        <VoiceMemoButton onSend={onSend} onStage={handleStageVoiceMemo} disabled={disabled || !!voiceMemoUrl} scope={fileScope} />
         <Button
           onClick={handleSend}
           disabled={disabled || (!text.trim() && !voiceMemoUrl)}

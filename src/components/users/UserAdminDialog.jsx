@@ -186,7 +186,7 @@ export default function UserAdminDialog({ person, me, onClose }) {
           </div>
         )}
 
-        {tab === 'onboarding' && <WorkspaceChecklists tx={null} user={me} subjectType="onboarding" subjectEmail={person.email} title="Onboarding" />}
+        {tab === 'onboarding' && <WorkspaceChecklists tx={null} user={me} subjectType="onboarding" subjectEmail={person.email} subjectUserId={person.id} title="Onboarding" />}
 
         {tab !== 'onboarding' && tab !== 'payouts' && (
           <div className="flex justify-end gap-2 pt-2 border-t">

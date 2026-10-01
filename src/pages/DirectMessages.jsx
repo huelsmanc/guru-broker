@@ -197,7 +197,7 @@ export function Conversation({ kind, convKey, group, chat, onBack, embedded }) {
       </header>
       <MessageList key={`${kind}:${convKey}`} conv={conv} kind={kind} chat={chat} variant="bubble" renderCall={renderCall} seenBy={seenBy} typers={room.typers}
         emptyText={kind === 'dm' ? `This is the start of your conversation with ${title}.` : 'Say hi to the group!'} />
-      <Composer draftKey={`${kind}:${convKey}`} people={kind === 'group' ? people : []} placeholder="Aa" onSend={(t, extra) => conv.send(t, kind === 'group' ? extra : {})}
+      <Composer draftKey={`${kind}:${convKey}`} fileScope={kind === 'dm' ? { kind: 'dm', emails: [chat.me, convKey] } : { kind: 'group', id: convKey }} people={kind === 'group' ? people : []} placeholder="Aa" onSend={(t, extra) => conv.send(t, kind === 'group' ? extra : {})}
         onTyping={room.typing} onStopTyping={room.stopTyping} />
       {manage && group && <GroupSettings group={group} chat={chat} onClose={() => setManage(false)} onLeft={onBack} />}
     </div>

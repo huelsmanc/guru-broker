@@ -10,6 +10,11 @@ declare
   k text;
   label text;
 begin
+  -- Bulk imports (Base44 data, Brokermint history) aren't logged row by row, and neither is
+  -- undoing one.
+  if tg_op = 'INSERT' and coalesce(rec -> 'extra' ->> 'imported', '') = 'true' then return new; end if;
+  if tg_op <> 'DELETE' and private.is_import_write(rec, prev) then return new; end if;
+  if tg_op = 'DELETE' and coalesce(rec -> 'extra' ->> 'imported', '') = 'true' and public.auth_email() = '' then return old; end if;
   if tg_op = 'UPDATE' then
     for k in select jsonb_object_keys(rec) loop
       if k not in ('updated_date', 'synced_at') and (rec -> k) is distinct from (prev -> k) then

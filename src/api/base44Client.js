@@ -16,6 +16,25 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
 });
 
+// File links (/api/file?p=...) are opened by the browser itself (<img>, <iframe>, downloads),
+// so the server needs to know who is asking: keep a short-lived cookie with the current
+// sign-in, scoped to that one path. It is refreshed whenever Supabase refreshes the session.
+function syncFileCookie(session) {
+  try {
+    const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+    if (session?.access_token) {
+      const ttl = Math.max(60, (session.expires_at || 0) - Math.floor(Date.now() / 1000));
+      document.cookie = `gbh_at=${encodeURIComponent(session.access_token)}; Path=/api/file; Max-Age=${ttl}; SameSite=Lax${secure}`;
+    } else {
+      document.cookie = `gbh_at=; Path=/api/file; Max-Age=0; SameSite=Lax${secure}`;
+    }
+  } catch { /* no cookies (private mode): file links ask to sign in */ }
+}
+if (typeof window !== 'undefined') {
+  supabase.auth.getSession().then(({ data }) => syncFileCookie(data.session)).catch(() => {});
+  supabase.auth.onAuthStateChange((_event, session) => syncFileCookie(session));
+}
+
 async function currentEmail() {
   const { data } = await supabase.auth.getSession();
   return data.session?.user?.email?.toLowerCase() || null;
@@ -95,7 +114,25 @@ const auth = {
 
 // Base44 "Core" integrations, now backed by Supabase Storage, Resend and Claude.
 const Core = {
-  async UploadFile({ file }) {
+  /**
+   * Uploads a file. With a `scope`, the file is private to that record and only people who
+   * can see the record can open it:
+   *   { kind: 'tx', id }        a deal's documents
+   *   { kind: 'offer', id }     an offer
+   *   { kind: 'user', id }      a person's onboarding / own drafts
+   *   { kind: 'dm', emails }    a direct message (both emails)
+   *   { kind: 'group', id }     a group or deal chat
+   *   { kind: 'channel', name } a channel (and its threads)
+   *   { kind: 'misc' }          anyone in the brokerage
+   * Without a scope the file is public (headshots, logos, marketing images).
+   */
+  async UploadFile({ file, scope }) {
+    if (scope) {
+      const { data } = await callApi('/api/fn/fileUpload', { scope, name: file.name || 'file', type: file.type || '', size: file.size || 0 });
+      const { error } = await supabase.storage.from('private-files').uploadToSignedUrl(data.path, data.token, file, { contentType: file.type || undefined });
+      if (error) throw new Error(error.message);
+      return { file_url: data.file_url, private: true };
+    }
     const path = `${Date.now()}-${crypto.randomUUID()}-${safeName(file.name || 'file')}`;
     const { error } = await supabase.storage.from('public-files').upload(path, file, {
       contentType: file.type || undefined,

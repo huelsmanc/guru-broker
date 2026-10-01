@@ -384,7 +384,7 @@ function SendOffer({ offer, user, brokerageId, onClose, onSent }) {
     (async () => {
       try {
         const file = textToPdfFile(offer.offer_text, `Offer - ${offer.property_address}.pdf`);
-        const { file_url } = await base44.integrations.Core.UploadFile({ file });
+        const { file_url } = await base44.integrations.Core.UploadFile({ file, scope: { kind: 'offer', id: offer.id } });
         await base44.entities.Offer.update(offer.id, { document_url: file_url });
         setUrl(file_url);
       } catch (err) {

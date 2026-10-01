@@ -5,11 +5,10 @@ import { createClientFromRequest, adminClient } from '../lib/base44.js';
 import { SendEmail } from '../lib/integrations.js';
 import { esc } from '../lib/esign.js';
 import { isAdminRole, can } from '../lib/team.js';
+import { readFileBytes } from '../lib/files.js';
 
 async function download(url) {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Could not read the offer PDF (${res.status})`);
-  return Buffer.from(await res.arrayBuffer());
+  try { return Buffer.from(await readFileBytes(url)); } catch (err) { throw new Error(`Could not read the offer PDF (${err.message})`); }
 }
 
 export default async (req) => {

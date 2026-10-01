@@ -17,7 +17,8 @@ function monthRange(ym) {
 
 export async function buildStatement(entities, email, ym, brokerageId) {
   const { from, to, label } = monthRange(ym);
-  const recs = (await entities.CommissionRecord.filter({ agent_email: email, status: { $in: ['approved', 'paid'] }, closed_date: { $gte: from, $lt: to } }, 'closed_date', 500));
+  const recs = (await entities.CommissionRecord.filter({ agent_email: email, status: { $in: ['approved', 'paid'] }, closed_date: { $gte: from, $lt: to } }, 'closed_date', 500))
+    .filter((r) => !r.calc?.opening); // carried-over cap balances aren't deals
   const payouts = await entities.Payout.filter({ payee_email: email, created_date: { $gte: from, $lt: to } }, 'created_date', 500);
   const ctx = await agentContext(entities, email, { brokerageId, on: new Date(`${to}T00:00:00Z`) });
   const [settings] = await entities.BrokerageSettings.filter({ brokerage_id: brokerageId }, '-created_date', 1);

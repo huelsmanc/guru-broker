@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { ScanLine, Loader2, AlertTriangle } from 'lucide-react';
 
 // "Scan a contract with AI": upload a PDF or phone photo, get the terms and dates back.
-export default function ScanContractButton({ onResult, label = 'Scan a contract with AI' }) {
+export default function ScanContractButton({ onResult, label = 'Scan a contract with AI', scope }) {
   const input = useRef(null);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
@@ -18,7 +18,7 @@ export default function ScanContractButton({ onResult, label = 'Scan a contract 
     try {
       const urls = [];
       for (const file of Array.from(files).slice(0, 10)) {
-        const { file_url } = await base44.integrations.Core.UploadFile({ file });
+        const { file_url } = await base44.integrations.Core.UploadFile({ file, scope });
         urls.push({ url: file_url, name: file.name });
       }
       const res = await base44.functions.invoke('aiScanDocument', { file_urls: urls.map((u) => u.url) });

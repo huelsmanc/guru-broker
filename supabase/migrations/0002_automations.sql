@@ -36,10 +36,22 @@ begin
   );
 end $$;
 
+-- True for the write an import makes (Import page / import scripts stamp extra.import_run),
+-- so old records coming in don't send notifications or fill the activity log. Later edits to
+-- an imported record are normal writes.
+create or replace function private.is_import_write(rec jsonb, prev jsonb) returns boolean
+language sql immutable as $$
+  select (rec -> 'extra' ->> 'import_run') is not null
+     and (prev is null or (rec -> 'extra' ->> 'import_run') is distinct from (prev -> 'extra' ->> 'import_run'))
+$$;
+
 -- Row change -> /api/hooks/db
 create or replace function private.on_row_change() returns trigger
 language plpgsql security definer set search_path = public, private as $$
 begin
+  if tg_op <> 'DELETE' and private.is_import_write(to_jsonb(new), case when tg_op = 'UPDATE' then to_jsonb(old) end) then
+    return new;
+  end if;
   perform private.call_app('/api/hooks/db', jsonb_build_object(
     'type', tg_op,
     'table', tg_table_name,

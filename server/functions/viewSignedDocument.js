@@ -2,6 +2,7 @@
 // server/lib/esign.js). Documents signed before the migration have no PDF, so they
 // still use the original page, which draws signatures over the document.
 import { createClientFromRequest, adminClient } from '../lib/base44.js';
+import { readFileBytes } from '../lib/files.js';
 
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -222,9 +223,7 @@ export default (async (req) => {
     // Detect page count
     let numPages = 1;
     try {
-      const pdfRes = await fetch(documentUrl);
-      const arrayBuffer = await pdfRes.arrayBuffer();
-      const text = new TextDecoder().decode(arrayBuffer);
+      const text = new TextDecoder().decode(await readFileBytes(documentUrl));
       const matches = text.match(/\/Type\s*\/Page[^s]/g) || [];
       numPages = Math.max(1, matches.length);
     } catch {}

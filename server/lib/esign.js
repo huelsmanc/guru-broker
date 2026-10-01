@@ -13,6 +13,7 @@ import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { adminClient, appUrl } from './base44.js';
 import { SendEmail } from './integrations.js';
 import { fieldToPdfBox, fieldSignerIndex, isPrefilled } from '../../shared/esignGeometry.js';
+import { readFileBytes } from './files.js';
 
 export const LINK_DAYS = 30;
 const MAX_IMAGE_BYTES = 400_000; // per signature image
@@ -357,9 +358,7 @@ const ASCII = (s) => String(s ?? '')
   .replace(/[^\x20-\x7E]/g, '?');
 
 async function fetchBytes(url) {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Could not download the original document (${res.status})`);
-  return new Uint8Array(await res.arrayBuffer());
+  try { return await readFileBytes(url); } catch (err) { throw new Error(`Could not download the original document (${err.message})`); }
 }
 
 function isPdfBytes(bytes) {

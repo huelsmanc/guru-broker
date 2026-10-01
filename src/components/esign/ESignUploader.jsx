@@ -14,7 +14,7 @@ export default function ESignUploader({ onComplete, brokerageId, user }) {
 
     setUploading(true);
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      const { file_url } = await base44.integrations.Core.UploadFile({ file, scope: { kind: 'user', id: user?.id } });
 
       const doc = await base44.entities.ESignDocument.create({
         brokerage_id: brokerageId,

@@ -17,7 +17,7 @@ async function act(body) {
 }
 
 // Checklists on a deal (or an agent's onboarding when subjectType = 'onboarding').
-export default function WorkspaceChecklists({ tx, user, subjectType = 'transaction', subjectEmail, title = 'Checklists' }) {
+export default function WorkspaceChecklists({ tx, user, subjectType = 'transaction', subjectEmail, subjectUserId, title = 'Checklists' }) {
   const queryClient = useQueryClient();
   const [params, setParams] = useSearchParams();
   const subjectId = subjectType === 'transaction' ? tx.id : subjectEmail;
@@ -36,6 +36,8 @@ export default function WorkspaceChecklists({ tx, user, subjectType = 'transacti
   const approver = admin || can(user, 'docs.approve');
   const manage = admin || can(user, 'tx.checklist_manage') || String(tx?.tc_email || '').toLowerCase() === user?.email?.toLowerCase();
 
+  // Uploads are private to the deal (or to the person, for onboarding).
+  const fileScope = subjectType === 'transaction' ? { kind: 'tx', id: tx.id } : { kind: 'user', id: subjectUserId || user?.id };
   const refresh = () => queryClient.invalidateQueries({ queryKey: key });
   const run = async (body) => {
     try { await act({ checklist_id: active.id, ...body }); refresh(); } catch (err) { window.alert(err.message); }
@@ -79,7 +81,7 @@ export default function WorkspaceChecklists({ tx, user, subjectType = 'transacti
             </ol>
             <div className="lg:col-span-2">
               {item ? (
-                <ItemPanel key={item.id} checklistId={active.id} item={item} tx={tx} user={user} approver={approver} admin={admin} manage={manage} run={run} />
+                <ItemPanel key={item.id} checklistId={active.id} fileScope={fileScope} item={item} tx={tx} user={user} approver={approver} admin={admin} manage={manage} run={run} />
               ) : <Empty>Select an item to upload, submit, approve or comment.</Empty>}
             </div>
           </div>
@@ -103,7 +105,7 @@ function AddItem({ onAdd }) {
   );
 }
 
-function ItemPanel({ checklistId, item, tx, user, approver, admin, manage, run }) {
+function ItemPanel({ checklistId, fileScope, item, tx, user, approver, admin, manage, run }) {
   const fileRef = useRef(null);
   const [busy, setBusy] = useState(null);
   const [picking, setPicking] = useState(false);
@@ -119,7 +121,7 @@ function ItemPanel({ checklistId, item, tx, user, approver, admin, manage, run }
     if (!file) return;
     setBusy('upload');
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      const { file_url } = await base44.integrations.Core.UploadFile({ file, scope: fileScope });
       await run({ action: 'attach', item_id: item.id, url: file_url, name: file.name });
     } finally { setBusy(null); if (fileRef.current) fileRef.current.value = ''; }
   };

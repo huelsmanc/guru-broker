@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import ChatBubble from '@/components/chat/ChatBubble';
 import ChatInput from '@/components/chat/ChatInput';
+import { useChat } from '@/lib/chat/ChatProvider';
 import TagButton from '@/components/chat/TagButton';
 import NewConversationDialog from '@/components/chat/NewConversationDialog';
 import ConversationList from '@/components/dashboard/ConversationList';
@@ -41,6 +42,10 @@ export default function Chat() {
     enabled: !!conversationId,
     select: (data) => data[0],
   });
+  // Voice notes in a support chat are private to the agent who opened it (and admins).
+  const chatCtx = useChat();
+  const supportAgentId = conversation?.agent_email ? chatCtx?.people.get(String(conversation.agent_email).toLowerCase())?.id : null;
+  const supportScope = supportAgentId ? { kind: 'user', id: supportAgentId } : undefined;
 
   const getAiSystemPrompt = () => {
     if (!brokerageSettings) {
@@ -507,6 +512,7 @@ export default function Chat() {
        <div className="flex-shrink-0 border-t border-border/30 bg-background overflow-hidden">
         {conversation?.status === 'active' && !isOlderThan24h && (
           <ChatInput
+            fileScope={supportScope}
             onSend={(content) => sendMessage.mutate(content)}
             disabled={sendMessage.isPending || aiLoading}
           />

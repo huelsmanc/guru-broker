@@ -44,7 +44,7 @@ export default async (req) => {
         if (['approved', 'exempt', 'done', 'review_requested'].includes(it.status)) continue;
         if (it.required === false && it.status === 'open') continue;
         todo.push({ checklist_id: cl.id, item_id: it.id, title: it.title, status: it.status, needs_document: !!it.requires_document, due: it.due_date || null,
-          where: cl.subject_type === 'transaction' ? txName.get(cl.subject_id) : 'Onboarding', link: cl.subject_type === 'transaction' ? `/Transactions/${cl.subject_id}?tab=checklists&checklist=${cl.id}&item=${it.id}` : '/Profile' });
+          where: cl.subject_type === 'transaction' ? txName.get(cl.subject_id) : 'Onboarding', link: cl.subject_type === 'transaction' ? `/Transactions/${cl.subject_id}?tab=checklists&checklist=${cl.id}&item=${it.id}` : '/Profile#onboarding' });
       }
     }
     const rank = (x) => (x.status === 'rejected' ? 0 : x.due && x.due < today ? 1 : x.due === today ? 2 : x.due ? 3 : 4);

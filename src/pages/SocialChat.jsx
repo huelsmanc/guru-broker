@@ -159,7 +159,7 @@ function ChannelView({ channel, admin, chat, panel, setPanel, openThread, onMemb
           <MessageList key={key} conv={conv} kind="channel" chat={chat} variant="slack" canModerate={admin} onThread={openThread} threadCounts={threadCounts}
             renderCall={renderCall} seenBy={seenBy} typers={room.typers} firstUnreadAt={lastRead || null}
             emptyText={`This is the start of #${channel.label || channel.name}. Say hello!`} />
-          <Composer draftKey={`channel:${key}`} people={mentionable} allowChannel placeholder={`Message #${channel.label || channel.name}`}
+          <Composer draftKey={`channel:${key}`} fileScope={{ kind: 'channel', name: key }} people={mentionable} allowChannel placeholder={`Message #${channel.label || channel.name}`}
             onSend={(text, extra) => conv.send(text, extra)} onTyping={room.typing} onStopTyping={room.stopTyping} />
         </div>
         {panel && <SidePanel kind={panel} channel={channel} chat={chat} onClose={() => setPanel(null)} />}
@@ -223,7 +223,7 @@ function ThreadPanel({ parentId, channel, chat, admin, onClose }) {
         </div>
       )}
       <MessageList key={parentId} conv={conv} kind="thread" chat={chat} variant="slack" canModerate={admin} typers={room.typers} emptyText="No replies yet." renderCall={renderCall} />
-      <Composer draftKey={`thread:${parentId}`} people={people} placeholder="Reply…" onSend={(t, extra) => conv.send(t, extra)} onTyping={room.typing} onStopTyping={room.stopTyping} />
+      <Composer draftKey={`thread:${parentId}`} fileScope={{ kind: 'channel', name: channel.name }} people={people} placeholder="Reply…" onSend={(t, extra) => conv.send(t, extra)} onTyping={room.typing} onStopTyping={room.stopTyping} />
     </aside>
   );
 }

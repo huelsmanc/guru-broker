@@ -13,6 +13,8 @@ export default async (req) => {
     const isTx = event.entity_name === 'Transaction';
     // Deals opened from an accepted offer get the checklists the agent picked instead.
     if (isTx && row.offer_id) return Response.json({ skipped: 'agent chose checklists' });
+    // Imported people and deals (Base44, Brokermint) already exist; don't add new-hire or new-deal checklists.
+    if (row.imported || (isTx && row.status === 'closed')) return Response.json({ skipped: 'imported or closed' });
     const kind = isTx ? 'transaction' : 'onboarding';
     const dealType = isTx ? row.deal_type || row.transaction_type || null : null;
     const templates = (await E.ChecklistTemplate.filter({ brokerage_id: row.brokerage_id, is_default: true }, 'name', 50))

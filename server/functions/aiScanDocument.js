@@ -2,6 +2,7 @@
 // returns the deal terms, every key date, and anything that looks incomplete.
 import { createClientFromRequest } from '../lib/base44.js';
 import { InvokeLLM } from '../lib/integrations.js';
+import { resolveForUser } from '../lib/files.js';
 
 const DATE = { type: ['string', 'null'], description: 'YYYY-MM-DD, or null if not in the document' };
 
@@ -59,10 +60,12 @@ const SCHEMA = {
 export default async (req) => {
   try {
     const base44 = createClientFromRequest(req);
-    await base44.auth.me();
+    const me = await base44.auth.me();
     const { file_url, file_urls } = await req.json();
-    const urls = (file_urls || [file_url]).filter(Boolean).slice(0, 10);
-    if (!urls.length) return Response.json({ error: 'Upload a document first' }, { status: 400 });
+    const given = (file_urls || [file_url]).filter(Boolean).slice(0, 10);
+    if (!given.length) return Response.json({ error: 'Upload a document first' }, { status: 400 });
+    // Private files: only ones this person can open, as short-lived links for the AI.
+    const urls = await resolveForUser(me, base44.entities, given);
 
     const today = new Date().toISOString().slice(0, 10);
     const result = await InvokeLLM({

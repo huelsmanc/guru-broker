@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { base44 } from '@/api/base44Client';
 import { cn } from '@/lib/utils';
 
-export default function VoiceMemoButton({ onSend, onStage, disabled }) {
+export default function VoiceMemoButton({ onSend, onStage, disabled, scope }) {
   const [recording, setRecording] = useState(false);
   const [uploading, setUploading] = useState(false);
   const mediaRecorderRef = useRef(null);
@@ -33,7 +33,7 @@ export default function VoiceMemoButton({ onSend, onStage, disabled }) {
       const file = new File([blob], `voice-memo.${ext}`, { type: effectiveMime });
       setUploading(true);
       try {
-        const uploadRes = await base44.integrations.Core.UploadFile({ file });
+        const uploadRes = await base44.integrations.Core.UploadFile({ file, scope });
         const file_url = uploadRes.file_url || uploadRes.data?.file_url;
         setUploading(false);
         if (file_url) {

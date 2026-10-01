@@ -199,7 +199,7 @@ export default function Transactions() {
 
   const uploadFile = async (txId, file) => {
     setUploadingFor(txId);
-    const { file_url } = await base44.integrations.Core.UploadFile({ file });
+    const { file_url } = await base44.integrations.Core.UploadFile({ file, scope: { kind: 'tx', id: txId } });
     const tx = transactions.find(t => t.id === txId);
     const docs = [...(tx.documents || []), { name: file.name, url: file_url, uploaded_at: new Date().toISOString(), uploaded_by: user.full_name }];
     await base44.entities.Transaction.update(txId, { documents: docs });
@@ -681,7 +681,7 @@ export default function Transactions() {
             <DialogTitle>New Transaction File</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            <ScanContractButton onResult={applyScan} />
+            <ScanContractButton scope={{ kind: 'user', id: user?.id }} onResult={applyScan} />
             <div>
               <Label>Property Address *</Label>
               <Input value={form.property_address} onChange={e => setForm(f => ({ ...f, property_address: e.target.value }))} placeholder="123 Main St, City, State" className="mt-1.5" />

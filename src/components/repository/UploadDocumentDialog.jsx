@@ -25,7 +25,8 @@ export default function UploadDocumentDialog({ open, onClose, brokerageId, user 
 
       setUploading(true);
       try {
-        const { file_url } = await base44.integrations.Core.UploadFile({ file: selectedFile });
+        // Brokerage library: private to people in the brokerage.
+        const { file_url } = await base44.integrations.Core.UploadFile({ file: selectedFile, scope: { kind: 'misc' } });
 
         const tags = form.tags
           .split(',')

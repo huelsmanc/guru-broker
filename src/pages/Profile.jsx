@@ -12,6 +12,8 @@ import { Badge } from '@/components/ui/badge';
 import ImageCropModal from '@/components/profile/ImageCropModal';
 import DeleteAccountDialog from '@/components/profile/DeleteAccountDialog';
 import NotificationSettings from '@/components/NotificationSettings';
+import WorkspaceChecklists from '@/components/workspace/WorkspaceChecklists';
+import { useQuery as useQueryOnboarding } from '@tanstack/react-query';
 import { format, differenceInDays } from 'date-fns';
 import { isAdminRole, normalizeRole, can } from '../../shared/permissions.generated.js';
 
@@ -284,6 +286,8 @@ export default function Profile() {
            </div>
          )}
 
+        <MyOnboarding user={user} />
+
         <div className="rounded-2xl border p-5"><NotificationSettings /></div>
 
         <div className="flex items-center justify-between gap-3">
@@ -423,5 +427,19 @@ export default function Profile() {
       userName={user?.full_name}
     />
     </>
+  );
+}
+// The agent's own onboarding checklist (documents to upload, tasks), when they have one.
+function MyOnboarding({ user }) {
+  const { data: count = 0 } = useQueryOnboarding({
+    queryKey: ['my-onboarding-count', user?.email],
+    queryFn: async () => (await base44.entities.Checklist.filter({ subject_type: 'onboarding', subject_email: String(user.email).toLowerCase() }, 'created_date', 5)).length,
+    enabled: !!user?.email,
+  });
+  if (!count) return null;
+  return (
+    <div id="onboarding" className="rounded-2xl border p-5 scroll-mt-20">
+      <WorkspaceChecklists tx={null} user={user} subjectType="onboarding" subjectEmail={String(user.email).toLowerCase()} subjectUserId={user.id} title="My onboarding" />
+    </div>
   );
 }

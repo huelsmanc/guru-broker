@@ -64,6 +64,7 @@ const Reports = lazy(() => import('@/pages/Reports'));
 const Activity = lazy(() => import('@/pages/Activity'));
 const ApproveDocs = lazy(() => import('@/pages/ApproveDocs'));
 const ChecklistTemplates = lazy(() => import('@/pages/ChecklistTemplates'));
+const Import = lazy(() => import('@/pages/Import'));
 
 
 // Loading fallback component
@@ -171,6 +172,7 @@ const AuthenticatedApp = () => {
             <Route path="/Activity" element={<Activity />} />
             <Route path="/ApproveDocs" element={<ApproveDocs />} />
             <Route path="/ChecklistTemplates" element={<ChecklistTemplates />} />
+            <Route path="/Import" element={<Import />} />
           </Route>
           <Route path="/JoinBrokerage" element={<JoinBrokerage />} />
           <Route path="*" element={<PageNotFound />} />

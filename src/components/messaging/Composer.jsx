@@ -11,7 +11,7 @@ const MAX_FILE = 25 * 1024 * 1024;
  * onSend(text, { mentions }) for text; files and voice memos are sent as their own messages.
  * people: [{ email, name, photo }] who can be @mentioned. allowChannel adds @channel.
  */
-export default function Composer({ onSend, people = [], allowChannel, placeholder, disabled, onTyping, onStopTyping, onEditLast, draftKey }) {
+export default function Composer({ onSend, people = [], allowChannel, placeholder, disabled, onTyping, onStopTyping, onEditLast, draftKey, fileScope }) {
   const [text, setText] = useState(() => { try { return sessionStorage.getItem(`draft:${draftKey}`) || ''; } catch { return ''; } });
   const [picked, setPicked] = useState([]);
   const [query, setQuery] = useState(null);
@@ -75,7 +75,7 @@ export default function Composer({ onSend, people = [], allowChannel, placeholde
       const id = `${file.name}-${Date.now()}`;
       setUploads((u) => [...u, { id, name: file.name }]);
       try {
-        const { file_url } = await base44.integrations.Core.UploadFile({ file });
+        const { file_url } = await base44.integrations.Core.UploadFile({ file, scope: fileScope });
         await onSend(`[file]${file_url}|${file.type || 'application/octet-stream'}|${file.name.replace(/\|/g, '-')}`, {});
         setUploads((u) => u.filter((x) => x.id !== id));
       } catch (err) {
@@ -101,7 +101,7 @@ export default function Composer({ onSend, people = [], allowChannel, placeholde
         const type = recorder.mimeType || 'audio/webm';
         const file = new File([new Blob(chunks, { type })], `voice-${Date.now()}.${type.includes('mp4') ? 'm4a' : 'webm'}`, { type });
         setUploads((u) => [...u, { id: 'voice', name: 'Voice message' }]);
-        try { const { file_url } = await base44.integrations.Core.UploadFile({ file }); await onSend(`[voice_memo]${file_url}`, {}); } catch (err) { window.alert(err.message); }
+        try { const { file_url } = await base44.integrations.Core.UploadFile({ file, scope: fileScope }); await onSend(`[voice_memo]${file_url}`, {}); } catch (err) { window.alert(err.message); }
         setUploads((u) => u.filter((x) => x.id !== 'voice'));
       };
       recorder.start();

@@ -164,7 +164,7 @@ FORMATTING:
       }
       const name = `Purchase-Agreement-${formData.property_address?.replace(/\s/g, '-') || 'Contract'}.pdf`;
       const file = new File([pdf.output('blob')], name, { type: 'application/pdf' });
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      const { file_url } = await base44.integrations.Core.UploadFile({ file, scope: { kind: 'user', id: user?.id } });
       setContractFileUrl(file_url);
       setShowESignModal(true);
     } catch (e) {

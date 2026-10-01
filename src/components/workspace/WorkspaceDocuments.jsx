@@ -26,7 +26,7 @@ export default function WorkspaceDocuments({ tx, user, refresh, canEdit }) {
     try {
       const docs = [...(tx.documents || [])];
       for (const file of files) {
-        const { file_url } = await base44.integrations.Core.UploadFile({ file });
+        const { file_url } = await base44.integrations.Core.UploadFile({ file, scope: { kind: 'tx', id: tx.id } });
         docs.push({ name: file.name, url: file_url, uploaded_at: new Date().toISOString(), uploaded_by: user.full_name || user.email });
       }
       await base44.entities.Transaction.update(tx.id, { documents: docs });
@@ -62,7 +62,7 @@ export default function WorkspaceDocuments({ tx, user, refresh, canEdit }) {
           <Button variant="outline" className="gap-1.5" onClick={() => setShowScan((s) => !s)}><ScanLine className="w-4 h-4" /> Scan with AI</Button>
           <Button className="gap-1.5" disabled={busy} onClick={() => fileRef.current?.click()}>{busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} Add document</Button>
         </>}>
-        {showScan && <div className="mb-4 max-w-md"><ScanContractButton label="Scan a contract to check it and pull dates" /></div>}
+        {showScan && <div className="mb-4 max-w-md"><ScanContractButton scope={{ kind: 'tx', id: tx.id }} label="Scan a contract to check it and pull dates" /></div>}
 
         <h3 className="text-sm font-semibold text-muted-foreground uppercase mb-2">Unsorted</h3>
         {unsorted.length === 0 ? <Empty>Nothing unsorted. New uploads land here until you assign them to a checklist item.</Empty> : (

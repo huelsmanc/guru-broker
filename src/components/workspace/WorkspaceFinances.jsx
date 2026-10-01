@@ -86,8 +86,9 @@ export default function WorkspaceFinances({ tx, user, refresh }) {
       <Section title="Finances" subtitle={`Representing ${sides.filter((s) => (s.agents || []).length).map((s) => (s.side === 'listing' ? 'seller' : 'buyer')).join(' and ') || '-'} · Price ${money(tx.sale_price)}`}
         actions={<>
           <Button variant="outline" className="gap-1.5" onClick={calc} disabled={!!busy}>{busy === 'calc' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calculator className="w-4 h-4" />} Recalculate</Button>
-          {accounting && <Button className="gap-1.5" onClick={finalize} disabled={!!busy}>{busy === 'final' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save commission</Button>}
+          {accounting && !tx.imported && <Button className="gap-1.5" onClick={finalize} disabled={!!busy}>{busy === 'final' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save commission</Button>}
         </>}>
+        {tx.imported && <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-950/30 px-4 py-3 text-sm">This deal came from your Brokermint history. Its commission was paid there and already counts toward the agent's cap, so it isn't saved again here.</p>}
         <div className="grid lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-4">
             {sides.map((s, i) => (

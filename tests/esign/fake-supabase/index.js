@@ -20,7 +20,22 @@ function matches(row, ops) {
   }
   return true;
 }
-export function createClient(url, key, opts) {
+function newLogin(email, meta = {}) {
+  const users = (globalThis.__authUsers ||= []);
+  const e = String(email || '').toLowerCase();
+  if (users.some((u) => u.email === e) || (db.profiles || []).some((p) => String(p.email).toLowerCase() === e)) {
+    return { data: { user: null }, error: { message: 'A user with this email address has already been registered' } };
+  }
+  const user = { id: `au${++n}`, email: e };
+  users.push(user);
+  (db.profiles ||= []).push({ id: user.id, email: e, full_name: meta?.full_name || '', role: 'user', extra: {}, created_date: new Date().toISOString() });
+  return { data: { user }, error: null };
+}
+export function createClient(url, key, clientOpts) {
+  // Requests made with a user's token can be limited by simple per-table rules in tests:
+  // globalThis.__rls = { transaction: (row, user) => boolean }
+  const auth = clientOpts?.global?.headers?.Authorization || '';
+  const viewer = auth.startsWith('Bearer ') ? globalThis.__users?.[auth.slice(7)] : null;
   const from = (table) => {
     const ops = []; let action = 'select', payload = null, single = false, opts = null;
     const run = () => {
@@ -39,6 +54,8 @@ export function createClient(url, key, opts) {
         return { data: single ? structuredClone(items[0]) : structuredClone(items), error: null };
       }
       let hit = rows.filter((r) => matches(r, ops));
+      const rule = viewer && globalThis.__rls?.[table];
+      if (rule) hit = hit.filter((r) => rule(r, viewer));
       if (action === 'update') { hit.forEach((r) => Object.assign(r, payload)); }
       if (action === 'delete') { db[table] = rows.filter((r) => !hit.includes(r)); }
       const order = ops.find((o) => o[0] === 'order');
@@ -61,12 +78,18 @@ export function createClient(url, key, opts) {
   };
   return {
     from,
-    auth: { getUser: async (t) => (globalThis.__users?.[t] ? { data: { user: globalThis.__users[t] } } : { data: {}, error: { message: 'bad' } }), admin: {} },
+    auth: { getUser: async (t) => (globalThis.__users?.[t] ? { data: { user: globalThis.__users[t] } } : { data: {}, error: { message: 'bad' } }), admin: {
+      // Logins. Like the real database, creating one also creates the profile row (handle_new_user).
+      createUser: async ({ email, user_metadata }) => newLogin(email, user_metadata),
+      inviteUserByEmail: async (email, o = {}) => { (globalThis.__invites ||= []).push({ email, redirectTo: o.redirectTo }); return newLogin(email, o.data); },
+      listUsers: async ({ page = 1, perPage = 50 } = {}) => ({ data: { users: (globalThis.__authUsers || []).slice((page - 1) * perPage, page * perPage) }, error: null }),
+    } },
     storage: { from: (b) => ({
       upload: async (p, bytes) => { storage[`${b}/${p}`] = bytes; return { error: null }; },
       download: async (p) => ({ data: new Blob([storage[`${b}/${p}`] || '']) }),
       list: async (prefix) => ({ data: Object.keys(storage).filter((k) => k.startsWith(`${b}/${prefix}/`)).map((k) => ({ name: k.split('/').pop() })) }),
-      createSignedUrl: async (p) => ({ data: { signedUrl: `https://storage.test/${b}/${p}?sig=1` }, error: null }),
+      createSignedUrl: async (p, secs, o) => (storage[`${b}/${p}`] !== undefined || b === 'private-files' && globalThis.__lenientSign ? { data: { signedUrl: `https://storage.test/${b}/${p}?sig=1${o?.download ? '&download=1' : ''}` }, error: null } : { data: null, error: { message: 'Object not found' } }),
+      createSignedUploadUrl: async (p) => ({ data: { signedUrl: `https://storage.test/upload/${b}/${p}?token=t`, token: 't', path: p }, error: null }),
       getPublicUrl: (p) => ({ data: { publicUrl: `https://storage.test/${b}/${p}` } }),
     }) },
     channel: () => ({}),

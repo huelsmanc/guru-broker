@@ -2,6 +2,7 @@
 // other signers' links and personal data are never sent to the browser.
 import { createClientFromRequest } from '../lib/base44.js';
 import { findByToken, isExpired, whoseTurn, signerIndexInDoc, audit, clientIp, matchSigner, signerKey } from '../lib/esign.js';
+import { signedUrlFor } from '../lib/files.js';
 
 export default async (req) => {
   try {
@@ -41,7 +42,7 @@ export default async (req) => {
       document: {
         id: doc.id,
         title: doc.title,
-        document_url: doc.document_url,
+        document_url: await signedUrlFor(doc.document_url, 3600), // private files: a link that works for this signing session
         fields: doc.fields || [],
       },
     });

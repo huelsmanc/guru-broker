@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { MessageSquare, Phone, LayoutDashboard, Monitor, LogOut, Users, Settings as SettingsIcon, ShieldCheck, Building2, UserCircle, TrendingUp, UserPlus, Mail, Trophy, BookOpen, FileText, Heart, Lightbulb, Calendar, FolderOpen, Link2, Wand2, Target, ScrollText, Calculator, File, Gift, Star, ClipboardList, Handshake, Wallet, Banknote, Percent, BarChart3, Activity as ActivityIcon, FileCheck2, ListChecks, Megaphone } from 'lucide-react';
+import { MessageSquare, Phone, LayoutDashboard, Monitor, LogOut, Users, Settings as SettingsIcon, ShieldCheck, Building2, UserCircle, TrendingUp, UserPlus, Mail, Trophy, BookOpen, FileText, Heart, Lightbulb, Calendar, FolderOpen, Link2, Wand2, Target, ScrollText, Calculator, File, Gift, Star, ClipboardList, Handshake, Wallet, Banknote, Percent, BarChart3, Activity as ActivityIcon, FileCheck2, ListChecks, Megaphone, Database } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import NotificationBell from './NotificationBell';
 import ChatChannelsDropdown from './ChatChannelsDropdown';
@@ -79,6 +79,7 @@ export default function Sidebar({ user, brokerageId, onChannelClick }) {
 
   const superAdminLinks = [
     { to: '/SuperAdmin', icon: Building2, label: 'Brokerages' },
+    { to: '/Import', icon: Database, label: 'Import Data' },
   ];
 
   const agentLinks = [
@@ -148,6 +149,7 @@ export default function Sidebar({ user, brokerageId, onChannelClick }) {
     { to: '/ChecklistTemplates', icon: ListChecks, label: 'Checklist Templates', show: isAdmin },
     { to: '/Reports', icon: BarChart3, label: 'Reports', show: can(user, 'reports.company') },
     { to: '/Activity', icon: ActivityIcon, label: 'Activity', show: isAdmin || can(user, 'activity.account') },
+    { to: '/Import', icon: Database, label: 'Import Data', show: ['owner', 'broker'].includes(normalizeRole(user?.role)) || isSuperAdmin || (isAdmin && can(user, 'accounting.access')) },
   ].filter((l) => l.show) : [];
 
   // If super admin has a brokerage_id, they're viewing inside a brokerage - show broker links

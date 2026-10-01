@@ -11,6 +11,10 @@
     "api/hooks/db.js": {
       "maxDuration": 60,
       "includeFiles": "server/**"
+    },
+    "api/file.js": {
+      "maxDuration": 15,
+      "includeFiles": "server/**"
     }
   },
   "rewrites": [

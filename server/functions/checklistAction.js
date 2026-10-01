@@ -17,6 +17,7 @@ import { applyTemplate } from '../lib/checklists.js';
 import { esc } from '../lib/esign.js';
 import { createClientFromRequest } from '../lib/base44.js';
 import { isAdminRole, can, notifyPeople, mentionablePeople } from '../lib/team.js';
+import { isPrivateUrl, canAccess, parsePath, pathFromUrl } from '../lib/files.js';
 
 const DOC = (title, extra = {}) => ({ title, requires_document: true, ...extra });
 const TASK = (title, extra = {}) => ({ title, requires_document: false, ...extra });
@@ -158,7 +159,9 @@ export default async (req) => {
       }
       case 'attach':
         if (!item) return fail('Item not found', 404);
-        if (!/^https?:\/\//.test(String(body.url || ''))) return fail('Missing document', 400);
+        if (isPrivateUrl(body.url)) {
+          if (!(await canAccess(me, parsePath(pathFromUrl(body.url)), base44.entities))) return fail('Not allowed to use that file');
+        } else if (!/^https:\/\//.test(String(body.url || ''))) return fail('Missing document', 400);
         item.document_url = body.url; item.document_name = String(body.name || 'Document').slice(0, 200);
         item.uploaded_by = myEmail; item.uploaded_at = now;
         if (!['approved'].includes(item.status)) item.status = 'uploaded';

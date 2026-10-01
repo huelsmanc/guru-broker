@@ -1,13 +1,34 @@
 // Web Push (phone and desktop notifications even when the app is closed), using only
 // Node's crypto: RFC 8291 message encryption (aes128gcm) and RFC 8292 VAPID signing.
-// Keys: VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY (make them with `node scripts/gen-vapid.mjs`).
+// Keys are created automatically the first time they're needed and kept in the
+// server-only app_secret table. Setting VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY overrides that.
 import crypto from 'node:crypto';
 
 const b64u = (buf) => Buffer.from(buf).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 const unb64u = (s) => Buffer.from(String(s).replace(/-/g, '+').replace(/_/g, '/'), 'base64');
 const hmac = (key, data) => crypto.createHmac('sha256', key).update(data).digest();
 
-export const pushConfigured = () => !!(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY);
+export const pushConfigured = () => true;
+
+let cachedKeys = null;
+/** The app's push key pair: from Vercel settings if set, otherwise made once and stored. */
+export async function vapidKeys() {
+  if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) return { publicKey: process.env.VAPID_PUBLIC_KEY, privateKey: process.env.VAPID_PRIVATE_KEY };
+  if (cachedKeys) return cachedKeys;
+  const { adminClient } = await import('./base44.js'); // loaded lazily so key helpers work standalone
+  const db = adminClient();
+  const read = async () => (await db.from('app_secret').select('value').eq('name', 'vapid').maybeSingle()).data?.value;
+  const have = await read();
+  if (have?.publicKey && have?.privateKey) return (cachedKeys = have);
+  const made = makeVapidKeys();
+  const { error } = await db.from('app_secret').insert({ name: 'vapid', value: made });
+  if (error) { // another request made them at the same moment: use theirs
+    const again = await read();
+    if (again?.publicKey) return (cachedKeys = again);
+    throw new Error(`Could not save push keys: ${error.message}`);
+  }
+  return (cachedKeys = made);
+}
 
 export function makeVapidKeys() {
   const { publicKey, privateKey } = crypto.generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
@@ -21,7 +42,7 @@ function vapidKey(publicKeyB64, privateKeyB64) {
   return crypto.createPrivateKey({ key: { kty: 'EC', crv: 'P-256', d: privateKeyB64, x: b64u(pub.subarray(1, 33)), y: b64u(pub.subarray(33, 65)) }, format: 'jwk' });
 }
 
-export function vapidHeader(endpoint, { publicKey = process.env.VAPID_PUBLIC_KEY, privateKey = process.env.VAPID_PRIVATE_KEY, subject = process.env.VAPID_SUBJECT || `mailto:${process.env.SUPPORT_EMAIL || 'support@gurubroker.app'}` } = {}) {
+export function vapidHeader(endpoint, { publicKey, privateKey, subject = process.env.VAPID_SUBJECT || `mailto:${process.env.SUPPORT_EMAIL || 'support@gurubroker.app'}` } = {}) {
   const aud = new URL(endpoint).origin;
   const head = b64u(JSON.stringify({ typ: 'JWT', alg: 'ES256' }));
   const body = b64u(JSON.stringify({ aud, exp: Math.floor(Date.now() / 1000) + 12 * 3600, sub: subject }));
@@ -49,11 +70,12 @@ export function encrypt(payload, { p256dh, auth }) {
 }
 
 /** Sends to one subscription. Returns 'ok', 'gone' (delete it) or 'error'. */
-export async function sendOne(sub, data, { ttl = 3600, urgency = 'normal' } = {}) {
+export async function sendOne(sub, data, { ttl = 3600, urgency = 'normal', keys } = {}) {
   try {
+    const k = keys || (await vapidKeys());
     const res = await fetch(sub.endpoint, {
       method: 'POST',
-      headers: { 'Content-Encoding': 'aes128gcm', 'Content-Type': 'application/octet-stream', TTL: String(ttl), Urgency: urgency, Authorization: vapidHeader(sub.endpoint) },
+      headers: { 'Content-Encoding': 'aes128gcm', 'Content-Type': 'application/octet-stream', TTL: String(ttl), Urgency: urgency, Authorization: vapidHeader(sub.endpoint, k) },
       body: encrypt(JSON.stringify(data), sub),
     });
     if (res.status === 404 || res.status === 410) return 'gone';
@@ -75,9 +97,11 @@ export async function pushTo(entities, emails, data, opts = {}) {
   list = list.filter((e) => !off.has(e));
   if (!list.length) return 0;
   const subs = await entities.PushSubscription.filter({ user_email: { $in: list } }, '-created_date', 500);
+  if (!subs.length) return 0;
+  const keys = await vapidKeys();
   let sent = 0;
   await Promise.all(subs.map(async (s) => {
-    const r = await sendOne(s, data, opts);
+    const r = await sendOne(s, data, { ...opts, keys });
     if (r === 'ok') sent += 1;
     if (r === 'gone') await entities.PushSubscription.delete(s.id).catch(() => {});
   }));

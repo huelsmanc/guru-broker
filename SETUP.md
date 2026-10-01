@@ -21,12 +21,13 @@ Do these in order. Budget about an hour.
    **Check first:** if the project already has tables from the earlier migration attempt and they only hold test data, it's cleanest to remove them (Database → Tables). The setup SQL only adds what's missing, so an old table with the same name but different columns would cause errors.
 2. **Database → Extensions:** turn on `pg_cron` and `pg_net`.
 3. **SQL Editor:** open each file below from this repo, paste it in, and click Run, in this order:
-   1. `supabase/migrations/0001_init.sql`: all 53 tables, roles and permissions, security rules, storage buckets, realtime
+   1. `supabase/migrations/0001_init.sql`: all 57 tables, roles and permissions, security rules, storage buckets (public and private), realtime
    2. `supabase/migrations/0002_automations.sql`: scheduled jobs and database automations
    3. `supabase/migrations/0003_mls.sql`: MLS listings and the 15-minute sync
    4. `supabase/migrations/0004_backoffice.sql`: activity log, live updates for admins, license alerts, monthly statements, payout status sync
    5. `supabase/migrations/0005_default_checklists.sql`: adds "Add automatically" checklists to new deals and new agents
    6. `supabase/migrations/0006_messaging.sql`: unread badges, read receipts, reactions, private channels and call history
+   7. `supabase/migrations/0007_files_import.sql`: what the Import page needs, and a private place for keys the app makes itself
 
    Every file is safe to run again, so after pulling new code just re-run them in order.
 4. Still in the SQL editor, run this once, with your real domain and a long random secret (you'll use the same secret as `HOOK_SECRET` in Vercel):
@@ -64,7 +65,7 @@ Do these in order. Budget about an hour.
 
    Without the two Payload values everything still works except the "Send direct deposit" button; you can still mark payouts paid by check.
 
-   For phone and desktop notifications (messages, mentions, calls, approvals), run `node scripts/gen-vapid.mjs` once on your computer and add the two values it prints, `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY`. On iPhone, people add the app to their Home Screen (Share → Add to Home Screen) and turn notifications on from there; the app shows them how.
+   Phone and desktop notifications (messages, mentions, calls, approvals) need no setup: the app makes its own keys the first time and keeps them in the database. On iPhone, people add the app to their Home Screen (Share → Add to Home Screen) and turn notifications on from there; the app shows them how.
 
    For voice and video calls add `DAILY_API_KEY`: sign up at daily.co, then Developers → API keys. Free for the first 10,000 call minutes each month. Without it everything else works and the call buttons explain what's missing. AI call notes also need Daily's transcription add-on turned on in your Daily account (billed by Daily per minute transcribed); without it the notes button says so.
 
@@ -74,29 +75,24 @@ Do these in order. Budget about an hour.
 
 Add and verify the `gurubroker.app` domain (Resend shows the DNS records to add). Until it's verified, emails from `@gurubroker.app` won't send.
 
-## 4. Move your data over from Base44
+## 4. Move your data over (Base44 and Brokermint)
 
-1. In Base44, export each data table (CSV or JSON) into one folder. Name each file after its table: `User.csv`, `Transaction.csv`, `ESignDocument.csv`, and so on.
-2. On your computer, in this project folder:
-   ```bash
-   npm install
-   SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... node scripts/import-base44.mjs ./base44-export --copy-files --dry-run
-   SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... node scripts/import-base44.mjs ./base44-export --copy-files
-   ```
-   Every record keeps its id and dates. `--copy-files` moves files off Base44's storage into yours. It's safe to run again.
-3. **Make yourself super admin** (SQL editor):
+Everything here is on the app's **Import Data** page (in the sidebar for the owner, broker and super admin). Each step can be run again safely.
+
+1. **Sign in once** to the new app with "Email me a sign-in link", so your login exists.
+2. **Make yourself super admin** (Supabase SQL editor):
    ```sql
    update public.profiles set role = 'super_admin' where email = 'cody@gurubroker.com';  -- the email you sign in with
    ```
-
-4. **Bring your agents over from Brokermint** (optional, fills in profiles, licenses, teams, recruiters and anniversaries). In Brokermint, export the users list to CSV, then:
-   ```bash
-   SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... node scripts/import-brokermint-users.mjs brokermint-users.csv --brokerage <your brokerage id> --dry-run
-   SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... node scripts/import-brokermint-users.mjs brokermint-users.csv --brokerage <your brokerage id>
-   ```
-   Your brokerage id is in Supabase → Table editor → `brokerage`. Add `--invite` to email everyone a set-password link. Then assign commission plans under **Manage Users**.
+3. **Base44 data.** In Base44, export each data table (Data → table → Export) as CSV or JSON, keeping the table name as the file name (`User.csv`, `Transaction.csv`, `ESignDocument.csv`, …). On **Import Data → Base44 data**, drop all the files in, tick **All brokerages** and **Copy files off Base44**, and click Import. Every record keeps its id and dates, everyone gets a login, and files move into your storage (deal documents and chat files into private storage). Big exports take a few minutes; leave the page open until it finishes.
+4. **Make files private.** On **Import Data → Make files private**, click the button once. It moves deal documents, offers, e-sign files and chat attachments that were stored publicly (older uploads and the import) into private storage. From then on, a file link only opens for someone signed in who can see that deal or conversation.
+5. **Agents from Brokermint.** Choose your brokerage at the top of the page. In Brokermint, export the users list (Settings → Users → Export) and upload it under **Agents from Brokermint**. It brings over role, phone, birthday, anniversary (starts their cap year), team, address, annual cap, up to 4 licenses, their TC and who recruited them. Tick "Email everyone an invite" if you want them to get a set-password email now.
+6. **Cap history from Brokermint**, so agents partway through their cap year don't start back at $0. Export a transactions or commission report from Brokermint covering at least each agent's current cap year, upload it under **Cap history from Brokermint**, match the columns (agent, closing date and the amount paid to the brokerage are required), and import. It shows each agent's total for this cap year before you import, and each import can be undone. No per-deal report? Type each agent's totals into **Starting balances** instead (not both).
+7. Assign commission plans under **Manage Users**.
 
 **Passwords:** Base44 can't export them. Everyone signs in the first time with **"Email me a sign-in link"** or **"Forgot password"** on the sign-in page. Send your agents a heads-up.
+
+Imports don't send notifications, emails or activity entries for old records. For very large Base44 exports there are also command-line versions (`scripts/import-base44.mjs`, `scripts/import-brokermint-users.mjs`; run either with no arguments for help).
 
 ## 5. SmartMLS
 
@@ -141,6 +137,8 @@ When the preview looks right: Vercel → Settings → Domains → add `gurubroke
 - **E-sign rebuilt.** Fields line up everywhere, the editor works with mouse and touch, signing in order is enforced, and a real signed PDF with a certificate page is emailed to everyone and attached to the transaction. Old emailed links still work. DocuSeal is removed.
 - **Back office (replaces Brokermint):** transaction workspace (checklists, documents, offers, contacts, finances, shared, activity), commission plans with caps, sliding scales, team splits and multi-level revenue share, payouts with approval and Payload direct deposit, monthly statements, CDAs, 1099 worksheet, reports, a live activity feed, license tracking, role permissions per user, and the CEO closing thank-you.
 - **New:** Offer Builder (AI-written offers, "Offer accepted" opens the transaction and assigns the TC), contract scanner, AI-placed signature fields, AI file check, MLS sync with real-sale CMAs.
+- **Private files:** deal documents, offers, onboarding paperwork and chat attachments are stored privately. Links only open for signed-in people who can see that deal or conversation, so a forwarded link is useless to anyone else.
+- **Import Data page:** Base44 data, Brokermint agents and Brokermint cap history, with no terminal needed.
 - **Security fixes found during the move:** functions that let anyone trigger emails or read documents without signing in are now locked; the OpenAI key setting that every agent could read is removed; signing link codes are stored hashed and encrypted; page titles and names are escaped in emails.
 - **Bug fixes:** removing a reaction crashed, the notifications button crashed, "delete my account" didn't delete anything, signing reminders pointed to a dead link.
 
@@ -149,5 +147,5 @@ When the preview looks right: Vercel → Settings → Domains → add `gurubroke
 ```bash
 npm install
 npm run build          # the app compiles
-npm run test:esign     # e-sign, AI, MLS and back-office tests with fake email/database
+npm run test:esign     # e-sign, AI, MLS, back office, messaging, marketing, private files and imports, with fake email/database
 ```

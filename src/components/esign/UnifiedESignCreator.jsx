@@ -57,7 +57,8 @@ export default function UnifiedESignCreator({
     setError(null);
 
     try {
-      const response = await base44.integrations.Core.UploadFile({ file });
+      // Private: to the deal when sent from one, otherwise to the sender (and admins).
+      const response = await base44.integrations.Core.UploadFile({ file, scope: transactionId ? { kind: 'tx', id: transactionId } : { kind: 'user', id: user?.id } });
       const url = response?.file_url || response?.data?.file_url;
       if (url) {
         setDocumentUrl(url);
