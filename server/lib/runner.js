@@ -46,7 +46,7 @@ export async function run(name, request) {
     return res instanceof Response ? res : Response.json(res ?? null);
   } catch (err) {
     console.error(`[fn:${name}]`, err);
-    return Response.json({ error: err.message || 'Server error' }, { status: err.status || 500 });
+    return Response.json({ error: err.message || 'Server error', ...(err.code ? { code: err.code } : {}) }, { status: err.status || 500 });
   }
 }
 

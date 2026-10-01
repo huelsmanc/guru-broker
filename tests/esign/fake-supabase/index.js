@@ -82,6 +82,10 @@ export function createClient(url, key, clientOpts) {
       // Logins. Like the real database, creating one also creates the profile row (handle_new_user).
       createUser: async ({ email, user_metadata }) => newLogin(email, user_metadata),
       inviteUserByEmail: async (email, o = {}) => { (globalThis.__invites ||= []).push({ email, redirectTo: o.redirectTo }); return newLogin(email, o.data); },
+      mfa: {
+        listFactors: async ({ userId }) => ({ data: { factors: (globalThis.__factors?.[userId] || []).map((id) => ({ id, factor_type: 'totp', status: 'verified' })) }, error: null }),
+        deleteFactor: async ({ id, userId }) => { const l = globalThis.__factors?.[userId] || []; globalThis.__factors[userId] = l.filter((x) => x !== id); return { data: { id }, error: null }; },
+      },
       listUsers: async ({ page = 1, perPage = 50 } = {}) => ({ data: { users: (globalThis.__authUsers || []).slice((page - 1) * perPage, page * perPage) }, error: null }),
     } },
     storage: { from: (b) => ({

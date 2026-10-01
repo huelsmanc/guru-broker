@@ -117,6 +117,7 @@ export const FUNCTIONS = {
   submitSignature: () => import('./submitSignature.js'),
   syncUserDatesToCultureCalendar: () => import('./syncUserDatesToCultureCalendar.js'),
   trackEvent: () => import('./trackEvent.js'),
+  twoStep: () => import('./twoStep.js'),
   updateUserBadges: () => import('./updateUserBadges.js'),
   uploadPrivateFile: () => import('./uploadPrivateFile.js'),
   verifyDocumentIntegrity: () => import('./verifyDocumentIntegrity.js'),

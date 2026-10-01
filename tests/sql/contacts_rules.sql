@@ -17,7 +17,7 @@ insert into public.contact (id,brokerage_id,owner_email,name,email) values
 create or replace function pg_temp.as_user(uid text, email text) returns void language plpgsql as $$
 begin
   perform set_config('request.jwt.claim.sub', uid, false);
-  perform set_config('request.jwt.claims', json_build_object('sub', uid, 'email', email)::text, false);
+  perform set_config('request.jwt.claims', json_build_object('sub', uid, 'email', email, 'aal', 'aal2')::text, false);
 end $$;
 
 select pg_temp.as_user('00000000-0000-0000-0000-00000000001b','cann@x.com');

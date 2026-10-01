@@ -7,6 +7,7 @@
 import { createClient as createSupabase } from '@supabase/supabase-js';
 import { makeEntities, fromRow } from '../../shared/entities.js';
 import { Core } from './integrations.js';
+import { tokenClaims, secondStepNeeded, sessionConfirmed } from './twostep.js';
 
 const URL_ = () => process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const ANON = () => process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
@@ -47,11 +48,29 @@ function buildClient({ token, asService }) {
   // Signed-in user: their own access. No user: anonymous access (security rules deny).
   // App-credential clients (`createClient()`): full access.
   const scoped = asService ? null : token ? userClient(token) : anonClient();
-  let cachedUser;
+  let cachedUser, cachedRow, stepChecked;
+
+  // 2-step sign-in: people who must confirm a second step get nothing until they have.
+  // Only the 2-step route itself skips this (it is how they confirm).
+  async function checkSecondStep(user) {
+    if (stepChecked) return;
+    const claims = tokenClaims(token);
+    // Supabase only accepts real sign-in tokens, which always carry these claims.
+    if (claims && claims.aal !== 'aal2' && (await secondStepNeeded(admin, cachedRow)) && !(await sessionConfirmed(admin, user.id, claims))) {
+      const e = new Error('Confirm the second sign-in step first.');
+      e.status = 401;
+      e.code = 'second_step_required';
+      throw e;
+    }
+    stepChecked = true;
+  }
 
   const auth = {
-    async me() {
-      if (cachedUser) return cachedUser;
+    async me({ secondStep = true } = {}) {
+      if (cachedUser) {
+        if (secondStep) await checkSecondStep(cachedUser);
+        return cachedUser;
+      }
       if (!token) {
         const e = new Error('Not authenticated');
         e.status = 401;
@@ -64,7 +83,9 @@ function buildClient({ token, asService }) {
         throw e;
       }
       const { data: profile } = await admin.from('profiles').select('*').eq('id', data.user.id).maybeSingle();
+      cachedRow = profile || null;
       cachedUser = { ...fromRow(profile || {}), id: data.user.id, email: data.user.email };
+      if (secondStep) await checkSecondStep(cachedUser);
       return cachedUser;
     },
     async isAuthenticated() {

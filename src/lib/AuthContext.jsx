@@ -1,5 +1,6 @@
 import React, { createContext, useState, useContext, useEffect, useCallback, useRef } from 'react';
 import { base44, supabase } from '@/api/base44Client';
+import { secondStepStatus } from '@/lib/twoStep';
 
 const AuthContext = createContext();
 
@@ -53,6 +54,14 @@ export const AuthProvider = ({ children }) => {
         return;
       }
       setUser((prev) => (prev && JSON.stringify(prev) === JSON.stringify(currentUser) ? prev : currentUser));
+      // 2-step sign-in: stop here until this sign-in is confirmed. (If the check itself can't be
+      // reached, carry on: the database still holds back data until the step is done.)
+      const step = await secondStepStatus(currentUser.id).catch((e) => (e?.status === 401 && e?.data?.code !== 'second_step_required' ? Promise.reject(e) : null));
+      if (step?.needed && !step.ok) {
+        setIsAuthenticated(false);
+        setAuthError({ type: 'second_step', message: 'Confirm the second sign-in step', status: step });
+        return;
+      }
       setIsAuthenticated(true);
       setAuthError(null);
     } catch (error) {
@@ -76,6 +85,8 @@ export const AuthProvider = ({ children }) => {
         signedInAs.current = null;
         setUser(null);
         setIsAuthenticated(false);
+      } else if (event === 'MFA_CHALLENGE_VERIFIED') {
+        // The gate re-checks itself after the code; nothing to do here.
       } else if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
         // Supabase also sends SIGNED_IN when the tab regains focus; only a real new sign-in
         // (a different person, or no one before) is logged as one.

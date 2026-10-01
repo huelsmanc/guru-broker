@@ -21,7 +21,7 @@ insert into public.direct_message (id,brokerage_id,content,sender_email,receiver
 create or replace function pg_temp.as_user(uid text, email text) returns void language plpgsql as $$
 begin
   perform set_config('request.jwt.claim.sub', uid, false);
-  perform set_config('request.jwt.claims', json_build_object('sub', uid, 'email', email)::text, false);
+  perform set_config('request.jwt.claims', json_build_object('sub', uid, 'email', email, 'aal', 'aal2')::text, false);
 end $$;
 
 -- Bob (agent, not in leadership)

@@ -6,6 +6,7 @@ import { AnimatePresence } from 'framer-motion';
 import { lazy, Suspense, useState, useEffect } from 'react';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
+import SecondStepGate from '@/components/auth/SecondStepGate';
 import { MobileTabBarProvider } from '@/components/layout/MobileTabBarProvider';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import AppLayout from '@/components/layout/AppLayout';
@@ -76,7 +77,7 @@ const PageLoader = () => (
 );
 
 const AuthenticatedApp = () => {
-  const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
+  const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin, user, checkAppState, logout } = useAuth();
   const location = useLocation();
 
   const isPublicRoute = ['/sign', '/verify', '/custom-sign', '/BulkSign', '/review', '/login', '/reset-password', '/status'].includes(location.pathname);
@@ -112,6 +113,8 @@ const AuthenticatedApp = () => {
   if (authError) {
     if (authError.type === 'user_not_registered') {
       return <UserNotRegisteredError />;
+    } else if (authError.type === 'second_step') {
+      return <SecondStepGate user={user} status={authError.status} onDone={checkAppState} onSignOut={() => logout(true)} />;
     } else if (authError.type === 'auth_required') {
       navigateToLogin();
       return null;

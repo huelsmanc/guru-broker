@@ -46,13 +46,13 @@ language sql stable security definer set search_path = public as $$
   select coalesce(
     (select case when p.permissions ? key then (p.permissions ->> key)::boolean
                  else public.perm_default(p.role, key) end
-       from public.profiles p where p.id = auth.uid()),
+       from public.profiles p where p.id = auth.uid() and public.second_step_ok()),
     false)
 $$;
 
 create or replace function public.auth_team_id() returns text
 language sql stable security definer set search_path = public as $$
-  select team_id from public.profiles where id = auth.uid()
+  select team_id from public.profiles where id = auth.uid() and public.second_step_ok()
 $$;
 create or replace function public.is_team_leader() returns boolean language sql stable as $$
   select coalesce(public.normalize_role(public.auth_role()) = 'team_leader', false)

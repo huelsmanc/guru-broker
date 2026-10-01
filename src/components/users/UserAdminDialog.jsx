@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Loader2, Save, Plus, Trash2, Landmark, RotateCcw } from 'lucide-react';
+import { Loader2, Save, Plus, Trash2, Landmark, RotateCcw, ShieldCheck } from 'lucide-react';
 import { ROLES, PERMS, normalizeRole } from '../../../shared/permissions.generated.js';
 import WorkspaceChecklists from '@/components/workspace/WorkspaceChecklists';
 
@@ -154,6 +154,10 @@ export default function UserAdminDialog({ person, me, onClose }) {
                   {Object.entries(ROLES).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
                 </select></div>
               <Button variant="ghost" size="sm" className="gap-1" onClick={() => setF((x) => ({ ...x, permissions: {} }))}><RotateCcw className="w-4 h-4" /> Reset to role defaults</Button>
+              <Button variant="outline" size="sm" className="gap-1 sm:ml-auto" onClick={async () => {
+                if (!window.confirm(`Reset ${person.full_name || person.email}'s 2-step sign-in? Their authenticator app and trusted devices are removed, and they'll set it up again (or use emailed codes) next time they sign in.`)) return;
+                try { await base44.functions.invoke('twoStep', { action: 'reset_user', user_id: person.id }); window.alert('Done. They will be asked to set up 2-step sign-in again.'); } catch (e) { window.alert(e.message); }
+              }}><ShieldCheck className="w-4 h-4" /> Reset 2-step sign-in</Button>
             </div>
             <div className="grid md:grid-cols-2 gap-x-8 gap-y-4">
               {groups.map(([g, items]) => (

@@ -35,6 +35,7 @@ export default function Settings() {
     thank_you_message: '',
     thank_you_video_url: '',
     cda_direct_agent_pay: false,
+    require_2fa_all: false,
     tech_links: [],
     primary_color: '#667eea',
     sidebar_color: '#1c231f',
@@ -70,6 +71,7 @@ export default function Settings() {
           thank_you_message: s.thank_you_message || '',
           thank_you_video_url: s.thank_you_video_url || '',
           cda_direct_agent_pay: s.cda_direct_agent_pay === true,
+          require_2fa_all: s.require_2fa_all === true,
           tech_links: s.tech_links || [],
           primary_color: s.primary_color || '#667eea',
           sidebar_color: s.sidebar_color || '#1c231f',
@@ -204,6 +206,11 @@ export default function Settings() {
           <div className="sm:col-span-2 border-t pt-5">
             <h3 className="font-semibold mb-2">Commission disbursements</h3>
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!form.cda_direct_agent_pay} onChange={(e) => setForm({ ...form, cda_direct_agent_pay: e.target.checked })} /> CDAs tell title to pay agents directly (otherwise title pays the brokerage and we pay agents)</label>
+          </div>
+          <div className="sm:col-span-2 border-t pt-5">
+            <h3 className="font-semibold mb-1">Sign-in security</h3>
+            <p className="text-xs text-muted-foreground mb-2">Owners, brokers, office admins and anyone with accounting access always confirm a second step (authenticator app or emailed code) when they sign in.</p>
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!form.require_2fa_all} onChange={(e) => setForm({ ...form, require_2fa_all: e.target.checked })} /> Require 2-step sign-in for every agent and TC too</label>
           </div>
         </div>
 
