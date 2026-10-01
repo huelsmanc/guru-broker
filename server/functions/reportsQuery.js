@@ -19,6 +19,7 @@ export const REPORTS = {
   esign: 'E-sign requests',
   licenses: 'License and E&O expirations',
   activity: 'Platform activity',
+  support_chats: 'Support chats (Ask the broker)',
 };
 
 async function run(entities, brokerageId, { report, from, to, agent, status }) {
@@ -143,6 +144,36 @@ async function run(entities, brokerageId, { report, from, to, agent, status }) {
       }
     }
     return { columns: [['agent', 'Agent'], ['item', 'Item'], ['number', 'Number'], ['expires', 'Expires', 'date'], ['state', 'Status']], rows, summary: { Expired: rows.filter((r) => r.state === 'expired').length, 'Next 90 days': rows.filter((r) => r.state === 'expiring').length, Missing: rows.filter((r) => r.state === 'missing').length } };
+  }
+
+  if (report === 'support_chats') {
+    // Agent questions to the broker/AI: volume, status, category and how fast someone replied.
+    const convs = (await E.Conversation.filter({ brokerage_id: brokerageId }, '-created_date', 5000))
+      .filter((c) => inRange(String(c.created_date).slice(0, 10), from, to) && agentOk(c.agent_email) && (!status || c.status === status));
+    const ids = new Set(convs.map((c) => c.id));
+    const msgs = ids.size ? (await E.Message.filter({ brokerage_id: brokerageId }, 'created_date', 20000)).filter((m) => ids.has(m.conversation_id)) : [];
+    const byConv = new Map();
+    for (const m of msgs) { if (!byConv.has(m.conversation_id)) byConv.set(m.conversation_id, []); byConv.get(m.conversation_id).push(m); }
+    const rows = convs.map((c) => {
+      const list = (byConv.get(c.id) || []).sort((a, b) => String(a.created_date).localeCompare(String(b.created_date)));
+      const firstAsk = list.find((m) => m.sender_role === 'agent');
+      const firstReply = firstAsk && list.find((m) => m.sender_role !== 'agent' && m.created_date > firstAsk.created_date);
+      const humanReply = firstAsk && list.find((m) => m.sender_role === 'broker' && m.created_date > firstAsk.created_date);
+      const mins = (m) => (m ? Math.max(0, Math.round((new Date(m.created_date) - new Date(firstAsk.created_date)) / 60000)) : null);
+      return {
+        started: c.created_date, agent: c.agent_name || c.agent_email, title: c.title || c.last_message_preview || '',
+        category: String(c.category || 'general').replace(/_/g, ' '), status: c.status || '', handled_by: c.handled_by || '',
+        messages: list.length, first_reply: mins(firstReply), broker_reply: mins(humanReply),
+      };
+    });
+    const avg = (k) => { const v = rows.map((r) => r[k]).filter((x) => x != null); return v.length ? `${Math.round(v.reduce((a, b) => a + b, 0) / v.length)} min` : '-'; };
+    const cats = {};
+    for (const r of rows) cats[r.category] = (cats[r.category] || 0) + 1;
+    return {
+      columns: [['started', 'Started', 'datetime'], ['agent', 'Agent'], ['title', 'Topic'], ['category', 'Category'], ['status', 'Status'], ['handled_by', 'Handled by'], ['messages', 'Messages', 'number'], ['first_reply', 'First reply (min)', 'number'], ['broker_reply', 'Broker reply (min)', 'number']],
+      rows,
+      summary: { Conversations: rows.length, Resolved: rows.filter((r) => r.status === 'resolved').length, Active: rows.filter((r) => r.status === 'active').length, 'Avg first reply': avg('first_reply'), 'Avg broker reply': avg('broker_reply'), ...(Object.keys(cats).length ? { 'Top category': Object.entries(cats).sort((a, b) => b[1] - a[1])[0][0] } : {}) },
+    };
   }
 
   if (report === 'activity') {

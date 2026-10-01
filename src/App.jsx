@@ -20,7 +20,6 @@ const SocialChat = lazy(() => import('@/pages/SocialChat'));
 const Settings = lazy(() => import('@/pages/Settings'));
 const AdminChat = lazy(() => import('@/pages/AdminChat'));
 const SuperAdmin = lazy(() => import('@/pages/SuperAdmin'));
-const Analytics = lazy(() => import('@/pages/Analytics'));
 const BrokerageUsers = lazy(() => import('@/pages/BrokerageUsers'));
 const Profile = lazy(() => import('@/pages/Profile'));
 const JoinBrokerage = lazy(() => import('@/pages/JoinBrokerage'));
@@ -140,7 +139,7 @@ const AuthenticatedApp = () => {
             <Route path="/Settings" element={<Settings />} />
             <Route path="/AdminChat" element={<AdminChat />} />
             <Route path="/SuperAdmin" element={<SuperAdmin />} />
-            <Route path="/Analytics" element={<Analytics />} />
+            <Route path="/Analytics" element={<Navigate to="/Reports?report=support_chats" replace />} />
             <Route path="/BrokerageUsers" element={<BrokerageUsers />} />
             <Route path="/Profile" element={<Profile />} />
             <Route path="/DirectMessages" element={<DirectMessages />} />

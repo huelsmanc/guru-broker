@@ -111,7 +111,6 @@ export default function Sidebar({ user, brokerageId, onChannelClick }) {
   const brokerLinks = [
     { to: '/Dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/BrokerMonitor', icon: Monitor, label: 'Monitor Chats' },
-    { to: '/Analytics', icon: TrendingUp, label: 'Analytics' },
     { to: '/AgentLeaderboard', icon: Trophy, label: 'Agent Performance' },
     { to: '/CultureCalendar', icon: Calendar, label: 'Culture Calendar' },
     { to: '/FileRepository', icon: FolderOpen, label: 'File Repository' },

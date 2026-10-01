@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,7 +11,7 @@ import { Empty, money } from '@/components/workspace/ui';
 
 const sel = 'mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm';
 const fmt = (v, t) => (v == null || v === '' ? '' : t === 'money' ? money(v) : t === 'datetime' ? new Date(v).toLocaleString() : t === 'date' && /^\d{4}-\d{2}-\d{2}/.test(String(v)) ? new Date(`${String(v).slice(0, 10)}T12:00:00`).toLocaleDateString() : t === 'number' ? Number(v).toLocaleString() : String(v));
-const STATUS = { payouts: ['pending_approval', 'approved', 'sent', 'paid', 'failed'], offers: ['draft', 'review_requested', 'sent', 'accepted', 'rejected'], esign: ['pending', 'in_progress', 'completed', 'voided', 'expired'] };
+const STATUS = { support_chats: ['active', 'resolved'], payouts: ['pending_approval', 'approved', 'sent', 'paid', 'failed'], offers: ['draft', 'review_requested', 'sent', 'accepted', 'rejected'], esign: ['pending', 'in_progress', 'completed', 'voided', 'expired'] };
 const RANGES = [['ytd', 'Year to date'], ['last_month', 'Last month'], ['this_month', 'This month'], ['last_year', 'Last year'], ['12m', 'Last 12 months'], ['all', 'All time'], ['custom', 'Custom']];
 
 function range(k) {
@@ -29,7 +29,8 @@ const csvCell = (v) => (/[",\n]/.test(String(v ?? '')) ? `"${String(v).replace(/
 export default function Reports() {
   const { user, brokerageId } = useOutletContext();
   const [list, setList] = useState({});
-  const [report, setReport] = useState('closed_sales');
+  const [params] = useSearchParams();
+  const [report, setReport] = useState(params.get('report') || 'closed_sales');
   const [preset, setPreset] = useState('ytd');
   const [[from, to], setDates] = useState(range('ytd'));
   const [agent, setAgent] = useState('');

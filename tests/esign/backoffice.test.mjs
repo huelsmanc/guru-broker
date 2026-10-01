@@ -106,6 +106,23 @@ for (const report of ['closed_sales', 'commissions', 'agent_production', 'cap_st
   assert.equal(r.status, 200, `${report}: ${JSON.stringify(r.body)}`);
   assert.ok(Array.isArray(r.body.rows) && r.body.columns.length, report);
 }
+// Support chats report (the old Analytics page): reply times from the messages.
+globalThis.__db.conversation = [
+  { id: 'cv1', brokerage_id: 'B1', agent_email: 'ann@x.com', agent_name: 'Ann', category: 'contracts', status: 'resolved', title: 'Addendum question', created_date: '2026-05-01T14:00:00Z', extra: {} },
+  { id: 'cv2', brokerage_id: 'B1', agent_email: 'ann@x.com', agent_name: 'Ann', category: 'general', status: 'active', created_date: '2026-05-02T14:00:00Z', extra: {} },
+  { id: 'cv9', brokerage_id: 'B9', agent_email: 'eve@o.com', status: 'active', created_date: '2026-05-02T14:00:00Z', extra: {} },
+];
+globalThis.__db.message = [
+  { id: 'm1', brokerage_id: 'B1', conversation_id: 'cv1', sender_role: 'agent', created_date: '2026-05-01T14:00:00Z', extra: {} },
+  { id: 'm2', brokerage_id: 'B1', conversation_id: 'cv1', sender_role: 'ai', created_date: '2026-05-01T14:01:00Z', extra: {} },
+  { id: 'm3', brokerage_id: 'B1', conversation_id: 'cv1', sender_role: 'broker', created_date: '2026-05-01T14:20:00Z', extra: {} },
+];
+r = await as('boss')('reportsQuery', { report: 'support_chats', from: '2026-01-01', to: '2026-12-31' });
+assert.equal(r.status, 200, JSON.stringify(r.body));
+assert.equal(r.body.rows.length, 2, 'own brokerage only');
+const cv1 = r.body.rows.find((x) => x.title === 'Addendum question');
+assert.deepEqual([cv1.first_reply, cv1.broker_reply, cv1.messages], [1, 20, 3]);
+assert.deepEqual([r.body.summary.Resolved, r.body.summary.Active, r.body.summary['Avg first reply']], [1, 1, '1 min']);
 r = await as('boss')('reportsQuery', { report: 'agent_production' });
 assert.equal(r.body.rows[0].gci, 12500); assert.equal(r.body.rows[0].company_dollar, 2500);
 r = await as('ann')('reportsQuery', { report: 'payouts' });
