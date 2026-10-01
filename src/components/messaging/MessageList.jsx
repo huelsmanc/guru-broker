@@ -233,7 +233,7 @@ export default function MessageList({ conv, kind, chat, variant = 'slack', canMo
                 if (r.type === 'new') return <div key={r.key} className="flex items-center gap-3 px-4 my-2"><div className="flex-1 h-px bg-red-400/70" /><span className="text-[11px] font-semibold text-red-500">New</span></div>;
                 const m = r.m;
                 const own = lc(m.sender_email) === me;
-                const person = chat.personOf(m.sender_email);
+                const person = chat.personOf(m.sender_email, m.sender_name);
                 const time = format(new Date(m.created_date), 'h:mm a');
                 const showTools = hover === m.id && !editing && !m._pending && !m._failed;
                 const tools = showTools && <Toolbar msg={m} own={own} canModerate={canModerate} kind={kind} onReact={react} onEdit={setEditing} onDelete={setConfirmDel} onPin={setPinned} onThread={onThread} align={variant === 'bubble' && own ? 'right' : 'left'} />;

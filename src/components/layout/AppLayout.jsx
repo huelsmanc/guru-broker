@@ -69,10 +69,46 @@ export default function AppLayout() {
       {/* Mobile Bottom Tab Bar */}
       <MobileTabBar />
 
+      {user && !(user.display_name || user.full_name) && <NamePrompt user={user} onSaved={setUser} />}
+
       {/* Floating Idea Pad */}
       <IdeaPadBubble user={user} />
     </div>
     </CallProvider>
     </ChatProvider>
+  );
+}
+// First sign-in: people invited by email have no name yet, so chat and deals would show
+// their email address. Ask once.
+function NamePrompt({ user, onSaved }) {
+  const [first, setFirst] = useState('');
+  const [last, setLast] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const save = async (e) => {
+    e.preventDefault();
+    const full = `${first.trim()} ${last.trim()}`.trim();
+    if (!first.trim()) { setError('Add your first name.'); return; }
+    setBusy(true); setError('');
+    try {
+      await base44.auth.updateMe({ first_name: first.trim(), last_name: last.trim() || null, full_name: full, display_name: full });
+      onSaved({ ...user, first_name: first.trim(), last_name: last.trim(), full_name: full, display_name: full });
+    } catch (err) { setError(err.message || 'Could not save your name.'); setBusy(false); }
+  };
+  return (
+    <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4">
+      <form onSubmit={save} className="w-full max-w-sm rounded-2xl bg-card p-6 shadow-xl space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold">What's your name?</h2>
+          <p className="text-sm text-muted-foreground mt-1">It's what your team sees in chat, on deals and on documents.</p>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="text-sm">First name<input autoFocus className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2" value={first} onChange={(e) => setFirst(e.target.value)} /></label>
+          <label className="text-sm">Last name<input className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2" value={last} onChange={(e) => setLast(e.target.value)} /></label>
+        </div>
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        <button type="submit" disabled={busy} className="w-full rounded-md bg-primary text-primary-foreground py-2 font-medium disabled:opacity-60">{busy ? 'Saving…' : 'Save'}</button>
+      </form>
+    </div>
   );
 }

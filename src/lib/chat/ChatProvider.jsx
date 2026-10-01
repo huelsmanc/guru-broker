@@ -50,10 +50,13 @@ export function ChatProvider({ user, children }) {
     staleTime: 5 * 60 * 1000,
   });
   const people = useMemo(() => new Map(peopleList.map((p) => [lc(p.email), p])), [peopleList]);
-  const personOf = useCallback((email) => {
-    const p = people.get(lc(email));
-    return { email: lc(email), name: p?.display_name || p?.full_name || email || 'Someone', photo: p?.headshot || null, id: p?.id, role: p?.role };
-  }, [people]);
+  // Name for an email: their profile, then (for me) my own profile, then the name saved on the message.
+  const personOf = useCallback((email, hint) => {
+    const e = lc(email);
+    const p = people.get(e) || (e && e === me ? user : null);
+    const saved = hint && !String(hint).includes('@') ? hint : '';
+    return { email: e, name: p?.display_name || p?.full_name || saved || email || 'Someone', photo: p?.headshot || null, id: p?.id, role: p?.role };
+  }, [people, me, user]);
 
   // Unread badges.
   const { data: unreadRows = [], refetch: refetchUnread } = useQuery({
