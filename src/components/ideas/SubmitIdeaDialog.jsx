@@ -40,10 +40,14 @@ export default function SubmitIdeaDialog({ open, onClose, brokerageId, user }) {
         category,
         is_anonymous: isAnonymous,
         submitter_email: user.email,
-        submitter_name: user.full_name,
+        submitter_name: user.display_name || user.full_name || user.email,
+        status: 'under_review',
+        upvotes: [],
+        downvotes: [],
       });
       queryClient.invalidateQueries({ queryKey: ['ideas', brokerageId] });
     },
+    onError: (err) => window.alert(`Your idea wasn't saved: ${err.message}`),
     onSuccess: () => {
       setTitle('');
       setDescription('');

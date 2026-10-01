@@ -46,6 +46,8 @@ function applySort(q, def, sort) {
   if (!sort) return q.order('created_date', { ascending: false });
   const desc = sort.startsWith('-');
   const key = desc ? sort.slice(1) : sort;
+  // Base44 accepted sorts like "-upvotes.length" that a database can't do; use newest first.
+  if (!/^[A-Za-z_][\w]*$/.test(key)) return q.order('created_date', { ascending: false });
   return q.order(col(def, key), { ascending: !desc, nullsFirst: false });
 }
 
