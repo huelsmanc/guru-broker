@@ -5,7 +5,7 @@ Your app now runs on infrastructure you own:
 | Piece | Where | What it does |
 |---|---|---|
 | Website + backend | **Vercel** | The React app, plus `/api/fn/*` (all backend functions, one route) |
-| Database, logins, files, live updates | **Supabase** (project `btiqwmmxkkbaignnokfi`) | Postgres with per-brokerage security, email logins, file storage, realtime chat |
+| Database, logins, files, live updates | **Supabase** (project `fozmqivnjoghsupnqvod`) | Postgres with per-brokerage security, email logins, file storage, realtime chat |
 | Scheduled jobs + automations | **Supabase** (pg_cron + pg_net) | Deadline reminders, signing reminders, event reminders, MLS sync, notifications |
 | Email | **Resend** | Signing requests, signed PDFs, reminders, TC notices |
 | AI | **Claude and/or ChatGPT** | Offer writer, contract scanner, auto-placed signature fields, file check, CMA, chat |
