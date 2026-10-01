@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
@@ -15,10 +15,12 @@ import {
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { isAdminRole, normalizeRole, can } from '../../shared/permissions.generated.js';
-import { US_STATES } from '@/components/contracts/FormsLibrary';
+import FormsLibrary, { US_STATES } from '@/components/contracts/FormsLibrary';
 
 export default function SuperAdmin() {
   const { user } = useOutletContext();
+  const [params, setParams] = useSearchParams();
+  const platformTab = ['forms', 'users'].includes(params.get('tab')) ? params.get('tab') : 'brokerages';
   const queryClient = useQueryClient();
   const isSuperAdmin = true;
 
@@ -170,11 +172,19 @@ export default function SuperAdmin() {
         </div>
       </motion.div>
 
-      <Tabs defaultValue="brokerages">
+      <Tabs value={platformTab} onValueChange={(v) => setParams(v === 'brokerages' ? {} : { tab: v }, { replace: true })}>
         <TabsList className="mb-6">
           <TabsTrigger value="brokerages">Brokerages</TabsTrigger>
           <TabsTrigger value="users">All Users</TabsTrigger>
+          <TabsTrigger value="forms">State Contract Forms</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="forms">
+          <p className="text-sm text-muted-foreground mb-4">
+            Forms you add here go to every brokerage assigned that state. Set a brokerage's states under Brokerages, open the brokerage, Settings.
+          </p>
+          <FormsLibrary user={user} brokerageId={null} platformMode brokerages={brokerages} />
+        </TabsContent>
 
         <TabsContent value="brokerages">
           <div className="flex justify-end mb-4">
@@ -231,7 +241,7 @@ export default function SuperAdmin() {
                       )}
                     </div>
                     <p className="text-sm text-muted-foreground mt-0.5">{b.broker_name}{b.broker_title ? ` · ${b.broker_title}` : ''}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{brokerageUsers.length} user{brokerageUsers.length !== 1 ? 's' : ''}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{brokerageUsers.length} user{brokerageUsers.length !== 1 ? 's' : ''}{(b.states || []).length ? ` · States: ${b.states.join(', ')}` : ' · No states set'}</p>
                   </div>
                   <ChevronRight className="w-5 h-5 text-muted-foreground flex-shrink-0" />
                 </motion.div>

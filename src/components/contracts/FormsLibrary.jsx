@@ -32,11 +32,22 @@ export function useContractForms(brokerageId, { all = false } = {}) {
  * The forms library: state forms, each set up once with its boxes. Admins add their
  * brokerage's forms; the platform owner (super admin) adds forms every brokerage can use.
  */
-export default function FormsLibrary({ user, brokerageId, onUse }) {
+// platformMode (Super Admin panel): only the platform's state forms, all managed here.
+// Otherwise (inside a brokerage): its states' platform forms (read-only) plus its own forms.
+export default function FormsLibrary({ user, brokerageId, onUse, platformMode, brokerages = [] }) {
   const queryClient = useQueryClient();
   const isSuper = user?.role === 'super_admin';
   const isAdmin = isSuper || isAdminRole(user?.role);
-  const { data: forms = [], isLoading } = useContractForms(brokerageId, { all: isAdmin });
+  const { data: brokerageStates = [] } = useQuery({
+    queryKey: ['brokerage-states', brokerageId],
+    enabled: !!brokerageId && !platformMode,
+    queryFn: async () => ((await base44.entities.Brokerage.get(brokerageId).catch(() => null))?.states || []).map((x) => String(x).toUpperCase()),
+  });
+  const { data: allForms = [], isLoading } = useContractForms(brokerageId, { all: isAdmin });
+  // The platform owner sees every form; inside a brokerage show what that brokerage gets.
+  const forms = platformMode ? allForms.filter((f) => f.brokerage_id === 'platform')
+    : isSuper ? allForms.filter((f) => f.brokerage_id === brokerageId || (f.brokerage_id === 'platform' && brokerageStates.includes(String(f.state || '').toUpperCase())))
+    : allForms;
   const [q, setQ] = useState('');
   const [state, setState] = useState('');
   const [type, setType] = useState('');
@@ -54,7 +65,8 @@ export default function FormsLibrary({ user, brokerageId, onUse }) {
     .filter((f) => !type || f.form_type === type)
     .filter((f) => !q || `${f.name} ${f.description || ''} ${f.form_version || ''}`.toLowerCase().includes(q.toLowerCase())),
   [forms, state, type, q]);
-  const canEdit = (f) => isSuper || (isAdmin && f.brokerage_id === brokerageId);
+  // Platform forms are managed only in the Super Admin panel.
+  const canEdit = (f) => (platformMode ? isSuper : isAdmin && f.brokerage_id === brokerageId && f.brokerage_id !== 'platform');
 
   const remove = async (f) => {
     if (!window.confirm(`Delete "${f.name}"? Documents already sent keep their copy.`)) return;
@@ -78,12 +90,12 @@ export default function FormsLibrary({ user, brokerageId, onUse }) {
           <option value="">All types</option>
           {FORM_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
         </select>
-        {isAdmin && <Button className="gap-1.5" onClick={() => setAdding(true)}><Plus className="w-4 h-4" /> Add a form</Button>}
+        {(platformMode ? isSuper : isAdmin && brokerageId) && <Button className="gap-1.5" onClick={() => setAdding(true)}><Plus className="w-4 h-4" /> {platformMode ? 'Add a state form' : 'Add your own form'}</Button>}
       </div>
 
       {isLoading ? <Loader2 className="w-6 h-6 animate-spin text-muted-foreground mx-auto" /> : !shown.length ? (
         <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
-          {forms.length ? 'No forms match.' : isSuper ? 'No forms yet. Add each state\'s purchase agreement, listing agreement, buyer representation agreement and disclosures, then set up their boxes once. Brokerages see a state\'s forms once you assign them that state.' : isAdmin ? 'No forms yet. Your brokerage gets the platform\'s forms for the states it is set up in; you can also add your own.' : 'No forms yet. Ask your broker.'}
+          {forms.length ? 'No forms match.' : platformMode ? 'No forms yet. Add each state\'s purchase agreement, listing agreement, buyer representation agreement and disclosures, then set up their boxes once. Brokerages see a state\'s forms once you assign them that state.' : isAdmin ? 'No forms yet. Your brokerage gets the state forms for the states it is set up in (ask the platform owner), and you can add your own.' : 'No forms yet. Ask your broker.'}
         </div>
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -101,7 +113,9 @@ export default function FormsLibrary({ user, brokerageId, onUse }) {
                 {f.description && <p className="text-xs text-muted-foreground line-clamp-2">{f.description}</p>}
                 <div className="flex flex-wrap gap-1.5 text-[11px]">
                   <span className={`rounded-full px-2 py-0.5 ${f.brokerage_id === 'platform' ? 'bg-indigo-100 text-indigo-800' : 'bg-slate-100 text-slate-700'}`}>
-                    {f.brokerage_id === 'platform' ? <><Globe className="w-3 h-3 inline -mt-0.5" /> Brokerages in {f.state}</> : <><Building2 className="w-3 h-3 inline -mt-0.5" /> Your brokerage</>}
+                    {f.brokerage_id === 'platform'
+                      ? <><Globe className="w-3 h-3 inline -mt-0.5" /> {platformMode ? `${brokerages.filter((b) => (b.states || []).map((x) => String(x).toUpperCase()).includes(String(f.state || '').toUpperCase())).length} brokerage(s) in ${f.state}` : `State form (${f.state})`}</>
+                      : <><Building2 className="w-3 h-3 inline -mt-0.5" /> Your brokerage</>}
                   </span>
                   <span className={`rounded-full px-2 py-0.5 ${boxes ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>{boxes ? `${boxes} boxes ready` : 'Boxes not set up'}</span>
                   {(f.roles || []).length > 0 && <span className="rounded-full px-2 py-0.5 bg-muted">{f.roles.join(', ')}</span>}
@@ -126,7 +140,7 @@ export default function FormsLibrary({ user, brokerageId, onUse }) {
       )}
 
       {(adding || editing) && (
-        <FormDetails form={editing} user={user} brokerageId={brokerageId}
+        <FormDetails form={editing} user={user} brokerageId={brokerageId} platformMode={platformMode}
           onClose={() => { setAdding(false); setEditing(null); }}
           onSaved={(f, isNew) => { setAdding(false); setEditing(null); refresh(); if (isNew) setSetup(f); }} />
       )}
@@ -141,9 +155,8 @@ export default function FormsLibrary({ user, brokerageId, onUse }) {
   );
 }
 
-function FormDetails({ form, user, brokerageId, onClose, onSaved }) {
-  const isSuper = user?.role === 'super_admin';
-  const [f, setF] = useState(() => form || { state: 'CT', form_type: 'purchase_agreement', name: '', form_version: '', description: '', platform: isSuper });
+function FormDetails({ form, user, brokerageId, platformMode, onClose, onSaved }) {
+  const [f, setF] = useState(() => form || { state: 'CT', form_type: 'purchase_agreement', name: '', form_version: '', description: '', platform: !!platformMode });
   const [file, setFile] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -201,12 +214,6 @@ function FormDetails({ form, user, brokerageId, onClose, onSaved }) {
             </span>
             {form && file && <span className="text-xs text-amber-700">A new PDF clears its boxes; you'll set them up again.</span>}
           </label>
-          {!form && isSuper && (
-            <label className="col-span-2 flex items-start gap-2 text-sm">
-              <input type="checkbox" className="mt-1" checked={!!f.platform} onChange={set('platform')} />
-              <span>Platform form for every brokerage in {f.state}<span className="block text-xs text-muted-foreground">Brokerages get it when you assign them {f.state} (Super Admin, brokerage Settings, States). Only you can change it. Untick to make it just {brokerageId ? 'this brokerage\'s' : 'your brokerage\'s'} own form.</span></span>
-            </label>
-          )}
         </div>
         {error && <p className="text-sm text-destructive">{error}</p>}
         <div className="flex justify-end gap-2">
