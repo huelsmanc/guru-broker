@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Handshake, Plus, Sparkles, Loader2, Send, CheckCircle, XCircle, FileText, ArrowRight, Trash2, ShieldQuestion, Mail } from 'lucide-react';
+import { Handshake, Plus, Sparkles, Loader2, Send, CheckCircle, XCircle, FileText, ArrowRight, Trash2, ShieldQuestion, Mail, Library, TrendingUp, AlertTriangle } from 'lucide-react';
+import FormsLibrary, { useContractForms } from '@/components/contracts/FormsLibrary';
 import UnifiedESignCreator from '@/components/esign/UnifiedESignCreator';
 import { isAdminRole, can } from '../../shared/permissions.generated.js';
 import { textToPdfFile } from '@/lib/textToPdf';
@@ -49,8 +50,12 @@ export default function Offers() {
   const [accepting, setAccepting] = useState(null);
   const [emailing, setEmailing] = useState(null);
   const [busy, setBusy] = useState(null);
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const openId = params.get('open');
+  const tab = params.get('tab') === 'forms' ? 'forms' : 'offers';
+  const setTab = (t) => setParams(t === 'forms' ? { tab: 'forms' } : {}, { replace: true });
+  const [useForm, setUseForm] = useState(null);
+  const brokerageName = useBrokerageName(brokerageId);
 
   const review = async (o, action) => {
     const note = window.prompt(
@@ -81,11 +86,27 @@ export default function Offers() {
     <div className="p-4 sm:p-6 lg:p-10 max-w-5xl mx-auto">
       <div className="flex items-center justify-between gap-3 mb-6">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2"><Handshake className="w-6 h-6" /> Offer Builder</h1>
-          <p className="text-sm text-muted-foreground">Write an offer with AI, send it to your buyers to sign, and open the transaction when it's accepted.</p>
+          <h1 className="text-2xl font-bold flex items-center gap-2"><Handshake className="w-6 h-6" /> Offers &amp; Contracts</h1>
+          <p className="text-sm text-muted-foreground">Price it with the AI coach, fill your state's real contract from the terms, get it signed, and open the deal when it's accepted.</p>
         </div>
-        <Button onClick={() => setEditing({ ...EMPTY })} className="gap-2"><Plus className="w-4 h-4" /> New offer</Button>
+        {tab === 'offers' && <Button onClick={() => setEditing({ ...EMPTY })} className="gap-2"><Plus className="w-4 h-4" /> New offer</Button>}
       </div>
+
+      <div className="flex gap-1 rounded-xl bg-muted p-1 mb-5 w-fit">
+        {[['offers', 'Offers', Handshake], ['forms', 'Contract forms', Library]].map(([id, label, Icon]) => (
+          <button key={id} type="button" onClick={() => setTab(id)}
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 ${tab === id ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+            <Icon className="w-4 h-4" /> {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'forms' ? (
+        <>
+          <p className="text-sm text-muted-foreground mb-3">Listing agreements, buyer representation agreements, disclosures and purchase agreements. Pick one and press Use: its boxes fill in from the deal you choose.</p>
+          <FormsLibrary user={user} brokerageId={brokerageId} onUse={setUseForm} />
+        </>
+      ) : <>
 
       {isLoading ? (
         <div className="py-20 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
@@ -122,7 +143,7 @@ export default function Offers() {
                   {o.status !== 'accepted' && (
                     <Button size="sm" variant="outline" onClick={() => setEditing(o)}>Edit</Button>
                   )}
-                  {o.offer_text && o.status !== 'accepted' && (
+                  {o.status !== 'accepted' && (
                     <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setSending(o)}>
                       <Send className="w-3.5 h-3.5" /> {o.submission_id ? 'Send again' : 'Send to buyers to sign'}
                     </Button>
@@ -169,6 +190,19 @@ export default function Offers() {
         </div>
       )}
 
+      </>}
+
+      {useForm && (
+        <Dialog open onOpenChange={(o) => !o && setUseForm(null)}>
+          <DialogContent className="w-[96vw] max-w-6xl max-h-[94vh] overflow-y-auto">
+            <DialogHeader><DialogTitle>{useForm.state ? `${useForm.state} · ` : ''}{useForm.name}</DialogTitle></DialogHeader>
+            <UnifiedESignCreator user={user} brokerageId={brokerageId} initialTitle={useForm.name} initialForm={useForm}
+              facts={{ brokerage_name: brokerageName, agent_name: user.full_name, agent_email: user.email }}
+              onCancel={() => setUseForm(null)} onComplete={() => setUseForm(null)} />
+          </DialogContent>
+        </Dialog>
+      )}
+
       {editing && (
         <OfferEditor
           offer={editing}
@@ -180,7 +214,7 @@ export default function Offers() {
       )}
 
       {sending && (
-        <SendOffer offer={sending} user={user} brokerageId={brokerageId}
+        <SendOffer offer={sending} user={user} brokerageId={brokerageId} brokerageName={brokerageName}
           onClose={() => setSending(null)} onSent={() => { setSending(null); refresh(); }} />
       )}
 
@@ -223,6 +257,7 @@ function OfferEditor({ offer, user, brokerageId, onClose, onSaved }) {
     sellers: (offer.sellers?.length ? offer.sellers : EMPTY.sellers).map((b) => (typeof b === 'string' ? { name: b, email: '' } : b)),
   }));
   const [drafting, setDrafting] = useState(false);
+  const [coach, setCoach] = useState(null); // { strategy, comps } | 'loading'
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const set = (k) => (e) => setF((x) => ({ ...x, [k]: e?.target ? (e.target.type === 'checkbox' ? e.target.checked : e.target.value) : e }));
@@ -290,6 +325,16 @@ function OfferEditor({ offer, user, brokerageId, onClose, onSaved }) {
     }
   };
 
+  const askCoach = async () => {
+    setError(null);
+    if (!f.property_address && !f.mls_number) return setError('Add the address or MLS number first.');
+    setCoach('loading');
+    try {
+      const res = await base44.functions.invoke('aiOfferStrategy', { ...payload(), notes: f.coach_notes || '' });
+      setCoach(res.data);
+    } catch (err) { setCoach(null); setError(err.message); }
+  };
+
   const save = async (next) => {
     setError(null);
     if (!f.property_address || !f.offer_price) return setError('Property address and offer price are required.');
@@ -352,22 +397,33 @@ function OfferEditor({ offer, user, brokerageId, onClose, onSaved }) {
           <div className="sm:col-span-3"><Label>Listing agent email</Label><Input className="mt-1" type="email" value={f.listing_agent_email} onChange={set('listing_agent_email')} /></div>
         </div>
 
+        <div className="mt-4 rounded-xl border bg-gradient-to-br from-indigo-50/60 to-transparent dark:from-indigo-950/20 p-3 space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm font-semibold flex items-center gap-1.5"><TrendingUp className="w-4 h-4 text-indigo-600" /> AI offer coach</p>
+            <Input className="h-8 flex-1 min-w-[180px] text-xs" placeholder="Anything to know? e.g. multiple offers, buyer max $460k" value={f.coach_notes || ''} onChange={set('coach_notes')} />
+            <Button type="button" size="sm" variant="outline" className="gap-1.5" onClick={askCoach} disabled={coach === 'loading'}>
+              {coach === 'loading' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />} {coach && coach !== 'loading' ? 'Ask again' : 'Suggest price & terms'}
+            </Button>
+          </div>
+          {coach && coach !== 'loading' && <CoachResult data={coach} onUsePrice={(p) => setF((x) => ({ ...x, offer_price: String(p) }))} />}
+        </div>
+
         <div className="mt-4 space-y-2">
           <div className="flex items-center justify-between">
-            <Label>Offer letter</Label>
+            <Label>Cover letter to the listing agent (optional)</Label>
             <Button type="button" size="sm" variant="outline" className="gap-1.5" onClick={draft} disabled={drafting}>
               {drafting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />} {f.offer_text ? 'Rewrite with AI' : 'Write with AI'}
             </Button>
           </div>
-          <Textarea rows={14} value={f.offer_text} onChange={set('offer_text')} placeholder="AI writes the offer from the terms above. You can edit anything before sending." className="font-mono text-xs" />
-          <p className="text-xs text-muted-foreground">Review every term before sending. The offer is drafted from what you entered and doesn't replace your state's standard forms.</p>
+          <Textarea rows={10} value={f.offer_text} onChange={set('offer_text')} placeholder="AI writes a short letter presenting your buyers and terms. It goes with the contract; the contract itself is your state's form, filled from the terms above." className="font-mono text-xs" />
+          <p className="text-xs text-muted-foreground">The contract is your state's form from the Contract forms tab, filled in from these terms when you send it.</p>
         </div>
 
         {error && <p className="text-sm text-destructive mt-2">{error}</p>}
         <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 mt-4">
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button variant="outline" onClick={() => save()} disabled={saving}>Save draft</Button>
-          <Button onClick={() => save('send')} disabled={saving || !f.offer_text} className="gap-1.5">
+          <Button onClick={() => save('send')} disabled={saving} className="gap-1.5">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Save & send to sign
           </Button>
         </div>
@@ -376,41 +432,89 @@ function OfferEditor({ offer, user, brokerageId, onClose, onSaved }) {
   );
 }
 
-function SendOffer({ offer, user, brokerageId, onClose, onSent }) {
-  const [url, setUrl] = useState(null);
+function SendOffer({ offer, user, brokerageId, brokerageName, onClose, onSent }) {
+  const { data: forms = [], isLoading } = useContractForms(brokerageId);
+  const usable = forms.filter((f) => f.form_type === 'purchase_agreement' && (f.fields || []).length);
+  const forState = usable.filter((f) => !offer.state || String(f.state).toUpperCase() === String(offer.state).toUpperCase());
+  const [formId, setFormId] = useState('');
+  const [withLetter, setWithLetter] = useState(!!offer.offer_text);
+  const [letterOnly, setLetterOnly] = useState(false);
+  const [ready, setReady] = useState(null); // { form, letterUrl }
   const [error, setError] = useState(null);
+  const [preparing, setPreparing] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const file = textToPdfFile(offer.offer_text, `Offer - ${offer.property_address}.pdf`);
-        const { file_url } = await base44.integrations.Core.UploadFile({ file, scope: { kind: 'offer', id: offer.id } });
-        await base44.entities.Offer.update(offer.id, { document_url: file_url });
-        setUrl(file_url);
-      } catch (err) {
-        setError(err.message);
+  useEffect(() => { if (!formId && forState[0]) setFormId(forState[0].id); }, [forState.length]);
+
+  const go = async () => {
+    setPreparing(true); setError(null);
+    try {
+      let letterUrl = null;
+      if ((withLetter || letterOnly) && offer.offer_text) {
+        const file = textToPdfFile(offer.offer_text, `Offer letter - ${offer.property_address}.pdf`);
+        letterUrl = (await base44.integrations.Core.UploadFile({ file, scope: { kind: 'offer', id: offer.id } })).file_url;
+        await base44.entities.Offer.update(offer.id, { document_url: letterUrl });
       }
-    })();
-  }, [offer]);
+      setReady({ form: letterOnly ? null : usable.find((f) => f.id === formId), letterUrl });
+    } catch (err) { setError(err.message); } finally { setPreparing(false); }
+  };
 
   const signers = [
-    ...(offer.buyers || []).filter((b) => b.email).map((b) => ({ name: b.name, email: b.email, role: 'Buyer' })),
+    ...(offer.buyers || []).map((b) => ({ name: b.name, email: b.email || '', role: 'Buyer' })),
+    ...(offer.sellers || []).filter((b) => b.name || b.email).map((b) => ({ name: b.name, email: b.email || '', role: 'Seller' })),
     { name: user.full_name, email: user.email, role: "Buyer's agent" },
   ].map((s, i) => ({ id: `s${i}`, ...s }));
+  // Without a form, only people with emails sign the letter.
+  const letterSigners = signers.filter((s) => s.email && s.role !== 'Seller');
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="w-[96vw] max-w-6xl max-h-[94vh] overflow-y-auto">
         <DialogHeader><DialogTitle>Send offer for signature</DialogTitle></DialogHeader>
-        {error ? <p className="text-sm text-destructive">{error}</p> : !url ? (
-          <div className="py-16 flex justify-center gap-2 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin" /> Preparing the PDF…</div>
+        {error && <p className="text-sm text-destructive">{error}</p>}
+        {!ready ? (
+          isLoading ? <div className="py-16 flex justify-center"><Loader2 className="w-5 h-5 animate-spin" /></div> : (
+            <div className="space-y-4 max-w-xl">
+              {usable.length ? (
+                <label className="block text-sm">
+                  <span className="font-medium">Purchase agreement</span>
+                  <select className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={formId} onChange={(e) => setFormId(e.target.value)} disabled={letterOnly}>
+                    {!forState.length && <option value="">Choose a form</option>}
+                    {(forState.length ? forState : usable).map((f) => <option key={f.id} value={f.id}>{f.state} · {f.name}{f.form_version ? ` (${f.form_version})` : ''}</option>)}
+                    {forState.length > 0 && usable.length > forState.length && <optgroup label="Other states">{usable.filter((f) => !forState.includes(f)).map((f) => <option key={f.id} value={f.id}>{f.state} · {f.name}</option>)}</optgroup>}
+                  </select>
+                  <span className="block text-xs text-muted-foreground mt-1">Filled in from the offer terms. You'll see every box and can change anything before it goes out.</span>
+                </label>
+              ) : null}
+              {!forState.length && (
+                <p className="text-sm rounded-lg border border-amber-300 bg-amber-50 text-amber-900 p-3 flex gap-2">
+                  <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  <span>No {offer.state || 'state'} purchase agreement is set up in the Contract forms library yet. {usable.length ? 'You can pick another state\'s form above, or ' : ''}ask your broker to add it{offer.offer_text ? ', or send just the offer letter for now' : ''}.</span>
+                </p>
+              )}
+              {offer.offer_text && (
+                <>
+                  {!letterOnly && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={withLetter} onChange={(e) => setWithLetter(e.target.checked)} /> Put the cover letter in front of the contract</label>}
+                  <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={letterOnly} onChange={(e) => setLetterOnly(e.target.checked)} /> Send only the offer letter (no contract)</label>
+                </>
+              )}
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={onClose}>Cancel</Button>
+                <Button onClick={go} disabled={preparing || (letterOnly ? !offer.offer_text : !formId)} className="gap-1.5">
+                  {preparing ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />} Continue
+                </Button>
+              </div>
+            </div>
+          )
         ) : (
           <UnifiedESignCreator
             user={user}
             brokerageId={brokerageId}
+            transactionId={offer.transaction_id || undefined}
             initialTitle={`Offer - ${offer.property_address}`}
-            initialDocumentUrl={url}
-            initialSigners={signers}
+            initialForm={ready.form || undefined}
+            initialDocumentUrl={ready.letterUrl || ''}
+            initialSigners={ready.form ? signers : letterSigners}
+            facts={{ ...offer, brokerage_name: brokerageName, agent_name: offer.agent_name || user.full_name, agent_email: offer.agent_email || user.email }}
             onCancel={onClose}
             onComplete={async (result) => {
               if (!result) return onClose();
@@ -418,6 +522,7 @@ function SendOffer({ offer, user, brokerageId, onClose, onSent }) {
                 status: 'sent',
                 esign_document_id: result.document?.id,
                 submission_id: result.submissionId,
+                contract_form_id: ready.form?.id || null,
               });
               onSent();
             }}
@@ -426,6 +531,50 @@ function SendOffer({ offer, user, brokerageId, onClose, onSent }) {
       </DialogContent>
     </Dialog>
   );
+}
+
+function CoachResult({ data, onUsePrice }) {
+  const s = data.strategy || {};
+  const m = (v) => (v == null ? '-' : `$${Number(v).toLocaleString('en-US')}`);
+  return (
+    <div className="text-sm space-y-2">
+      <p className="font-medium">{s.headline}</p>
+      {s.suggested_price != null && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-lg bg-background border px-3 py-1.5"><span className="text-xs text-muted-foreground">Suggested</span> <strong>{m(s.suggested_price)}</strong></span>
+          {s.price_low != null && <span className="text-xs text-muted-foreground">range {m(s.price_low)} to {m(s.price_high)}</span>}
+          <span className={`text-[11px] rounded-full px-2 py-0.5 ${s.confidence === 'high' ? 'bg-green-100 text-green-800' : s.confidence === 'low' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'}`}>{s.confidence} confidence</span>
+          <Button type="button" size="sm" variant="ghost" className="h-7 text-xs" onClick={() => onUsePrice(s.suggested_price)}>Use this price</Button>
+        </div>
+      )}
+      {s.market_read && <p className="text-xs text-muted-foreground">{s.market_read}</p>}
+      <div className="grid sm:grid-cols-3 gap-3 text-xs">
+        {[['Why', s.reasons], ['Make it stronger', s.term_tips], ['Watch out for', s.risks]].map(([h, list]) => (
+          <div key={h}><p className="font-semibold mb-1">{h}</p><ul className="list-disc pl-4 space-y-0.5">{(list || []).map((x, i) => <li key={i}>{x}</li>)}</ul></div>
+        ))}
+      </div>
+      {data.comps?.length > 0 && (
+        <details className="text-xs"><summary className="cursor-pointer text-muted-foreground">{data.comps.length} recent sales used</summary>
+          <ul className="mt-1 space-y-0.5">{data.comps.map((c) => <li key={c.id}>{c.address}: sold {m(c.soldPrice)}{c.listPrice ? ` (list ${m(c.listPrice)})` : ''}{c.soldDate ? `, ${c.soldDate}` : ''}{c.beds ? ` · ${c.beds}bd` : ''}{c.sqft ? ` · ${c.sqft} sqft` : ''}</li>)}</ul>
+        </details>
+      )}
+      <p className="text-[11px] text-muted-foreground">AI suggestion from synced MLS data. Use your judgment; it isn't an appraisal.</p>
+    </div>
+  );
+}
+
+function useBrokerageName(brokerageId) {
+  const { data } = useQuery({
+    queryKey: ['brokerage-name', brokerageId],
+    enabled: !!brokerageId,
+    queryFn: async () => {
+      const [st] = await base44.entities.BrokerageSettings.filter({ brokerage_id: brokerageId }, '-created_date', 1).catch(() => []);
+      if (st?.brokerage_name) return st.brokerage_name;
+      const b = await base44.entities.Brokerage.get(brokerageId).catch(() => null);
+      return b?.name || '';
+    },
+  });
+  return data || '';
 }
 
 function AcceptOffer({ offer, brokerageId, onClose, onDone }) {

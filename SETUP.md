@@ -29,6 +29,7 @@ Do these in order. Budget about an hour.
    6. `supabase/migrations/0006_messaging.sql`: unread badges, read receipts, reactions, private channels and call history
    7. `supabase/migrations/0007_files_import.sql`: what the Import page needs, and a private place for keys the app makes itself
    8. `supabase/migrations/0008_contacts.sql`: the Contacts page (each agent's private contact book)
+   9. `supabase/migrations/0009_contract_forms.sql`: the Contract forms library (state forms shared with every brokerage, or your own)
 
    Every file is safe to run again, so after pulling new code just re-run them in order.
 4. Still in the SQL editor, run this once, with your real domain and a long random secret (you'll use the same secret as `HOOK_SECRET` in Vercel):

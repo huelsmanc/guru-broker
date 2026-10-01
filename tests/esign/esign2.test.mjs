@@ -14,12 +14,13 @@ globalThis.fetch = async (url, init) => {
   if (url.includes('original.pdf')) return new Response(original, { status: 200 });
   throw new Error('unexpected fetch ' + url);
 };
-globalThis.__users = { agentTok: { id: 'u1', email: 'ann@x.com' }, otherTok: { id: 'u9', email: 'zed@y.com' } };
+globalThis.__users = { agentTok: { id: 'u1', email: 'ann@x.com' }, otherTok: { id: 'u9', email: 'zed@y.com' }, superTok: { id: 'u0', email: 'owner@x.com' } };
 globalThis.__storage ||= {};
 globalThis.__db = {
   profiles: [
     { id: 'u1', email: 'ann@x.com', full_name: 'Ann Agent', role: 'user', brokerage_id: 'B1', extra: {} },
     { id: 'u9', email: 'zed@y.com', full_name: 'Zed', role: 'user', brokerage_id: 'B2', extra: {} },
+    { id: 'u0', email: 'owner@x.com', full_name: 'Owner', role: 'super_admin', brokerage_id: null, extra: {} },
   ],
   checklist: [{ id: 'cl1', brokerage_id: 'B1', subject_type: 'transaction', subject_id: 'tx1', items: [{ id: 'ad', title: 'Addendum', requires_document: true, status: 'open', history: [] }], extra: {} }],
   esign_document: [{ id: 'doc2', brokerage_id: 'B1', created_by_email: 'ann@x.com', title: 'Addendum', document_url: 'https://files/original.pdf', transaction_id: 'tx1',
@@ -170,5 +171,24 @@ r = await call('esignPacket', { parts: [{ url: 'https://evil.example/x.pdf' }] }
 assert.equal(r.status, 400, 'outside links refused');
 r = await call('esignPacket', { parts: [{ url: '/api/file?p=scoped%2FB1%2Ftx%2Ftx1%2Fa.pdf' }] }, { authorization: 'Bearer otherTok' });
 assert.equal(r.status, 403, "can't pull another brokerage's file");
+
+// Contract forms library: a platform form can go in a packet; another brokerage's can't
+globalThis.__storage['private-files/scoped/platform/forms/ct.pdf'] = original;
+globalThis.__db.contract_form = [
+  { id: 'cfp', brokerage_id: 'platform', state: 'CT', form_type: 'purchase_agreement', name: 'CT Standard Form', document_url: '/api/file?p=scoped%2Fplatform%2Fforms%2Fct.pdf', fields: [{ id: 'a', type: 'text', deal_key: 'property_address', sender_fill: true, x: 5, y: 5, width: 30, hPct: 1, signer_index: 0, value: '' }], roles: ['Buyer 1', 'Seller 1'], extra: {} },
+  { id: 'cfx', brokerage_id: 'B2', state: 'NY', form_type: 'purchase_agreement', name: 'NY', document_url: '/api/file?p=scoped%2FB2%2Fforms%2Fny.pdf', fields: [], extra: {} },
+];
+r = await call('esignPacket', { title: 'Offer', parts: [{ url: '/api/file?p=scoped%2FB1%2Ftx%2Ftx1%2Fb.png' }, { formId: 'cfp' }] }, agent);
+assert.equal(r.status, 200, JSON.stringify(r.body));
+assert.equal(r.body.fields[0].id, 'p2_a'); assert.equal(r.body.fields[0].deal_key, 'property_address', 'deal-filled boxes keep their tie');
+r = await call('esignPacket', { parts: [{ formId: 'cfx' }] }, agent);
+assert.equal(r.status, 404, "another brokerage's form is not usable");
+// Uploading forms: agents can't; the platform owner's go in the shared folder
+r = await call('fileUpload', { scope: { kind: 'forms' }, name: 'x.pdf', size: 10 }, agent);
+assert.equal(r.status, 403, 'agents cannot add forms');
+r = await call('fileUpload', { scope: { kind: 'forms', platform: true }, name: 'x.pdf', size: 10 }, agent);
+assert.equal(r.status, 403, 'only the platform owner adds shared forms');
+r = await call('fileUpload', { scope: { kind: 'forms', platform: true }, name: 'NY form.pdf', size: 10 }, { authorization: 'Bearer superTok' });
+assert.equal(r.status, 200, JSON.stringify(r.body)); assert.match(r.body.path, /^scoped\/platform\/forms\//);
 
 console.log('E-sign upgrades: all checks passed');

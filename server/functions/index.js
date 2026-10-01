@@ -4,6 +4,7 @@ export const FUNCTIONS = {
   aiAssignFields: () => import('./aiAssignFields.js'),
   aiFileCheck: () => import('./aiFileCheck.js'),
   aiOfferDraft: () => import('./aiOfferDraft.js'),
+  aiOfferStrategy: () => import('./aiOfferStrategy.js'),
   aiScanDocument: () => import('./aiScanDocument.js'),
   applyDefaultChecklists: () => import('./applyDefaultChecklists.js'),
   bankLink: () => import('./bankLink.js'),

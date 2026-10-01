@@ -19,20 +19,52 @@ export const FIELD_TYPES = [
 
 const money = (v) => (v == null || v === '' ? '' : `$${Number(v).toLocaleString('en-US', { maximumFractionDigits: 2 })}`);
 const usDate = (d) => { if (!d) return ''; const [y, m, day] = String(d).slice(0, 10).split('-'); return y && m && day ? `${m}/${day}/${y}` : String(d); };
-const listOf = (v) => (Array.isArray(v) ? v.filter(Boolean).join(', ') : v || '');
+const listOf = (v) => (Array.isArray(v) ? v.map((x) => (x && typeof x === 'object' ? x.name : x)).filter(Boolean).join(', ') : v || '');
+const usDateTime = (d) => { if (!d) return ''; const t = new Date(d); return Number.isNaN(t.getTime()) ? String(d) : t.toLocaleString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric', hour: 'numeric', minute: '2-digit' }); };
+const days = (v) => (v == null || v === '' ? '' : String(v));
+const today = () => new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
 
 // Deal facts a box can be tied to. On a template the box stays blank and fills itself in
 // from whichever deal the form is used on.
+// Works with a transaction, an offer, or both merged ({ ...deal, ...offer }).
 export const DEAL_KEYS = [
   { key: 'property_address', label: 'Property address', get: (d) => d.property_address },
-  { key: 'sale_price', label: 'Price', get: (d) => money(d.sale_price) },
+  { key: 'city', label: 'City', get: (d) => d.city },
+  { key: 'state', label: 'State', get: (d) => d.state },
+  { key: 'zip', label: 'ZIP', get: (d) => d.zip },
+  { key: 'full_address', label: 'Full address', get: (d) => [d.property_address, d.city, [d.state, d.zip].filter(Boolean).join(' ')].filter(Boolean).join(', ') },
+  { key: 'mls_number', label: 'MLS #', get: (d) => d.mls_number },
+  { key: 'sale_price', label: 'Price', get: (d) => money(d.offer_price ?? d.sale_price) },
+  { key: 'list_price', label: 'List price', get: (d) => money(d.list_price) },
   { key: 'buyers', label: 'Buyer(s)', get: (d) => listOf(d.buyers) || d.buyer_name },
   { key: 'sellers', label: 'Seller(s)', get: (d) => listOf(d.sellers) || d.seller_name },
+  { key: 'earnest_money', label: 'Earnest money', get: (d) => money(d.earnest_money) },
+  { key: 'financing_type', label: 'Financing type', get: (d) => (d.financing_type === 'cash' ? 'Cash' : d.financing_type || '') },
+  { key: 'down_payment_percent', label: 'Down payment %', get: (d) => (d.down_payment_percent == null || d.down_payment_percent === '' ? '' : `${d.down_payment_percent}%`) },
+  { key: 'loan_amount', label: 'Loan amount', get: (d) => money(d.loan_amount) },
+  { key: 'inspection_days', label: 'Inspection days', get: (d) => days(d.inspection_days) },
+  { key: 'financing_days', label: 'Financing days', get: (d) => days(d.financing_days) },
+  { key: 'seller_concessions', label: 'Seller concessions', get: (d) => money(d.seller_concessions) },
+  { key: 'included_items', label: 'Included items', get: (d) => d.included_items },
+  { key: 'special_terms', label: 'Special terms', get: (d) => d.special_terms },
+  { key: 'offer_expiration', label: 'Offer expires', get: (d) => usDateTime(d.offer_expiration) },
   { key: 'closing_date', label: 'Closing date', get: (d) => usDate(d.closing_date) },
   { key: 'acceptance_date', label: 'Acceptance date', get: (d) => usDate(d.acceptance_date) },
   { key: 'inspection_date', label: 'Inspection deadline', get: (d) => usDate(d.inspection_contingency_date || d.inspection_date) },
   { key: 'agent_name', label: 'Agent', get: (d) => d.agent_name },
-  { key: 'earnest_money', label: 'Earnest money', get: (d) => money(d.earnest_money) },
+  { key: 'agent_email', label: 'Agent email', get: (d) => d.agent_email },
+  { key: 'listing_agent_name', label: 'Listing agent', get: (d) => d.listing_agent_name },
+  { key: 'brokerage_name', label: 'Brokerage', get: (d) => d.brokerage_name },
+  { key: 'today', label: "Today's date", get: () => today() },
+];
+
+// Facts with a few set answers: a checkbox can tick itself when the fact matches.
+export const CHOICE_KEYS = [
+  { key: 'financing_type', label: 'Financing', options: ['conventional', 'FHA', 'VA', 'USDA', 'cash', 'other'], get: (d) => d.financing_type || '' },
+  { key: 'appraisal_contingency', label: 'Appraisal contingency', options: ['yes', 'no'], get: (d) => (d.appraisal_contingency == null ? '' : d.appraisal_contingency === false ? 'no' : 'yes') },
+  { key: 'inspection_contingency', label: 'Inspection contingency', options: ['yes', 'no'], get: (d) => (d.inspection_days == null && !d.inspection_contingency_date ? '' : Number(d.inspection_days) > 0 || d.inspection_contingency_date ? 'yes' : 'no') },
+  { key: 'financing_contingency', label: 'Financing contingency', options: ['yes', 'no'], get: (d) => (d.financing_type === 'cash' ? 'no' : d.financing_days == null && !d.financing_contingency_date ? '' : 'yes') },
+  { key: 'seller_concessions_any', label: 'Seller concessions', options: ['yes', 'no'], get: (d) => (d.seller_concessions == null || d.seller_concessions === '' ? '' : Number(d.seller_concessions) > 0 ? 'yes' : 'no') },
 ];
 
 /** Facts from the deal that can be dropped onto the document as pre-filled text. */
@@ -45,6 +77,11 @@ export function dealFacts(deal) {
 export function fillFromDeal(fields, deal) {
   if (!deal) return fields;
   return (fields || []).map((f) => {
+    if (f.type === 'checkbox' && f.deal_key && f.deal_equals) {
+      const c = CHOICE_KEYS.find((x) => x.key === f.deal_key);
+      const v = c ? c.get(deal) : '';
+      return v ? { ...f, value: String(v).toLowerCase() === String(f.deal_equals).toLowerCase() ? 'X' : '', sender_fill: true } : f;
+    }
     if (!f.deal_key || String(f.value || '').trim()) return f;
     const k = DEAL_KEYS.find((x) => x.key === f.deal_key);
     const v = k ? String(k.get(deal) || '') : '';
@@ -54,7 +91,7 @@ export function fillFromDeal(fields, deal) {
 
 // A small preview of each field type inside its box.
 function FieldPreview({ field, color, label }) {
-  if (field.type === 'checkbox') return <span className="w-full h-full flex items-center justify-center pointer-events-none"><Check className="w-3/4 h-3/4 opacity-30" style={{ color }} /></span>;
+  if (field.type === 'checkbox') return <span className="w-full h-full flex items-center justify-center pointer-events-none"><Check className={`w-3/4 h-3/4 ${field.value === 'X' ? '' : 'opacity-30'}`} style={{ color: field.value === 'X' ? '#111827' : color }} /></span>;
   if (field.type === 'radio') return <span className="w-3/4 h-3/4 rounded-full border-2 pointer-events-none" style={{ borderColor: color }} />;
   const text = field.type === 'dropdown' ? `▾ ${(field.options || []).filter(Boolean)[0] || 'Dropdown'}`
     : field.type === 'attachment' ? `📎 ${field.label || 'Attach a file'}`
@@ -494,6 +531,33 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChan
                 <input className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm text-foreground"
                   value={selected.label || ''} placeholder={selected.type === 'attachment' ? 'e.g. Proof of funds' : selected.type === 'radio' ? 'e.g. Cash' : 'e.g. Lender name'}
                   onChange={(e) => updateField(selected.id, { label: e.target.value.slice(0, 80) })} />
+              </label>
+            )}
+            {selected.type === 'checkbox' && (
+              <label className="block text-xs text-muted-foreground">
+                Who ticks it
+                <select className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm text-foreground"
+                  value={selected.deal_key && selected.deal_equals ? `${selected.deal_key}::${selected.deal_equals}` : selected.sender_fill ? 'sender' : ''}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (!v) return updateField(selected.id, { sender_fill: false, deal_key: null, deal_equals: null, value: '' });
+                    if (v === 'sender') return updateField(selected.id, { sender_fill: true, deal_key: null, deal_equals: null });
+                    const [k, eq] = v.split('::');
+                    updateField(selected.id, { sender_fill: true, deal_key: k, deal_equals: eq, ...(deal ? fillFromDeal([{ ...selected, deal_key: k, deal_equals: eq }], deal)[0] : {}) });
+                  }}>
+                  <option value="">The signer</option>
+                  <option value="sender">The agent, before sending</option>
+                  {CHOICE_KEYS.map((c) => (
+                    <optgroup key={c.key} label={`Automatically: ${c.label}`}>
+                      {c.options.map((o) => <option key={o} value={`${c.key}::${o}`}>{c.label} is {o}</option>)}
+                    </optgroup>
+                  ))}
+                </select>
+              </label>
+            )}
+            {selected.type === 'checkbox' && selected.sender_fill && !templateMode && (
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={selected.value === 'X'} onChange={(e) => updateField(selected.id, { value: e.target.checked ? 'X' : '' })} /> Ticked
               </label>
             )}
             {selected.type === 'radio' && (

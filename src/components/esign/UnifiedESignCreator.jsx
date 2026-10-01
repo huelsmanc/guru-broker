@@ -31,6 +31,8 @@ export default function UnifiedESignCreator({
   transactionId,
   checklistLink, // { checklist_id, item_id }: the signed copy lands on that checklist item
   initialSigners = [],
+  initialForm, // a contract form from the library ({ id, name, document_url, fields, roles })
+  facts, // extra facts to fill boxes from (e.g. an offer's terms), merged over the deal
   onCancel,
 }) {
   const outlet = useOutletContext() || {};
@@ -42,7 +44,19 @@ export default function UnifiedESignCreator({
   const [dealId, setDealId] = useState(transactionId || '');
   const [title, setTitle] = useState(initialTitle);
   const [documentUrl, setDocumentUrl] = useState(initialDocumentUrl);
-  const [signers, setSigners] = useState(initialSigners);
+  // Signers: a form's roles (Buyer 1, Seller 1...) filled with the people given, by role.
+  const [signers, setSigners] = useState(() => {
+    if (!initialForm?.roles?.length) return initialSigners;
+    const base = (r) => String(r || '').replace(/\s*\d+$/, '').trim().toLowerCase();
+    const rows = initialForm.roles.map((r, k) => ({ id: `role-${k}-${Date.now()}`, role: r, role_index: k, name: '', email: '' }));
+    const extra = [];
+    for (const s of initialSigners) {
+      const at = rows.findIndex((x) => !x.email && s.role && base(x.role) === base(s.role));
+      if (at >= 0) rows[at] = { ...rows[at], name: s.name || '', email: s.email || '' };
+      else extra.push(s);
+    }
+    return [...rows, ...extra];
+  });
   const [error, setError] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [fileName, setFileName] = useState('');
@@ -52,13 +66,23 @@ export default function UnifiedESignCreator({
   const [sequential, setSequential] = useState(false);
   const [message, setMessage] = useState('');
   // Files and templates that make up the document (more than one becomes a packet).
-  const [parts, setParts] = useState(() => (initialDocumentUrl ? [{ kind: 'file', url: initialDocumentUrl, name: initialTitle || 'Document' }] : []));
+  // A file passed with a form (e.g. an offer's cover letter) goes in front of it.
+  const [parts, setParts] = useState(() => [
+    ...(initialDocumentUrl ? [{ kind: 'file', url: initialDocumentUrl, name: initialForm ? 'Cover letter' : initialTitle || 'Document' }] : []),
+    ...(initialForm ? [{ kind: 'form', id: initialForm.id, name: initialForm.name, roles: initialForm.roles || [], url: initialForm.document_url, form: initialForm }] : []),
+  ]);
   const [builtKey, setBuiltKey] = useState(null);
   const [building, setBuilding] = useState(false);
   const [remindDays, setRemindDays] = useState(2);
   const [requireCode, setRequireCode] = useState(false);
   const [preflight, setPreflight] = useState(null); // { issues, ai } | 'loading'
 
+  // Contract forms library: platform-wide forms plus this brokerage's (security rules decide).
+  const { data: contractForms = [] } = useQuery({
+    queryKey: ['contract-forms', brokerageId],
+    queryFn: () => base44.entities.ContractForm.list('state', 500).then((l) => l.filter((f) => f.is_active !== false && (f.fields || []).length)).catch(() => []),
+  });
+  const [formState, setFormState] = useState('');
   const { data: templates = [] } = useQuery({
     queryKey: ['esign-templates', brokerageId],
     enabled: !!brokerageId,
@@ -112,6 +136,11 @@ export default function UnifiedESignCreator({
     }
   };
 
+  const addForm = (f) => {
+    setParts((p) => [...p, { kind: 'form', id: f.id, name: f.name, roles: f.roles || [], url: f.document_url, form: f }]);
+    if (!title.trim()) setTitle(f.name || '');
+    if (!signers.length && (f.roles || []).length) setSigners(f.roles.map((r, i) => ({ id: `role-${i}-${Date.now()}`, role: r, role_index: i, name: '', email: '' })));
+  };
   const addTemplate = (t) => {
     setParts((p) => [...p, { kind: 'template', id: t.id, name: t.title, roles: t.roles || [], url: t.document_url }]);
     if (!title.trim()) setTitle(t.title || '');
@@ -136,13 +165,17 @@ export default function UnifiedESignCreator({
   // One file: used as is. One template: its file and boxes. Several: merged into one packet.
   const buildDocument = async () => {
     if (parts.length === 1 && parts[0].kind === 'file') return { document_url: parts[0].url, fields: null };
+    if (parts.length === 1 && parts[0].kind === 'form') {
+      const f = parts[0].form || contractForms.find((x) => x.id === parts[0].id);
+      return { document_url: f?.document_url || parts[0].url, fields: (f?.fields || []).map((x, i) => ({ ...x, id: x.id || `field-${i}-${Date.now()}` })) };
+    }
     if (parts.length === 1 && parts[0].kind === 'template') {
       const t = templates.find((x) => x.id === parts[0].id);
       return { document_url: t?.document_url || parts[0].url, fields: (t?.fields || []).map((f, i) => ({ ...f, id: f.id || `field-${i}-${Date.now()}` })) };
     }
     const res = await base44.functions.invoke('esignPacket', {
       title, transactionId: dealId || undefined,
-      parts: parts.map((p) => (p.kind === 'template' ? { templateId: p.id } : { url: p.url })),
+      parts: parts.map((p) => (p.kind === 'template' ? { templateId: p.id } : p.kind === 'form' ? { formId: p.id } : { url: p.url })),
     });
     return { document_url: res.data.document_url, fields: res.data.fields || [] };
   };
@@ -207,9 +240,9 @@ export default function UnifiedESignCreator({
         }
         const built = await buildDocument();
         // Boxes tied to deal facts fill themselves in from this deal.
-        if (built.fields && dealId) {
-          const d = deal || await base44.entities.Transaction.get(dealId).catch(() => null);
-          built.fields = fillFromDeal(built.fields, d);
+        if (built.fields && (dealId || facts)) {
+          const d = dealId ? deal || await base44.entities.Transaction.get(dealId).catch(() => null) : null;
+          built.fields = fillFromDeal(built.fields, { ...(d || {}), ...(facts || {}) });
         }
         setDocumentUrl(built.document_url);
         setBuiltKey(key);
@@ -367,12 +400,33 @@ export default function UnifiedESignCreator({
               </div>
             )}
 
+            {contractForms.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <p className="text-sm font-medium flex items-center gap-1.5"><FileText className="w-4 h-4" /> Contract forms</p>
+                  <select value={formState} onChange={(e) => setFormState(e.target.value)} className="ml-auto rounded-md border border-border bg-background px-2 py-1 text-xs">
+                    <option value="">All states</option>
+                    {[...new Set(contractForms.map((f) => f.state).filter(Boolean))].sort().map((st) => <option key={st} value={st}>{st}</option>)}
+                  </select>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {contractForms.filter((f) => !formState || f.state === formState).map((f) => (
+                    <button key={f.id} type="button" onClick={() => addForm(f)}
+                      className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs hover:border-primary hover:text-primary">
+                      + {f.state ? `${f.state} · ` : ''}{f.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {parts.length > 0 && (
               <div className="rounded-lg border border-border/60 divide-y">
                 {parts.map((p, i) => (
                   <div key={`${p.id || p.url}-${i}`} className="flex items-center gap-2 px-3 py-2 text-sm">
-                    {p.kind === 'template' ? <LayoutTemplate className="w-4 h-4 text-purple-600" /> : <FileText className="w-4 h-4 text-blue-600" />}
+                    {p.kind === 'template' ? <LayoutTemplate className="w-4 h-4 text-purple-600" /> : <FileText className={`w-4 h-4 ${p.kind === 'form' ? 'text-emerald-600' : 'text-blue-600'}`} />}
                     <span className="flex-1 truncate">{p.name}</span>
+                    {p.kind === 'form' && <span className="text-[10px] uppercase text-emerald-700">contract form</span>}
                     {p.kind === 'template' && <span className="text-[10px] uppercase text-purple-600">{p.auto ? 'fields ready' : 'template'}</span>}
                     <button type="button" onClick={() => removePart(i)} className="p-1 rounded hover:bg-muted" aria-label="Remove"><X className="w-4 h-4" /></button>
                   </div>

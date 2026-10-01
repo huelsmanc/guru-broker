@@ -516,6 +516,32 @@ export const SCHEMA = {
       "tags"
     ]
   },
+  "ContractForm": {
+    "table": "contract_form",
+    "columns": [
+      "brokerage_id",
+      "created_by_email",
+      "description",
+      "document_url",
+      "fields",
+      "form_type",
+      "form_version",
+      "is_active",
+      "name",
+      "page_count",
+      "roles",
+      "state",
+      "id",
+      "created_date",
+      "updated_date",
+      "created_by"
+    ],
+    "typed": [
+      "fields",
+      "is_active",
+      "roles"
+    ]
+  },
   "Conversation": {
     "table": "conversation",
     "columns": [

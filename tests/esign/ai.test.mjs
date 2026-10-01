@@ -13,6 +13,7 @@ globalThis.fetch = async (url, init) => {
     if (body.tool_choice) {
       const schema = body.tools[0].input_schema;
       const input = schema.properties.assignments ? { assignments: [{ id: 'c0', type: 'signature', signer_index: 0 }] }
+        : schema.properties.term_tips ? { headline: 'Offer near list with a short inspection', suggested_price: 445000, price_low: 435000, price_high: 452000, confidence: 'medium', market_read: 'Moving fast', reasons: ['Comps support it'], term_tips: ['Shorten inspection to 7 days'], risks: ['Appraisal gap'] }
         : schema.properties.score ? { score: 72, headline: 'Two items need attention', items: [{ severity: 'critical', title: 'Inspection deadline passed', detail: 'Due yesterday', suggested_task: 'Get inspection waiver signed' }] }
         : { document_type: 'Purchase and Sale Agreement', summary: 'x', buyers: ['Bob'], sellers: ['Sue'], purchase_price: 450000, dates: { closing_date: '2026-11-15' }, contingencies: [], issues: [] };
       return new Response(JSON.stringify({ content: [{ type: 'tool_use', name: 'respond', input }] }));
@@ -37,6 +38,7 @@ const call = async (name, body) => {
   return { status: r.status, body: await r.json() };
 };
 const svc = async (name, body = {}) => { const r = await POST(new Request(`https://gurubroker.app/api/fn/${name}`, { method: 'POST', headers: { 'x-gbh-service': 'hs' }, body: JSON.stringify(body) })); return { status: r.status, body: await r.json() }; };
+
 
 let r = await call('aiOfferDraft', { property_address: '12 Elm St', offer_price: 440000, buyers: [{ name: 'Bob' }] });
 assert.equal(r.status, 200, JSON.stringify(r.body)); assert.match(r.body.offer_text, /Offer to Purchase/);
@@ -126,4 +128,15 @@ assert.equal(r.status, 200, JSON.stringify(r.body));
 assert.equal(r.body.tc.email, 'tc2@x.com', 'least-loaded TC picked automatically');
 const notes = globalThis.__db.notification.filter((n) => n.reference_id === r.body.transaction_id).map((n) => n.user_email).sort();
 assert.deepEqual(notes, ['comp@x.com', 'tc2@x.com']);
+// Offer coach: price range and term tips from the listing and comps
+{
+  const r = await call('aiOfferStrategy', { property_address: '12 Elm St', city: 'Hartford', state: 'CT', list_price: 450000, financing_type: 'conventional' });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.strategy.suggested_price, 445000);
+  assert.ok(Array.isArray(r.body.comps));
+  const sent = calls.filter((c) => c.url.includes('anthropic')).at(-1).body;
+  assert.match(JSON.stringify(sent.messages), /12 Elm St/);
+  const bad = await call('aiOfferStrategy', {});
+  assert.equal(bad.status, 400);
+}
 console.log('Roles, review and send: all checks passed');

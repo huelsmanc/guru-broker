@@ -3,6 +3,7 @@
 // through the server) and the app link to save on the record.
 import { createClientFromRequest, adminClient } from '../lib/base44.js';
 import { scopeFolder, parsePath, canAccess, safeName, fileUrl, PRIVATE_BUCKET } from '../lib/files.js';
+import { isAdminRole } from '../lib/team.js';
 
 const MAX = 50 * 1024 * 1024;
 
@@ -13,7 +14,16 @@ export default async (req) => {
     const { scope, name, size } = await req.json();
     if (size && Number(size) > MAX) return Response.json({ error: 'Files can be up to 50 MB.' }, { status: 400 });
     // The super admin may work outside any brokerage; their own files go in a platform folder.
-    const brokerage = me.brokerage_id || (me.role === 'super_admin' ? 'platform' : null);
+    let brokerage = me.brokerage_id || (me.role === 'super_admin' ? 'platform' : null);
+    // Contract forms: admins add their brokerage's; only the super admin adds platform-wide ones.
+    if (scope?.kind === 'forms') {
+      if (scope.platform) {
+        if (me.role !== 'super_admin') return Response.json({ error: 'Only the platform owner can add forms for everyone' }, { status: 403 });
+        brokerage = 'platform';
+      } else if (!isAdminRole(me.role) && me.role !== 'super_admin') {
+        return Response.json({ error: 'Only admins can add contract forms' }, { status: 403 });
+      }
+    }
     if (!brokerage) return Response.json({ error: 'Join a brokerage before uploading files.' }, { status: 400 });
     const folder = scopeFolder(brokerage, scope);
     const path = `${folder}/${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}-${safeName(name)}`;

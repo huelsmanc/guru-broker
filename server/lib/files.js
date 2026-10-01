@@ -48,6 +48,8 @@ export function scopeFolder(brokerageId, scope = {}) {
       return `${base}/channel/${enc(scope.name)}`;
     case 'misc':
       return `${base}/misc`;
+    case 'forms': // blank contract forms (brokerage's own, or 'platform' for everyone)
+      return `${base}/forms`;
     default:
       throw bad('Bad file scope');
   }
@@ -61,7 +63,7 @@ export function parsePath(path) {
   const [, brokerageId, kind] = parts;
   if (!ID.test(brokerageId || '')) return null;
   const name = parts[parts.length - 1];
-  if (kind === 'misc') return parts.length >= 4 ? { brokerageId, kind, name } : null;
+  if (kind === 'misc' || kind === 'forms') return parts.length >= 4 ? { brokerageId, kind, name } : null;
   if (parts.length < 5) return null;
   const key = parts[3];
   if (['tx', 'offer', 'user', 'group'].includes(kind)) return ID.test(key) ? { brokerageId, kind, id: key, name } : null;
@@ -91,10 +93,13 @@ export const isPrivateUrl = (url) => !!pathFromUrl(url);
 export async function canAccess(me, info, entities) {
   if (!me || !info || me.suspended) return false;
   if (me.role === 'super_admin') return true;
+  // Platform-wide blank forms: anyone in a brokerage can open them.
+  if (info.kind === 'forms' && info.brokerageId === 'platform') return !!me.brokerage_id;
   if (info.brokerageId !== me.brokerage_id) return false;
   const one = async (entity, query) => ((await entities[entity].filter(query, '-created_date', 1).catch(() => [])) || []).length > 0;
   switch (info.kind) {
     case 'misc': return true;
+    case 'forms': return true;
     case 'user': return info.id === me.id || isAdminRole(me.role) || can(me, 'users.manage');
     case 'dm': return info.emails.includes(lc(me.email));
     case 'tx': return one('Transaction', { id: info.id });

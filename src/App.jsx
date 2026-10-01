@@ -43,7 +43,6 @@ const TechLinks = lazy(() => import('@/pages/TechLinks'));
 const ListingGenerator = lazy(() => import('@/pages/ListingGenerator'));
 const NetSheetCalculator = lazy(() => import('@/pages/NetSheetCalculator'));
 const SalesCoach = lazy(() => import('@/pages/SalesCoach'));
-const ContractGenerator = lazy(() => import('@/pages/ContractGenerator'));
 const Onboarding = lazy(() => import('@/pages/Onboarding'));
 const CMABuilder = lazy(() => import('@/pages/CMABuilder'));
 const MyReports = lazy(() => import('@/pages/MyReports'));
@@ -158,7 +157,7 @@ const AuthenticatedApp = () => {
             <Route path="/ListingGenerator" element={<ListingGenerator />} />
             <Route path="/NetSheetCalculator" element={<NetSheetCalculator />} />
             <Route path="/SalesCoach" element={<SalesCoach />} />
-            <Route path="/ContractGenerator" element={<ContractGenerator />} />
+            <Route path="/ContractGenerator" element={<Navigate to="/Offers?tab=forms" replace />} />
             <Route path="/Offers" element={<Offers />} />
             <Route path="/Transactions/:id" element={<TransactionWorkspace />} />
             <Route path="/Onboarding" element={<Onboarding />} />

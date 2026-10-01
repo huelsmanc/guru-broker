@@ -1,5 +1,5 @@
 // New: build one signing packet from several files and/or saved templates.
-// { parts: [{ url } | { templateId }], title, transactionId? }
+// { parts: [{ url } | { templateId } | { formId }], title, transactionId? }
 //   -> { document_url, fields, pages }  (fields from templates moved to their new place)
 // PDFs are copied page by page; photos (JPG/PNG) become a page each.
 import { createClientFromRequest } from '../lib/base44.js';
@@ -42,7 +42,13 @@ export default async (req) => {
     for (const part of parts) {
       let url = part?.url;
       let fields = [];
-      if (part?.templateId) {
+      if (part?.formId) {
+        // A contract form from the library (platform-wide or this brokerage's).
+        const [cf] = await base44.asServiceRole.entities.ContractForm.filter({ id: part.formId }, '-created_date', 1);
+        if (!cf || !(cf.brokerage_id === 'platform' || cf.brokerage_id === me.brokerage_id || me.role === 'super_admin')) return Response.json({ error: 'Form not found' }, { status: 404 });
+        url = cf.document_url;
+        fields = cf.fields || [];
+      } else if (part?.templateId) {
         const [t] = await base44.asServiceRole.entities.ESignTemplate.filter({ id: part.templateId }, '-created_date', 1);
         if (!t || (t.brokerage_id && t.brokerage_id !== me.brokerage_id && me.role !== 'super_admin')) return Response.json({ error: 'Template not found' }, { status: 404 });
         url = t.document_url;

@@ -57,6 +57,7 @@ ENTITIES = {
     "Checklist": "brokerage_id subject_type subject_id subject_email template_id name items status",
     "TransactionContact": "brokerage_id transaction_id agent_email role name email phone company notes is_client contact_id",
     "Contact": "brokerage_id owner_email owner_name name email phone company type tags notes address birthday source",
+    "ContractForm": "brokerage_id state form_type name description form_version document_url fields roles is_active created_by_email page_count",
     "ActivityEvent": "brokerage_id actor_email table_name op record_id transaction_id summary changed",
     "Offer": "brokerage_id agent_email agent_name property_address city state zip mls_number list_price offer_price earnest_money financing_type down_payment_percent loan_amount closing_date offer_expiration inspection_days financing_days appraisal_contingency seller_concessions included_items special_terms buyers sellers listing_agent_name listing_agent_email status offer_text document_url esign_document_id submission_id transaction_id accepted_at acceptance_date",
     "Onboarding": "agent_email agent_name brokerage_id items status",
@@ -78,7 +79,7 @@ USER_FIELDS = "email full_name display_name role brokerage_id suspended headshot
 
 JSON_FIELDS = set("""co_agents referral deductions commission_calc config calc items changed mls_ids answers buyers checklist completed_dates details documents encryption_metadata esign_docs fields items
 data members invitees mentions messages options reactions read_by sellers signatories signature_fields signers tags tech_links updates
-versions cma_report""".split())
+versions cma_report roles""".split())
 BOOL_FIELDS = set("auto_name is_private is_client is_default active appraisal_contingency read pinned encrypted suspended submitted checked_in is_active is_anonymous is_featured signed passed require_sequential_signing".split())
 INT_FIELDS = set("level inspection_days financing_days bathrooms bedrooms downloads_count downvotes upvotes guests_count order passing_score rating signer_index version file_size score".split())
 NUM_FIELDS = set("""lead_pct gross_share company_dollar agent_net fees team_lead revshare_total amount list_price offer_price earnest_money down_payment_percent loan_amount seller_concessions agent_net agent_split_percentage brokerage_fee brokerage_fee_flat brokerage_fee_percentage commission_amount
@@ -364,6 +365,14 @@ for ent, fields in sorted(ENTITIES.items()):
         pw(f"create policy {t}_access on public.{t} for select using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());")
         pw(f"drop policy if exists {t}_admin on public.{t};")
         pw(f"create policy {t}_admin on public.{t} for all using ((brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin()) with check ((brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin());")
+    elif ent == "ContractForm":
+        # Blank state forms. brokerage_id 'platform' = shared with every brokerage (super admin manages those).
+        pw(f"create policy {t}_access on public.{t} for select using (brokerage_id = 'platform' or brokerage_id = public.auth_brokerage_id() or public.is_super_admin());")
+        for op in ("insert", "update", "delete"): pw(f"drop policy if exists {t}_{op} on public.{t};")
+        cond = "((brokerage_id = public.auth_brokerage_id() and brokerage_id <> 'platform' and public.is_brokerage_admin()) or public.is_super_admin())"
+        pw(f"create policy {t}_insert on public.{t} for insert with check {cond};")
+        pw(f"create policy {t}_update on public.{t} for update using {cond} with check {cond};")
+        pw(f"create policy {t}_delete on public.{t} for delete using {cond};")
     elif ent == "Contact":
         # Each agent's own contact book: theirs alone, plus brokerage admins (and anyone given contacts.private_all).
         pw(f"create policy {t}_access on public.{t} for all using (lower(owner_email) = public.auth_email() or (brokerage_id = public.auth_brokerage_id() and (public.is_brokerage_admin() or public.has_perm('contacts.private_all'))) or public.is_super_admin()) with check ((brokerage_id = public.auth_brokerage_id() and (lower(owner_email) = public.auth_email() or public.is_brokerage_admin())) or public.is_super_admin());")

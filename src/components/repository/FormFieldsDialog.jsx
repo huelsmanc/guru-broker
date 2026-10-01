@@ -16,35 +16,55 @@ const DEFAULT_ROLES = ['Buyer 1', 'Buyer 2', 'Seller 1', 'Seller 2'];
  * uses the form from a checklist or the library, everything is already in place.
  * Saved as an e-sign template tied to the file (same document link).
  */
+export const ROLE_PRESETS = {
+  purchase_agreement: ['Buyer 1', 'Buyer 2', 'Seller 1', 'Seller 2'],
+  listing_agreement: ['Seller 1', 'Seller 2', 'Listing agent'],
+  buyer_rep: ['Buyer 1', 'Buyer 2', "Buyer's agent"],
+  disclosure: ['Seller 1', 'Seller 2', 'Buyer 1', 'Buyer 2'],
+};
+
 export default function FormFieldsDialog({ file, template, brokerageId, user, onClose }) {
   const queryClient = useQueryClient();
-  const [roles, setRoles] = useState(() => (template?.roles?.length ? template.roles : DEFAULT_ROLES));
-  const [initialFields, setInitialFields] = useState(() => template?.fields || []);
-  const [editorKey, setEditorKey] = useState(0);
-  const [status, setStatus] = useState(template ? 'Saved' : 'Not saved yet');
   const idRef = useRef(template?.id || null);
   const creating = useRef(null);
-  const latest = useRef(template?.fields || []);
-  const rolesRef = useRef(roles);
-  rolesRef.current = roles;
-
-  const persist = async (fields, nextRoles = rolesRef.current) => {
-    latest.current = fields;
-    const data = { fields, roles: nextRoles, title: file.file_name.replace(/\.[^.]+$/, ''), document_url: file.file_url, source_file_id: file.id };
-    setStatus('Saving…');
-    if (idRef.current) {
-      await base44.entities.ESignTemplate.update(idRef.current, data);
-    } else {
+  // Saved as an e-sign template tied to the library file.
+  const save = async (fields, roles) => {
+    const data = { fields, roles, title: file.file_name.replace(/\.[^.]+$/, ''), document_url: file.file_url, source_file_id: file.id };
+    if (idRef.current) await base44.entities.ESignTemplate.update(idRef.current, data);
+    else {
       if (!creating.current) {
         creating.current = base44.entities.ESignTemplate.create({ ...data, brokerage_id: brokerageId, created_by_email: user?.email })
           .then(async (t) => { idRef.current = t.id; await base44.entities.FileRepository.update(file.id, { esign_template_id: t.id }).catch(() => {}); return t; });
       }
       await creating.current;
-      if (latest.current !== fields) return;
+      await base44.entities.ESignTemplate.update(idRef.current, data);
     }
-    setStatus('Saved');
     queryClient.invalidateQueries({ queryKey: ['library-templates', brokerageId] });
     queryClient.invalidateQueries({ queryKey: ['esign-templates', brokerageId] });
+  };
+  return (
+    <FieldsSetupDialog title={file.file_name} documentUrl={file.file_url} fileName={file.file_name} brokerageId={brokerageId}
+      initialFields={template?.fields || []} initialRoles={template?.roles} saved={!!template} onSave={save} onClose={onClose} />
+  );
+}
+
+/** The editor itself, for any blank form. onSave(fields, roles) stores it wherever it belongs. */
+export function FieldsSetupDialog({ title, documentUrl, fileName, brokerageId, initialFields: startFields = [], initialRoles, defaultRoles = DEFAULT_ROLES, saved, onSave, onClose }) {
+  const [roles, setRoles] = useState(() => (initialRoles?.length ? initialRoles : defaultRoles));
+  const [initialFields, setInitialFields] = useState(startFields);
+  const [editorKey, setEditorKey] = useState(0);
+  const [status, setStatus] = useState(saved ? 'Saved' : 'Not saved yet');
+  const latest = useRef(startFields);
+  const queue = useRef(Promise.resolve());
+  const rolesRef = useRef(roles);
+  rolesRef.current = roles;
+
+  // Saves run one after another, so the last change always wins.
+  const persist = (fields, nextRoles = rolesRef.current) => {
+    latest.current = fields;
+    setStatus('Saving…');
+    queue.current = queue.current.catch(() => {}).then(() => onSave(fields, nextRoles)).then(() => setStatus('Saved'));
+    return queue.current;
   };
 
   const renameRole = (i, name) => {
@@ -70,11 +90,11 @@ export default function FormFieldsDialog({ file, template, brokerageId, user, on
     persist(fields, next).catch(() => setStatus('Could not save'));
   };
 
-  const usable = isPdfUrl(file.file_url) || /\.(png|jpe?g)$/i.test(file.file_name || '');
+  const usable = isPdfUrl(documentUrl) || /\.(png|jpe?g)$/i.test(fileName || '');
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="w-[95vw] max-w-[95vw] h-[95vh] max-h-[95vh] overflow-y-auto">
-        <DialogHeader><DialogTitle>Set up fields: {file.file_name}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>Set up fields: {title}</DialogTitle></DialogHeader>
         {!usable ? <p className="text-sm text-muted-foreground">Only PDFs and images can have fields. Upload this form as a PDF.</p> : (
           <div className="space-y-4">
             <div className="rounded-lg border bg-muted/30 p-3">
@@ -97,7 +117,7 @@ export default function FormFieldsDialog({ file, template, brokerageId, user, on
               </p>
             </div>
             <ESignFieldEditor key={editorKey} templateMode
-              doc={{ id: `tpl-${file.id}`, title: file.file_name, document_url: file.file_url, brokerage_id: brokerageId, signers: roles.map((r) => ({ name: r })), fields: initialFields }}
+              doc={{ id: 'form-setup', title, document_url: documentUrl, brokerage_id: brokerageId, signers: roles.map((r) => ({ name: r })), fields: initialFields }}
               persist={persist}
               onChange={(f) => { latest.current = f; }}
               onComplete={() => onClose()} />
