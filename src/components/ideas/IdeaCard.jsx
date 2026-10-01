@@ -25,7 +25,7 @@ const CATEGORY_EMOJIS = {
 
 export default function IdeaCard({ idea, onUpvote, onDownvote, currentUserEmail, isAdmin, brokerageUsers = [], brokerageId }) {
   const [showComments, setShowComments] = useState(false);
-  const colors = STATUS_COLORS[idea.status];
+  const colors = STATUS_COLORS[idea.status] || STATUS_COLORS.under_review; // ideas saved without a status count as under review
   const hasUpvoted = idea.upvotes?.includes(currentUserEmail);
   const hasDownvoted = idea.downvotes?.includes(currentUserEmail);
   const upvoteCount = idea.upvotes?.length || 0;

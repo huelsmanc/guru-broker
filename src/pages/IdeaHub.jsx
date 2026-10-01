@@ -32,6 +32,7 @@ export default function IdeaHub() {
     queryKey: ['ideas', brokerageId],
     // Most upvoted first, newest first among ties.
     queryFn: async () => (await base44.entities.Idea.filter({ brokerage_id: brokerageId }, '-created_date', 500))
+      .map((i) => ({ ...i, status: i.status || 'under_review', upvotes: i.upvotes || [], downvotes: i.downvotes || [] }))
       .sort((a, b) => (b.upvotes?.length || 0) - (a.upvotes?.length || 0)),
     enabled: !!brokerageId,
   });
