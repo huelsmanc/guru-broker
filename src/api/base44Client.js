@@ -8,11 +8,11 @@ import { makeEntities, fromRow } from '../../shared/entities.js';
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  console.error('Missing VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY. See SETUP.md.');
-}
+// Without these the app can't start; main.jsx shows a setup message instead of a blank page.
+export const CONFIG_MISSING = !SUPABASE_URL || !SUPABASE_ANON_KEY;
+if (CONFIG_MISSING) console.error('Missing VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY. See SETUP.md.');
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+export const supabase = createClient(SUPABASE_URL || 'https://missing-config.supabase.co', SUPABASE_ANON_KEY || 'missing', {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
 });
 
