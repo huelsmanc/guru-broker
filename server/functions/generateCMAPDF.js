@@ -1,270 +1,74 @@
-// Ported from Base44 function `generateCMAPDF`. Logic unchanged.
+// CMA report as a branded PDF (layout in server/lib/cmaPdf.js). The browser sends the report and
+// the subject photo; the server adds the brokerage's logo and colors, the agent's details, and a
+// photo for each comp (its MLS photo, else Google Street View).
 import { createClientFromRequest } from '../lib/base44.js';
-import { jsPDF } from 'jspdf';
+import { buildCmaPdf } from '../lib/cmaPdf.js';
 
-export default (async (req) => {
+const MAX_IMG = 3_000_000;
+
+async function toDataUrl(url, ms = 7000) {
+  if (!url || !/^https:\/\//.test(url)) return null;
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(ms) });
+    const type = (res.headers.get('content-type') || '').split(';')[0];
+    if (!res.ok || !/^image\/(jpeg|jpg|png)$/.test(type)) return null;
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.length > MAX_IMG) return null;
+    return `data:${type};base64,${buf.toString('base64')}`;
+  } catch {
+    return null;
+  }
+}
+
+function streetViewUrl(address) {
+  const key = (process.env.GOOGLE_MAPS_API_KEY || '').trim();
+  if (!key || !address) return null;
+  const u = new URL('https://maps.googleapis.com/maps/api/streetview');
+  u.search = new URLSearchParams({ size: '640x400', location: address, fov: '80', source: 'outdoor', return_error_code: 'true', key }).toString();
+  return u.toString();
+}
+
+export default async (req) => {
   try {
     const base44 = createClientFromRequest(req);
+    const me = await base44.auth.me();
     const { address, beds, baths, cmaReport, subjectPhoto } = await req.json();
+    if (!address || !cmaReport) return Response.json({ error: 'Missing required fields' }, { status: 400 });
 
-    if (!address || !cmaReport) {
-      return Response.json({ error: 'Missing required fields' }, { status: 400 });
-    }
+    const settings = me.brokerage_id
+      ? (await base44.asServiceRole.entities.BrokerageSettings.filter({ brokerage_id: me.brokerage_id }).catch(() => []))[0] || {}
+      : {};
 
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
-    const margin = 20;
-    const contentWidth = pageWidth - margin * 2;
-    let yPosition = margin;
+    // Comp addresses from web search can lack the town: borrow the subject's.
+    const tail = String(address).split(',').slice(1).join(',').trim();
+    const comps = (cmaReport.comparables || []).slice(0, 8);
+    const [logo, headshot, ...compPhotos] = await Promise.all([
+      toDataUrl(settings.logo_url),
+      toDataUrl(me.headshot),
+      ...comps.map(async (c) => {
+        const mls = c.photoUrl && /^https:\/\//.test(c.photoUrl) ? await toDataUrl(c.photoUrl) : null;
+        if (mls) return mls;
+        let a = String(c.address || '').trim();
+        if (a && tail && !a.includes(',')) a = `${a}, ${tail}`;
+        return toDataUrl(streetViewUrl(a));
+      }),
+    ]);
 
-    // Color scheme
-    const primaryColor = [102, 126, 234]; // #667eea
-    const accentColor = [168, 85, 247]; // #a855f7
-    const darkText = [30, 30, 30];
-    const lightText = [100, 100, 100];
-
-    // Helper: Add text with auto-wrapping
-    const addText = (text, size, color = darkText, bold = false, indent = 0) => {
-      pdf.setFontSize(size);
-      pdf.setTextColor(...color);
-      if (bold) pdf.setFont(undefined, 'bold');
-      
-      const lines = pdf.splitTextToSize(text, contentWidth - indent);
-      const lineHeight = size * 0.35;
-      
-      if (yPosition + lineHeight * lines.length > pageHeight - margin) {
-        pdf.addPage();
-        yPosition = margin;
-      }
-      
-      pdf.text(lines, margin + indent, yPosition);
-      yPosition += lineHeight * lines.length + 2;
-      
-      if (bold) pdf.setFont(undefined, 'normal');
-      return yPosition;
-    };
-
-    // Helper: Add section divider
-    const addDivider = () => {
-      if (yPosition + 6 > pageHeight - margin) {
-        pdf.addPage();
-        yPosition = margin;
-      }
-      pdf.setDrawColor(...primaryColor);
-      pdf.setLineWidth(0.5);
-      pdf.line(margin, yPosition, pageWidth - margin, yPosition);
-      yPosition += 6;
-    };
-
-    // ===== PAGE 1: TITLE & MARKET ANALYSIS =====
-    
-    // Title
-    pdf.setFontSize(28);
-    pdf.setTextColor(...primaryColor);
-    pdf.setFont(undefined, 'bold');
-    pdf.text('COMPARATIVE MARKET ANALYSIS', margin, yPosition);
-    yPosition += 12;
-    
-    // Subject property
-    addText(address, 16, darkText, true);
-    addText(`${beds} Bed • ${baths} Bath`, 11, lightText);
-    yPosition += 4;
-
-    // Subject property photo (uploaded by the agent, or the street photo), sent as a JPEG/PNG data URL.
-    const photo = typeof subjectPhoto === 'string' && subjectPhoto.length < 4_000_000 ? subjectPhoto.match(/^data:image\/(jpeg|jpg|png);base64,/i) : null;
-    if (photo) {
-      try {
-        const props = pdf.getImageProperties(subjectPhoto);
-        let w = contentWidth;
-        let h = (props.height / props.width) * w;
-        const maxH = 95;
-        if (h > maxH) { w = (maxH / h) * w; h = maxH; }
-        pdf.addImage(subjectPhoto, photo[1].toLowerCase() === 'png' ? 'PNG' : 'JPEG', margin + (contentWidth - w) / 2, yPosition, w, h);
-        yPosition += h + 6;
-      } catch (e) {
-        console.error('CMA PDF photo skipped:', e.message);
-      }
-    }
-    yPosition += 4;
-    
-    addDivider();
-    yPosition += 3;
-
-    // Market Analysis Section
-    addText('MARKET ANALYSIS & VALUATION', 14, primaryColor, true);
-    yPosition += 4;
-
-    // Market stats grid
-    const stats = [
-      { label: 'Price Per Sq Ft', value: `$${cmaReport.marketAnalysis.avgPricePerSqft?.toFixed(0) || 'N/A'}` },
-      { label: 'Avg Days on Market', value: `${cmaReport.marketAnalysis.avgDaysOnMarket || 'N/A'} days` },
-      { label: 'Market Condition', value: cmaReport.marketAnalysis.marketCondition || 'Balanced' },
-      { label: 'Recommended Price', value: cmaReport.marketAnalysis.recommendedPriceRange }
-    ];
-
-    stats.forEach(stat => {
-      if (yPosition + 8 > pageHeight - margin - 5) {
-        pdf.addPage();
-        yPosition = margin;
-      }
-      
-      pdf.setFontSize(10);
-      pdf.setTextColor(...lightText);
-      pdf.text(stat.label + ':', margin, yPosition);
-      
-      pdf.setFontSize(11);
-      pdf.setTextColor(...primaryColor);
-      pdf.setFont(undefined, 'bold');
-      pdf.text(stat.value, pageWidth - margin - 40, yPosition, { align: 'right' });
-      pdf.setFont(undefined, 'normal');
-      
-      yPosition += 8;
+    const photo = typeof subjectPhoto === 'string' && subjectPhoto.length < MAX_IMG * 1.4 ? subjectPhoto : null;
+    const pdfData = buildCmaPdf({
+      address, beds, baths, report: cmaReport, subjectPhoto: photo, compPhotos,
+      brand: { name: settings.brokerage_name || '', color: settings.primary_color || '', logo, phone: settings.brokerage_phone || '' },
+      agent: { name: me.display_name || me.full_name || '', email: me.email, phone: me.phone || '', title: me.title || '', photo: headshot },
     });
 
-    yPosition += 3;
-    addDivider();
-    yPosition += 3;
-
-    // Market Trend
-    addText('Market Trend', 12, primaryColor, true);
-    addText(cmaReport.marketAnalysis.marketTrend || 'Market analysis in progress', 10, darkText);
-    yPosition += 5;
-
-    if (cmaReport.marketAnalysis.priceAdjustments) {
-      addText('Price Adjustments', 12, primaryColor, true);
-      addText(cmaReport.marketAnalysis.priceAdjustments, 10, darkText);
-    }
-
-    // ===== COMPARABLE PROPERTIES PAGES =====
-    
-    if (cmaReport.comparables?.length > 0) {
-      // Comparables start on new page
-      pdf.addPage();
-      yPosition = margin;
-
-      addText('COMPARABLE PROPERTIES', 14, primaryColor, true);
-      addText(`${cmaReport.comparables.length} Recent Sales in the Area`, 11, lightText);
-      yPosition += 8;
-      addDivider();
-      yPosition += 3;
-
-      cmaReport.comparables.forEach((comp, idx) => {
-        // Check if we need new page
-        if (yPosition + 50 > pageHeight - margin) {
-          pdf.addPage();
-          yPosition = margin;
-        }
-
-        // Comparable header
-        pdf.setFontSize(12);
-        pdf.setTextColor(...primaryColor);
-        pdf.setFont(undefined, 'bold');
-        pdf.text(`${idx + 1}. ${comp.address}`, margin, yPosition);
-        pdf.setFont(undefined, 'normal');
-        yPosition += 7;
-
-        // Property details grid
-        const details = [
-          { label: 'Bedrooms', value: comp.beds },
-          { label: 'Bathrooms', value: comp.baths },
-          { label: 'Square Feet', value: `${(comp.sqft / 1000).toFixed(1)}K` },
-          { label: 'Days on Market', value: `${comp.daysOnMarket}d` }
-        ];
-
-        // 2x2 grid
-        const gridY = yPosition;
-        details.forEach((detail, i) => {
-          const col = i % 2;
-          const row = Math.floor(i / 2);
-          const cellX = margin + col * (contentWidth / 2);
-          const cellY = gridY + row * 11;
-
-          pdf.setFontSize(9);
-          pdf.setTextColor(...lightText);
-          pdf.text(detail.label + ':', cellX, cellY);
-
-          pdf.setFontSize(10);
-          pdf.setTextColor(...darkText);
-          pdf.setFont(undefined, 'bold');
-          pdf.text(String(detail.value), cellX, cellY + 4);
-          pdf.setFont(undefined, 'normal');
-        });
-
-        yPosition = gridY + 22;
-
-        // Price info
-        pdf.setDrawColor(235, 235, 235);
-        pdf.rect(margin, yPosition, contentWidth, 18);
-
-        pdf.setFontSize(10);
-        pdf.setTextColor(...lightText);
-        pdf.text('Sale Price:', margin + 3, yPosition + 5);
-        pdf.text('List Price:', margin + 3, yPosition + 11);
-
-        pdf.setFontSize(11);
-        pdf.setTextColor(...primaryColor);
-        pdf.setFont(undefined, 'bold');
-        pdf.text(`$${comp.soldPrice?.toLocaleString()}`, pageWidth - margin - 3, yPosition + 5, { align: 'right' });
-        pdf.text(`$${comp.listPrice?.toLocaleString()}`, pageWidth - margin - 3, yPosition + 11, { align: 'right' });
-        pdf.setFont(undefined, 'normal');
-
-        yPosition += 22;
-
-        // Condition & upgrades
-        if (comp.condition || comp.upgrades?.length > 0) {
-          pdf.setFontSize(10);
-          pdf.setTextColor(...darkText);
-          pdf.setFont(undefined, 'bold');
-          pdf.text('Property Details:', margin, yPosition);
-          pdf.setFont(undefined, 'normal');
-          yPosition += 4;
-
-          if (comp.condition) {
-            addText(`Condition: ${comp.condition}`, 9, darkText);
-          }
-
-          if (comp.upgrades?.length > 0) {
-            const upgradeText = comp.upgrades.slice(0, 3).join(' • ');
-            addText(`Upgrades: ${upgradeText}`, 9, darkText);
-          }
-        }
-
-        yPosition += 4;
-        addDivider();
-        yPosition += 3;
-      });
-    }
-
-    // ===== FINAL PAGE: SUMMARY & REHAB ASSESSMENT =====
-    pdf.addPage();
-    yPosition = margin;
-
-    addText('REHAB & CONDITION ASSESSMENT', 14, primaryColor, true);
-    yPosition += 4;
-    addText(cmaReport.rehabAssessment || 'Assessment pending', 10, darkText);
-
-    yPosition += 10;
-    addDivider();
-    yPosition += 5;
-
-    // Footer
-    pdf.setFontSize(8);
-    pdf.setTextColor(150, 150, 150);
-    pdf.text('This CMA report is prepared for informational purposes and is based on public market data.', margin, pageHeight - 10);
-    pdf.text(`Generated: ${new Date().toLocaleDateString()}`, margin, pageHeight - 6);
-
-    // Return PDF as base64
-    const pdfData = pdf.output('arraybuffer');
-    const pdfBase64 = Buffer.from(pdfData).toString('base64'); // (spreading every byte into one call overflows once the PDF has a photo)
-
-    return Response.json({ 
+    const street = String(address).split(',')[0].trim().replace(/[^\w\s-]/g, '').replace(/\s+/g, '_');
+    return Response.json({
       success: true,
-      pdf: pdfBase64,
-      filename: `CMA_${address.split(',')[0]}_${new Date().toISOString().split('T')[0]}.pdf`
+      pdf: Buffer.from(pdfData).toString('base64'),
+      filename: `CMA_${street}_${new Date().toISOString().slice(0, 10)}.pdf`,
     });
   } catch (error) {
     console.error('PDF generation error:', error);
-    return Response.json({ error: error.message }, { status: 500 });
+    return Response.json({ error: error.message }, { status: error.status || 500 });
   }
-});
+};
