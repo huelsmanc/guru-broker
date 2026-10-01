@@ -131,7 +131,7 @@ export default async (req) => {
     const fail = (msg, status = 403) => Response.json({ error: msg }, { status });
     let mentioned = [];
     if (body.action === 'mentionable') {
-      return Response.json({ people: [...(await mentionablePeople(E, me.brokerage_id, { tx: acc.tx, subjectEmail: cl.subject_email })).values()].filter((p) => p.email !== myEmail) });
+      return Response.json({ people: [...(await mentionablePeople(E, cl.brokerage_id || acc.tx?.brokerage_id || me.brokerage_id, { tx: acc.tx, subjectEmail: cl.subject_email })).values()].filter((p) => p.email !== myEmail) });
     }
 
     switch (body.action) {
@@ -204,7 +204,7 @@ export default async (req) => {
         if (!text.trim()) return fail('Write a comment', 400);
         const wanted = new Set([...(Array.isArray(body.mentions) ? body.mentions : []), ...[...text.matchAll(/@([\w.+-]+@[\w.-]+\.\w+)/g)].map((m) => m[1])]
           .map((e) => String(e).toLowerCase()).filter((e) => e && e !== myEmail));
-        const allowed = wanted.size ? await mentionablePeople(E, me.brokerage_id, { tx: acc.tx, subjectEmail: cl.subject_email }) : new Map();
+        const allowed = wanted.size ? await mentionablePeople(E, cl.brokerage_id || acc.tx?.brokerage_id || me.brokerage_id, { tx: acc.tx, subjectEmail: cl.subject_email }) : new Map();
         mentioned = [...wanted].filter((e) => allowed.has(e)).map((e) => allowed.get(e));
         item.comments.push({ at: now, by: myEmail, by_name: me.full_name || null, text, mentions: mentioned.map((p) => ({ email: p.email, name: p.name })) });
         log(mentioned.length ? `commented and mentioned ${mentioned.map((p) => p.name).join(', ')}` : 'commented');

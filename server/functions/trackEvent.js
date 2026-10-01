@@ -18,7 +18,7 @@ export default async (req) => {
     }
     if (event === 'mentionable') { // who can be @mentioned on this deal
       if (!tx) return Response.json({ error: 'transaction_id required' }, { status: 400 });
-      const all = await mentionablePeople(base44.asServiceRole.entities, me.brokerage_id, { tx });
+      const all = await mentionablePeople(base44.asServiceRole.entities, tx.brokerage_id || me.brokerage_id, { tx });
       return Response.json({ people: [...all.values()].filter((p) => p.email !== me.email.toLowerCase()) });
     }
     const text = String(summary || '').slice(0, event === 'comment' ? 4000 : 200);
@@ -31,7 +31,7 @@ export default async (req) => {
       const wanted = new Set([...(Array.isArray(mentions) ? mentions : []), ...[...text.matchAll(/@([\w.+-]+@[\w.-]+\.\w+)/g)].map((m) => m[1])]
         .map((e) => String(e).toLowerCase()).filter((e) => e && e !== myEmail));
       if (wanted.size) {
-        const allowed = await mentionablePeople(base44.asServiceRole.entities, me.brokerage_id, { tx });
+        const allowed = await mentionablePeople(base44.asServiceRole.entities, tx.brokerage_id || me.brokerage_id, { tx });
         const people = [...wanted].filter((e) => allowed.has(e)).map((e) => allowed.get(e));
         if (people.length) await notifyPeople(base44.asServiceRole.entities, { brokerageId: me.brokerage_id, people, link: `/Transactions/${tx.id}?tab=activity`,
           referenceId: tx.id, referenceType: 'Transaction', title: `${me.full_name || me.email} mentioned you`, message: `${tx.property_address}: ${text.slice(0, 200)}`,

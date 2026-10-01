@@ -60,6 +60,11 @@ export default function MentionInput({ people = [], onPost, placeholder = 'Comme
           className="flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
         <Button size="sm" className="self-end" disabled={!text.trim() || busy} onClick={post}>Post</Button>
       </div>
+      {query != null && matches.length === 0 && (
+        <p className="absolute z-20 left-0 bottom-full mb-1 w-72 rounded-md border bg-popover shadow-lg px-3 py-2 text-xs text-muted-foreground">
+          {people.length ? 'No one by that name.' : 'No one to mention yet.'} You can mention the agents and TC on this deal, and admins.
+        </p>
+      )}
       {matches.length > 0 && (
         <ul className="absolute z-20 left-0 bottom-full mb-1 w-72 rounded-md border bg-popover shadow-lg py-1">
           {matches.map((p, i) => (

@@ -76,6 +76,10 @@ export async function mentionablePeople(entities, brokerageId, { tx, subjectEmai
   const people = (await entities.User.filter({ brokerage_id: brokerageId }, 'full_name', 2000)).filter((u) => !u.suspended);
   const onDeal = new Set((tx ? [tx.agent_email, tx.tc_email, ...(tx.co_agents || []).map((a) => a.email)] : [subjectEmail]).map((e) => String(e || '').toLowerCase()));
   const out = new Map();
+  // People on the deal can be mentioned even if their profile sits elsewhere (e.g. the super admin).
+  const listed = new Set(people.map((u) => String(u.email || '').toLowerCase()));
+  const extra = [...onDeal].filter((e) => e && !listed.has(e));
+  if (extra.length) people.push(...(await entities.User.filter({ email: { $in: extra } }, 'full_name', 50).catch(() => [])).filter((u) => !u.suspended));
   for (const u of people) {
     const e = String(u.email || '').toLowerCase();
     const ok = onDeal.has(e) || isAdminRole(u.role) || can(u, 'docs.approve') || (tx ? can(u, 'tx.all') : can(u, 'users.manage'));
