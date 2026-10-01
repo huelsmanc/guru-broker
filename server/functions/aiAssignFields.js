@@ -23,7 +23,9 @@ export default async (req) => {
       seller_concessions: facts.seller_concessions, included_personal_property: facts.included_items, special_terms: facts.special_terms,
       buyer_agent: facts.agent_name, buyer_agent_email: facts.agent_email, listing_agent: facts.listing_agent_name, brokerage: facts.brokerage_name,
       today: new Date().toLocaleDateString('en-US', { timeZone: process.env.APP_TIMEZONE || 'America/New_York' }),
-    }).filter(([, v]) => v !== undefined && v !== null && v !== '')) : null;
+      // Answers from the AI intake questionnaire ("question": "answer"), the most specific facts.
+      ...(Array.isArray(facts.intake) ? { answers_from_agent: Object.fromEntries(facts.intake.filter((a) => a && a.label && String(a.value ?? '').trim()).slice(0, 80).map((a) => [String(a.label).slice(0, 160), String(a.value).slice(0, 600)])) } : {}),
+    }).filter(([, v]) => v !== undefined && v !== null && v !== '' && !(typeof v === 'object' && !Object.keys(v).length))) : null;
 
     const list = candidates.slice(0, 250).map((c) => `${c.id} | page ${c.page} | "${String(c.context || '').slice(0, 140)}"`).join('\n');
     const people = signers.map((s, i) => `${i}: ${s.name || ''} <${s.email || ''}>${s.role ? ` (${s.role})` : ''}`).join('\n') || '0: the signer';
@@ -57,7 +59,7 @@ ${people}
 Below are blank lines and boxes found in the document with nearby text. For each one decide:
 - type: signature, initial, date (date signed), text (a blank the signer fills in themselves), fill (a blank the agent fills in before sending: names, addresses, prices, amounts, dates, days, items), or skip (a line for someone who is not a signer, e.g. a notary, witness or attorney, a decorative rule, or not a blank at all)
 - label: a few words naming what the blank is for
-- value: only for fill. ${known ? 'Write what belongs there using ONLY these facts; format money like $500,000.00, dates like 11/15/2026. If the facts don\'t say, leave it empty. Never guess or invent.' : 'Leave empty.'}
+- value: only for fill. ${known ? 'Write what belongs there using ONLY these facts (answers_from_agent are the agent\'s own answers for this exact form; prefer them). For a checkbox-style blank next to a choice, write X if the agent\'s answer picks that choice, else leave it empty; format money like $500,000.00, dates like 11/15/2026. If the facts don\'t say, leave it empty. Never guess or invent.' : 'Leave empty.'}
 - signer_index: which signer it belongs to. Match "Buyer"/"Purchaser" lines to buyers, "Seller"/"Owner" lines to sellers, "Agent"/"Broker"/"Licensee" lines to agents, in the order they appear (Buyer 1, Buyer 2...). If unclear, use 0.
 
 ${known ? `Facts:\n${JSON.stringify(known, null, 1)}\n` : ''}Candidates (id | page | nearby text):

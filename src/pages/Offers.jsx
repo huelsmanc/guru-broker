@@ -8,7 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Handshake, Plus, Sparkles, Loader2, Send, CheckCircle, XCircle, FileText, ArrowRight, Trash2, ShieldQuestion, Mail, Library, TrendingUp, AlertTriangle } from 'lucide-react';
-import FormsLibrary, { useContractForms } from '@/components/contracts/FormsLibrary';
+import FormsLibrary, { useContractForms, typeLabel } from '@/components/contracts/FormsLibrary';
+import FillWithAI from '@/components/contracts/FillWithAI';
 import UnifiedESignCreator from '@/components/esign/UnifiedESignCreator';
 import { isAdminRole, can } from '../../shared/permissions.generated.js';
 import { textToPdfFile } from '@/lib/textToPdf';
@@ -103,8 +104,8 @@ export default function Offers() {
 
       {tab === 'forms' ? (
         <>
-          <p className="text-sm text-muted-foreground mb-3">Listing agreements, buyer representation agreements, disclosures and purchase agreements. Pick one and press Use: its boxes fill in from the deal you choose.</p>
-          <FormsLibrary user={user} brokerageId={brokerageId} onUse={setUseForm} />
+          <p className="text-sm text-muted-foreground mb-3">Your brokerage's forms. Press <strong>Fill with AI</strong>: it asks only the questions that form needs (pre-filled from a deal or offer), fills in the contract, and you review it before sending.</p>
+          <FormsLibrary user={user} brokerageId={brokerageId} brokerageName={brokerageName} />
         </>
       ) : <>
 
@@ -142,6 +143,11 @@ export default function Offers() {
                 <div className="flex flex-wrap gap-2 mt-3">
                   {o.status !== 'accepted' && (
                     <Button size="sm" variant="outline" onClick={() => setEditing(o)}>Edit</Button>
+                  )}
+                  {o.status !== 'accepted' && (
+                    <Button size="sm" className="gap-1.5 bg-violet-600 hover:bg-violet-700" onClick={() => setUseForm(o)}>
+                      <Sparkles className="w-3.5 h-3.5" /> Fill a contract with AI
+                    </Button>
                   )}
                   {o.status !== 'accepted' && (
                     <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setSending(o)}>
@@ -192,16 +198,7 @@ export default function Offers() {
 
       </>}
 
-      {useForm && (
-        <Dialog open onOpenChange={(o) => !o && setUseForm(null)}>
-          <DialogContent className="w-[96vw] max-w-6xl max-h-[94dvh] overflow-y-auto">
-            <DialogHeader><DialogTitle>{useForm.state ? `${useForm.state} · ` : ''}{useForm.name}</DialogTitle></DialogHeader>
-            <UnifiedESignCreator user={user} brokerageId={brokerageId} initialTitle={useForm.name} initialForm={useForm}
-              facts={{ brokerage_name: brokerageName, agent_name: user.full_name, agent_email: user.email }}
-              onCancel={() => setUseForm(null)} onComplete={() => setUseForm(null)} />
-          </DialogContent>
-        </Dialog>
-      )}
+      {useForm && <PickFormToFill offer={useForm} user={user} brokerageId={brokerageId} brokerageName={brokerageName} onClose={() => { setUseForm(null); refresh(); }} />}
 
       {editing && (
         <OfferEditor
@@ -436,7 +433,7 @@ function SendOffer({ offer, user, brokerageId, brokerageName, onClose, onSent })
   const { data: forms = [], isLoading } = useContractForms(brokerageId);
   // Forms whose boxes aren't set up yet still work: the agent places the boxes before sending.
   const usable = forms.filter((f) => f.form_type === 'purchase_agreement');
-  const forState = usable.filter((f) => !offer.state || String(f.state).toUpperCase() === String(offer.state).toUpperCase());
+  const forState = usable;
   const [formId, setFormId] = useState('');
   const [withLetter, setWithLetter] = useState(!!offer.offer_text);
   const [letterOnly, setLetterOnly] = useState(false);
@@ -480,8 +477,7 @@ function SendOffer({ offer, user, brokerageId, brokerageName, onClose, onSent })
                   <span className="font-medium">Purchase agreement</span>
                   <select className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={formId} onChange={(e) => setFormId(e.target.value)} disabled={letterOnly}>
                     {!forState.length && <option value="">Choose a form</option>}
-                    {(forState.length ? forState : usable).map((f) => <option key={f.id} value={f.id}>{f.state} · {f.name}{f.form_version ? ` (${f.form_version})` : ''}{(f.fields || []).length ? '' : ' (boxes not set up)'}</option>)}
-                    {forState.length > 0 && usable.length > forState.length && <optgroup label="Other states">{usable.filter((f) => !forState.includes(f)).map((f) => <option key={f.id} value={f.id}>{f.state} · {f.name}</option>)}</optgroup>}
+                    {usable.map((f) => <option key={f.id} value={f.id}>{f.name}{f.form_version ? ` (${f.form_version})` : ''}{(f.fields || []).length ? '' : ' (boxes not set up)'}</option>)}
                   </select>
                   <span className="block text-xs text-muted-foreground mt-1">
                     {(usable.find((f) => f.id === formId)?.fields || []).length
@@ -493,7 +489,7 @@ function SendOffer({ offer, user, brokerageId, brokerageName, onClose, onSent })
               {!forState.length && (
                 <p className="text-sm rounded-lg border border-amber-300 bg-amber-50 text-amber-900 p-3 flex gap-2">
                   <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                  <span>No {offer.state || 'state'} purchase agreement is set up in the Contract forms library yet. {usable.length ? 'You can pick another state\'s form above, or ' : ''}ask your broker to add it{offer.offer_text ? ', or send just the offer letter for now' : ''}.</span>
+                  <span>No purchase agreement is in your brokerage's Contract forms yet. Ask your broker to upload it{offer.offer_text ? ', or send just the offer letter for now' : ''}.</span>
                 </p>
               )}
               {offer.offer_text && (
@@ -532,6 +528,33 @@ function SendOffer({ offer, user, brokerageId, brokerageName, onClose, onSent })
               onSent();
             }}
           />
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Pick which of the brokerage's forms to fill from this offer (purchase agreements first).
+function PickFormToFill({ offer, user, brokerageId, brokerageName, onClose }) {
+  const { data: forms = [], isLoading } = useContractForms(brokerageId);
+  const [form, setForm] = useState(null);
+  if (form) return <FillWithAI form={form} user={user} brokerageId={brokerageId} brokerageName={brokerageName} initialOffer={offer} onClose={onClose} />;
+  const sorted = [...forms].sort((a, b) => (a.form_type === 'purchase_agreement' ? -1 : 0) - (b.form_type === 'purchase_agreement' ? -1 : 0));
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader><DialogTitle>Which form?</DialogTitle></DialogHeader>
+        {isLoading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : !sorted.length ? (
+          <p className="text-sm text-muted-foreground">Your brokerage hasn't uploaded any forms yet. An admin can add them under Contract forms.</p>
+        ) : (
+          <div className="space-y-1.5 max-h-[60dvh] overflow-y-auto">
+            {sorted.map((f) => (
+              <button key={f.id} type="button" onClick={() => setForm(f)} className="w-full text-left rounded-xl border p-3 hover:border-primary flex items-center gap-3">
+                <FileText className="w-5 h-5 text-primary flex-shrink-0" />
+                <span className="min-w-0"><span className="block text-sm font-medium truncate">{f.name}</span><span className="block text-xs text-muted-foreground">{typeLabel(f.form_type)}{f.state ? ` · ${f.state}` : ''}</span></span>
+              </button>
+            ))}
+          </div>
         )}
       </DialogContent>
     </Dialog>

@@ -23,6 +23,7 @@ export const FUNCTIONS = {
   closingDateReminder: () => import('./closingDateReminder.js'),
   commissionFinalize: () => import('./commissionFinalize.js'),
   commissionPreview: () => import('./commissionPreview.js'),
+  contractIntake: () => import('./contractIntake.js'),
   createESignSubmission: () => import('./createESignSubmission.js'),
   createFileSignedUrl: () => import('./createFileSignedUrl.js'),
   createMasterAdmin: () => import('./createMasterAdmin.js'),
