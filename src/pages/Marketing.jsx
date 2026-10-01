@@ -23,7 +23,7 @@ function useBrand(user, brokerageId) {
   });
   const agent = {
     name: user?.display_name || user?.full_name || '',
-    title: user?.marketing_title || 'REALTOR®',
+    title: user?.marketing_title ?? 'Real Estate Agent',
     phone: user?.phone || '',
     email: user?.email || '',
     license: user?.license_number || '',
@@ -269,9 +269,14 @@ function PropertyPicker({ user, listing, setListing, photos, setPhotos }) {
     const [state, zip] = String(rest || '').split(' ');
     setListing({ street_address: street, city, state, zip, price: t.sale_price, transaction_id: t.id });
   };
+  const [upErr, setUpErr] = useState('');
+  const [dragOver, setDragOver] = useState(false);
   const upload = async (files) => {
-    setBusy(true);
-    try { for (const f of [...files].slice(0, 12)) { const { file_url } = await base44.integrations.Core.UploadFile({ file: f }); setPhotos((p) => [...p, file_url]); } }
+    const list = [...(files || [])].filter((f) => f.type.startsWith('image/')).slice(0, 12);
+    if (!list.length) return;
+    setBusy(true); setUpErr('');
+    try { for (const f of list) { const { file_url } = await base44.integrations.Core.UploadFile({ file: f }); setPhotos((p) => [...p, file_url]); } }
+    catch (err) { setUpErr(`A photo didn't upload: ${err.message || 'try again'}`); }
     finally { setBusy(false); if (fileRef.current) fileRef.current.value = ''; }
   };
   const set = (k) => (e) => setListing((l) => ({ ...l, [k]: e.target.value }));
@@ -305,10 +310,18 @@ function PropertyPicker({ user, listing, setListing, photos, setPhotos }) {
         <Input className="col-span-1 h-8 text-sm" placeholder="Ba" value={listing.baths_total ?? ''} onChange={set('baths_total')} />
         <Input className="col-span-2 h-8 text-sm" placeholder="Sq ft" value={listing.living_area ?? ''} onChange={set('living_area')} />
       </div>
-      <div>
-        <div className="flex items-center justify-between"><span className="text-xs text-muted-foreground">Photos {busy && <Loader2 className="inline w-3 h-3 animate-spin" />} · first one is the main photo</span>
-          <button className="text-xs text-primary flex items-center gap-1" onClick={() => fileRef.current?.click()}><Upload className="w-3 h-3" /> Add</button></div>
+      <div onDragOver={(e) => { e.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)} onDrop={(e) => { e.preventDefault(); setDragOver(false); upload(e.dataTransfer.files); }}>
+        <div className="flex items-center justify-between"><span className="text-xs text-muted-foreground">Photos {busy && <Loader2 className="inline w-3 h-3 animate-spin" />}{photos.length > 1 ? ' · the first one is the main photo' : ''}</span>
+          {photos.length > 0 && <button className="text-xs text-primary flex items-center gap-1" onClick={() => fileRef.current?.click()}><Upload className="w-3 h-3" /> Add more</button>}</div>
         <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => upload(e.target.files)} />
+        {photos.length === 0 && (
+          <button type="button" onClick={() => fileRef.current?.click()} className={cn('mt-1.5 w-full rounded-lg border-2 border-dashed p-4 text-center text-sm hover:bg-muted/40', dragOver && 'border-primary bg-primary/5')}>
+            <Upload className="w-5 h-5 mx-auto mb-1 text-muted-foreground" />
+            <span className="font-medium">Upload photos of the house</span>
+            <span className="block text-xs text-muted-foreground">Click to choose, or drag them here. Up to 12.</span>
+          </button>
+        )}
+        {upErr && <p className="text-xs text-red-600 mt-1">{upErr}</p>}
         {photos.length > 0 && (
           <div className="grid grid-cols-4 gap-1.5 mt-1.5">
             {photos.map((p, i) => (
@@ -360,8 +373,10 @@ function Gallery({ user, brokerageId, agent, brand, onOpen }) {
   );
 }
 
+const TITLES = ['Real Estate Agent', 'Real Estate Salesperson', 'REALTOR®', 'Associate Broker', 'Broker', 'Broker/Owner', ''];
+
 function BrandKit({ user, onSaved, agent, brand }) {
-  const [f, setF] = useState({ headshot: user?.headshot || '', marketing_logo_url: user?.marketing_logo_url || '', brand_color: user?.brand_color || '#0f172a', marketing_title: user?.marketing_title || 'REALTOR®', phone: user?.phone || '', license_number: user?.license_number || '' });
+  const [f, setF] = useState({ headshot: user?.headshot || '', marketing_logo_url: user?.marketing_logo_url || '', brand_color: user?.brand_color || '#0f172a', marketing_title: user?.marketing_title ?? 'Real Estate Agent', phone: user?.phone || '', license_number: user?.license_number || '' });
   const [busy, setBusy] = useState(null);
   const up = (k) => async (e) => {
     const file = e.target.files?.[0]; if (!file) return;
@@ -388,7 +403,15 @@ function BrandKit({ user, onSaved, agent, brand }) {
           {f.marketing_logo_url && <button className="text-xs text-muted-foreground underline" onClick={() => setF((x) => ({ ...x, marketing_logo_url: '' }))}>use brokerage logo</button>}
         </div>
         <div className="grid sm:grid-cols-2 gap-3">
-          <div><Label>Title</Label><Input className="mt-1" value={f.marketing_title} onChange={(e) => setF({ ...f, marketing_title: e.target.value })} /></div>
+          <div><Label>Title under your name</Label>
+            {/* REALTOR® is only for NAR members, so it's a choice, not the default. */}
+            <select className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={TITLES.includes(f.marketing_title) ? f.marketing_title : '__custom'}
+              onChange={(e) => setF({ ...f, marketing_title: e.target.value === '__custom' ? (TITLES.includes(f.marketing_title) ? '' : f.marketing_title) : e.target.value })}>
+              {TITLES.map((t) => <option key={t} value={t}>{t || 'No title'}</option>)}
+              <option value="__custom">Something else…</option>
+            </select>
+            {!TITLES.includes(f.marketing_title) && <Input className="mt-2" placeholder="e.g. Licensed Real Estate Salesperson" value={f.marketing_title} onChange={(e) => setF({ ...f, marketing_title: e.target.value })} />}
+          </div>
           <div><Label>Phone</Label><Input className="mt-1" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} /></div>
           <div><Label>License #</Label><Input className="mt-1" value={f.license_number} onChange={(e) => setF({ ...f, license_number: e.target.value })} /></div>
           <div><Label>Brand color</Label><div className="flex gap-2 mt-1"><input type="color" value={f.brand_color} onChange={(e) => setF({ ...f, brand_color: e.target.value })} className="w-10 h-10 rounded border" /><Input value={f.brand_color} onChange={(e) => setF({ ...f, brand_color: e.target.value })} /></div></div>
