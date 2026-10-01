@@ -1,6 +1,7 @@
 // New: the intake questionnaire for filling a contract form with AI. The AI reads the blank form
 // once and writes the questions that form needs; they are saved on the form and reused.
-//   { form_id, text, force? } -> { form_summary, questions: [...] }
+//   { form_id, text, force? } -> { form_summary, questions: [...] }   (saved on the form)
+//   { name, text }             -> same, for a one-off uploaded document (not saved)
 // The browser sends the form's text (it already reads PDFs to find the blanks).
 import { createClientFromRequest } from '../lib/base44.js';
 import { InvokeLLM } from '../lib/integrations.js';
@@ -26,17 +27,18 @@ export default async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     await base44.auth.me();
-    const { form_id, text, force } = await req.json().catch(() => ({}));
-    // Reading it as the signed-in person: only forms they can see.
-    const form = await base44.entities.ContractForm.get(String(form_id || '')).catch(() => null);
+    const { form_id, text, force, name } = await req.json().catch(() => ({}));
+    // A library form (read as the signed-in person: only forms they can see), or a one-off
+    // document an agent uploaded (questions aren't saved anywhere).
+    const form = form_id ? await base44.entities.ContractForm.get(String(form_id)).catch(() => null) : { name: String(name || 'Document').slice(0, 120) };
     if (!form) return Response.json({ error: 'Form not found' }, { status: 404 });
-    if (form.intake?.questions?.length && !force) return Response.json(form.intake);
+    if (form.id && form.intake?.questions?.length && !force) return Response.json(form.intake);
     const body = String(text || '').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
     if (body.length < 200) return Response.json({ error: "Couldn't read any text in this form. It may be a scanned image; set up its boxes by hand instead." }, { status: 422 });
     const out = tidy(await InvokeLLM({ max_tokens: 6000, response_json_schema: INTAKE_SCHEMA, prompt: intakePrompt(form.name, body.slice(0, MAX_CHARS)) }));
     if (!out.questions.length) return Response.json({ error: 'The AI could not find anything to ask for this form.' }, { status: 422 });
     const intake = { ...out, made_at: new Date().toISOString() };
-    await base44.asServiceRole.entities.ContractForm.update(form.id, { intake });
+    if (form.id) await base44.asServiceRole.entities.ContractForm.update(form.id, { intake });
     return Response.json(intake);
   } catch (error) {
     console.error('contractIntake:', error);

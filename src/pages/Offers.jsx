@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Handshake, Plus, Sparkles, Loader2, Send, CheckCircle, XCircle, FileText, ArrowRight, Trash2, ShieldQuestion, Mail, Library, TrendingUp, AlertTriangle } from 'lucide-react';
 import FormsLibrary, { useContractForms, typeLabel } from '@/components/contracts/FormsLibrary';
-import FillWithAI from '@/components/contracts/FillWithAI';
+import ContractWizard from '@/components/contracts/ContractWizard';
 import UnifiedESignCreator from '@/components/esign/UnifiedESignCreator';
 import { isAdminRole, can } from '../../shared/permissions.generated.js';
 import { textToPdfFile } from '@/lib/textToPdf';
@@ -55,7 +55,7 @@ export default function Offers() {
   const openId = params.get('open');
   const tab = params.get('tab') === 'forms' ? 'forms' : 'offers';
   const setTab = (t) => setParams(t === 'forms' ? { tab: 'forms' } : {}, { replace: true });
-  const [useForm, setUseForm] = useState(null);
+  const [wizard, setWizard] = useState(null); // { offer?, doc? } for the contract flow
   const brokerageName = useBrokerageName(brokerageId);
 
   const review = async (o, action) => {
@@ -88,9 +88,9 @@ export default function Offers() {
       <div className="flex items-center justify-between gap-3 mb-6">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2"><Handshake className="w-6 h-6" /> Offers &amp; Contracts</h1>
-          <p className="text-sm text-muted-foreground">Price it with the AI coach, fill your state's real contract from the terms, get it signed, and open the deal when it's accepted.</p>
+          <p className="text-sm text-muted-foreground">Pick a form or upload one, answer the AI's questions, and it fills the contract. Review it, send it for signature, and open the deal when it's accepted.</p>
         </div>
-        {tab === 'offers' && <Button onClick={() => setEditing({ ...EMPTY })} className="gap-2"><Plus className="w-4 h-4" /> New offer</Button>}
+        {tab === 'offers' && <Button onClick={() => setWizard({})} className="gap-2"><Plus className="w-4 h-4" /> New offer</Button>}
       </div>
 
       <div className="flex gap-1 rounded-xl bg-muted p-1 mb-5 w-fit">
@@ -144,14 +144,15 @@ export default function Offers() {
                   {o.status !== 'accepted' && (
                     <Button size="sm" variant="outline" onClick={() => setEditing(o)}>Edit</Button>
                   )}
-                  {o.status !== 'accepted' && (
-                    <Button size="sm" className="gap-1.5 bg-violet-600 hover:bg-violet-700" onClick={() => setUseForm(o)}>
-                      <Sparkles className="w-3.5 h-3.5" /> Fill a contract with AI
-                    </Button>
+                  {o.status !== 'accepted' && o.esign_document_id && !o.submission_id && (
+                    <Button size="sm" className="gap-1.5" onClick={async () => {
+                      const doc = await base44.entities.ESignDocument.get(o.esign_document_id).catch(() => null);
+                      setWizard(doc ? { offer: o, doc } : { offer: o });
+                    }}><Send className="w-3.5 h-3.5" /> Review and send</Button>
                   )}
                   {o.status !== 'accepted' && (
-                    <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setSending(o)}>
-                      <Send className="w-3.5 h-3.5" /> {o.submission_id ? 'Send again' : 'Send to buyers to sign'}
+                    <Button size="sm" variant={o.esign_document_id ? 'outline' : 'default'} className={`gap-1.5 ${o.esign_document_id ? '' : 'bg-violet-600 hover:bg-violet-700'}`} onClick={() => setWizard({ offer: o })}>
+                      <Sparkles className="w-3.5 h-3.5" /> {o.esign_document_id ? 'Fill again' : 'Fill contract with AI'}
                     </Button>
                   )}
                   {o.document_url && (
@@ -198,7 +199,9 @@ export default function Offers() {
 
       </>}
 
-      {useForm && <PickFormToFill offer={useForm} user={user} brokerageId={brokerageId} brokerageName={brokerageName} onClose={() => { setUseForm(null); refresh(); }} />}
+      {wizard && <ContractWizard offerMode user={user} brokerageId={brokerageId} brokerageName={brokerageName}
+        initialOffer={wizard.offer || null} initialDoc={wizard.doc || null} initialDealId={wizard.offer?.transaction_id || null}
+        onClose={() => { setWizard(null); refresh(); }} />}
 
       {editing && (
         <OfferEditor
@@ -528,33 +531,6 @@ function SendOffer({ offer, user, brokerageId, brokerageName, onClose, onSent })
               onSent();
             }}
           />
-        )}
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// Pick which of the brokerage's forms to fill from this offer (purchase agreements first).
-function PickFormToFill({ offer, user, brokerageId, brokerageName, onClose }) {
-  const { data: forms = [], isLoading } = useContractForms(brokerageId);
-  const [form, setForm] = useState(null);
-  if (form) return <FillWithAI form={form} user={user} brokerageId={brokerageId} brokerageName={brokerageName} initialOffer={offer} onClose={onClose} />;
-  const sorted = [...forms].sort((a, b) => (a.form_type === 'purchase_agreement' ? -1 : 0) - (b.form_type === 'purchase_agreement' ? -1 : 0));
-  return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle>Which form?</DialogTitle></DialogHeader>
-        {isLoading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : !sorted.length ? (
-          <p className="text-sm text-muted-foreground">Your brokerage hasn't uploaded any forms yet. An admin can add them under Contract forms.</p>
-        ) : (
-          <div className="space-y-1.5 max-h-[60dvh] overflow-y-auto">
-            {sorted.map((f) => (
-              <button key={f.id} type="button" onClick={() => setForm(f)} className="w-full text-left rounded-xl border p-3 hover:border-primary flex items-center gap-3">
-                <FileText className="w-5 h-5 text-primary flex-shrink-0" />
-                <span className="min-w-0"><span className="block text-sm font-medium truncate">{f.name}</span><span className="block text-xs text-muted-foreground">{typeLabel(f.form_type)}{f.state ? ` · ${f.state}` : ''}</span></span>
-              </button>
-            ))}
-          </div>
         )}
       </DialogContent>
     </Dialog>

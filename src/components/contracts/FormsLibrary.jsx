@@ -9,7 +9,7 @@ import { Plus, Search, LayoutTemplate, Trash2, Loader2, Eye, Upload, Sparkles, F
 import { FieldsSetupDialog, ROLE_PRESETS } from '@/components/repository/FormFieldsDialog';
 import { isAdminRole } from '../../../shared/permissions.generated.js';
 import { pdfPageTexts } from '@/lib/pdfText';
-import FillWithAI from './FillWithAI';
+import ContractWizard from './ContractWizard';
 
 export const FORM_TYPES = [
   { id: 'purchase_agreement', label: 'Purchase agreement' },
@@ -144,7 +144,7 @@ export default function FormsLibrary({ user, brokerageId, brokerageName }) {
           onSave={async (fields, roles) => { await base44.entities.ContractForm.update(setup.id, { fields, roles }); refresh(); }}
           onClose={() => setSetup(null)} />
       )}
-      {filling && <FillWithAI form={filling} user={user} brokerageId={brokerageId} brokerageName={brokerageName} onClose={() => { setFilling(null); refresh(); }} />}
+      {filling && <ContractWizard form={filling} user={user} brokerageId={brokerageId} brokerageName={brokerageName} onClose={() => { setFilling(null); refresh(); }} />}
     </div>
   );
 }

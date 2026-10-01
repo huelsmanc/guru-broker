@@ -127,3 +127,37 @@ Rules:
 FORM TEXT:
 ${text}`;
 }
+
+const toNum = (v) => { const n = Number(String(v ?? '').replace(/[$,%\s]/g, '').replace(/k$/i, '000')); return Number.isFinite(n) && String(v ?? '').trim() !== '' ? n : null; };
+const toIsoDate = (v) => {
+  const s = String(v || '').trim();
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  m = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})$/);
+  if (m) { const y = m[3].length === 2 ? `20${m[3]}` : m[3]; return `${y}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`; }
+  const t = Date.parse(s); return Number.isNaN(t) ? null : new Date(t).toISOString().slice(0, 10);
+};
+const people = (v) => String(v || '').split(/\s*(?:,|;|\band\b|&)\s*/i).map((x) => x.trim()).filter(Boolean).map((name) => ({ name, email: '' }));
+
+/** The offer record's fields from the intake answers (only questions tied to a known fact). */
+export function offerFromAnswers(questions = [], answers = {}) {
+  const out = {};
+  for (const q of questions) {
+    const v = answers[q.key];
+    if (v == null || String(v).trim() === '' || !q.source || q.source === 'none') continue;
+    switch (q.source) {
+      case 'purchase_price': out.offer_price = toNum(v); break;
+      case 'list_price': case 'earnest_money': case 'loan_amount': case 'seller_concessions': case 'down_payment_percent': out[q.source] = toNum(v); break;
+      case 'inspection_days': case 'financing_days': out[q.source] = toNum(v); break;
+      case 'closing_date': out.closing_date = toIsoDate(v); break;
+      case 'offer_expiration': { const d = toIsoDate(v); if (d) out.offer_expiration = `${d}T17:00:00`; break; }
+      case 'appraisal_contingency': out.appraisal_contingency = /^y/i.test(String(v)); break;
+      case 'buyers': case 'sellers': out[q.source] = people(v); break;
+      case 'financing_type': out.financing_type = String(v).toLowerCase().includes('cash') ? 'cash' : String(v).toLowerCase().includes('fha') ? 'fha' : String(v).toLowerCase().includes('va') ? 'va' : String(v).toLowerCase().includes('usda') ? 'usda' : 'conventional'; break;
+      case 'property_address': case 'city': case 'state': case 'zip': case 'mls_number': case 'included_items': case 'special_terms': case 'listing_agent_name': case 'listing_agent_email':
+        out[q.source] = String(v).trim(); break;
+      default: break;
+    }
+  }
+  if (out.state) out.state = out.state.toUpperCase().slice(0, 2);
+  return Object.fromEntries(Object.entries(out).filter(([, v]) => v != null && v !== ''));
+}

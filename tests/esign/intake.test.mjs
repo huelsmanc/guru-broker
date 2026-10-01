@@ -48,6 +48,12 @@ assert.equal(llm.length, calls, 'second time comes from the saved copy, no AI ca
 r = await call('boss', 'contractIntake', { form_id: 'cf1', text, force: true });
 assert.equal(llm.length, calls + 1, 'rewrite on request');
 
+// A one-off uploaded document: questions come back but aren't saved anywhere.
+const before = JSON.stringify(globalThis.__db.contract_form);
+r = await call('ann', 'contractIntake', { name: 'Addendum', text });
+assert.equal(r.status, 200, JSON.stringify(r.body)); assert.ok(r.body.questions.length);
+assert.equal(JSON.stringify(globalThis.__db.contract_form), before, 'nothing saved for a one-off');
+
 // The filler gets the agent's answers.
 r = await call('ann', 'aiAssignFields', { title: 'CT PA', candidates: [{ id: 'c1', page: 1, context: 'Purchase price $____' }], signers: [], facts: { buyers: ['Alex Peck'], intake: [{ label: 'Purchase price', value: '$470,000' }, { label: 'Empty', value: '' }] } });
 assert.equal(r.status, 200, JSON.stringify(r.body));
