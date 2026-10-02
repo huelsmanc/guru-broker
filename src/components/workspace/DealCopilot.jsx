@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
-import { Sparkles, Send, Loader2, X, CalendarClock, CheckCircle2, ListChecks, Mail, MessageSquare, Copy, Check } from 'lucide-react';
+import { Sparkles, Send, Loader2, X, CalendarClock, CheckCircle2, ListChecks, Mail, MessageSquare, Copy, Check, ChevronLeft } from 'lucide-react';
 import { changeField, setDeadlineDone, addTask, postUpdate } from '@/lib/dealActions';
 
 const SUGGESTIONS = [
@@ -47,8 +47,10 @@ export default function DealCopilot({ tx, user, refresh, canEdit, open, onOpenCh
         </button>
       )}
       {open && (
-        <div className="fixed z-50 inset-0 lg:inset-auto lg:right-4 lg:bottom-4 lg:top-20 lg:w-[420px] bg-background lg:rounded-2xl lg:border shadow-2xl flex flex-col">
-          <div className="flex items-center gap-2 px-4 py-3 border-b">
+        <div className="fixed z-[70] inset-0 w-screen max-w-[100vw] h-[100dvh] lg:h-auto lg:w-[420px] lg:max-w-none lg:inset-auto lg:right-4 lg:bottom-4 lg:top-20 bg-background lg:rounded-2xl lg:border shadow-2xl flex flex-col overflow-hidden" style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
+          <div className="flex items-center gap-2 px-3 sm:px-4 py-3 border-b">
+            {/* Phones: a back arrow where thumbs expect it. */}
+            <button type="button" onClick={() => onOpenChange(false)} className="lg:hidden -ml-1 w-9 h-9 rounded-full hover:bg-muted flex items-center justify-center flex-shrink-0" aria-label="Back to the deal"><ChevronLeft className="w-5 h-5" /></button>
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-600 to-indigo-600 text-white flex items-center justify-center"><Sparkles className="w-4 h-4" /></div>
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold">Deal assistant</p>
@@ -82,8 +84,8 @@ export default function DealCopilot({ tx, user, refresh, canEdit, open, onOpenCh
           <form className="p-3 border-t flex gap-2" onSubmit={(e) => { e.preventDefault(); ask(); }}>
             <textarea rows={1} value={text} onChange={(e) => setText(e.target.value)} placeholder="Ask about this deal…"
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(); } }}
-              className="flex-1 resize-none rounded-xl border bg-background px-3 py-2 text-sm max-h-32 focus:outline-none focus:ring-2 focus:ring-primary/40" />
-            <Button type="submit" size="icon" disabled={busy || !text.trim()} className="rounded-xl h-10 w-10"><Send className="w-4 h-4" /></Button>
+              className="flex-1 min-w-0 resize-none rounded-xl border bg-background px-3 py-2 text-base sm:text-sm max-h-32 focus:outline-none focus:ring-2 focus:ring-primary/40" />
+            <Button type="submit" size="icon" disabled={busy || !text.trim()} className="rounded-xl h-10 w-10 flex-shrink-0"><Send className="w-4 h-4" /></Button>
           </form>
         </div>
       )}
