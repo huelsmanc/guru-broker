@@ -13,7 +13,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 const EMOJIS = ['💬', '🏠', '📋', '📣', '😄', '🎉', '📊', '💼', '🤝', '📢', '💡', '⚡', '🎯', '✅', '📞', '🔔'];
 
 export default function ChatChannelsDropdown({ brokerageId, isAdmin, isSuperAdmin, onChannelClick }) {
-  const [isOpen, setIsOpen] = useState(true);
+  // Open or closed is remembered on this device, so a refresh keeps it the way it was left.
+  const [isOpen, setOpenState] = useState(() => { try { return localStorage.getItem('gbh-channels-open') !== '0'; } catch { return true; } });
+  const setIsOpen = (v) => { setOpenState(v); try { localStorage.setItem('gbh-channels-open', v ? '1' : '0'); } catch { /* private mode */ } };
   const [newPrivate, setNewPrivate] = useState(false);
   const chat = useChat();
   const [showAddDialog, setShowAddDialog] = useState(false);
