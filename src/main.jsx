@@ -6,14 +6,16 @@ import { CONFIG_MISSING } from '@/api/base44Client'
 
 // After a new version is deployed, a tab that was already open asks for page files that no
 // longer exist. Reload once to get the new version instead of leaving the page stuck.
-const isStaleChunk = (msg) => /dynamically imported module|Importing a module script failed|error loading dynamically imported|Failed to fetch module/i.test(String(msg || ''));
+// (Safari words it as "'text/html' is not a valid JavaScript MIME type".)
+const isStaleChunk = (msg) => /dynamically imported module|Importing a module script failed|error loading dynamically imported|Failed to fetch module|not a valid JavaScript MIME type|Unable to preload CSS|Loading (CSS )?chunk/i.test(String(msg || ''));
+const freshReload = () => { const u = new URL(window.location.href); u.searchParams.set('v', Date.now().toString(36)); window.location.replace(u.href); };
 function reloadOnce() {
   try {
     const last = Number(sessionStorage.getItem('gbh-reloaded') || 0);
     if (Date.now() - last < 20000) return false;
     sessionStorage.setItem('gbh-reloaded', String(Date.now()));
   } catch { /* ignore */ }
-  window.location.reload();
+  freshReload();
   return true;
 }
 window.addEventListener('vite:preloadError', (e) => { if (reloadOnce()) e.preventDefault(); });
@@ -38,6 +40,7 @@ class ErrorBoundary extends React.Component {
     return (
       <Problem title="Something went wrong loading the app">
         <p>Try reloading the page. If it keeps happening, send this message to whoever manages the app:</p>
+        <button onClick={freshReload} style={{ margin: '4px 0 12px', padding: '8px 16px', borderRadius: 8, border: 0, background: '#0f172a', color: '#fff', fontSize: 14, cursor: 'pointer' }}>Reload</button>
         <pre style={{ whiteSpace: 'pre-wrap', background: '#f1f5f9', padding: 12, borderRadius: 8, fontSize: 13 }}>{String(this.state.error?.message || this.state.error)}</pre>
       </Problem>
     )
