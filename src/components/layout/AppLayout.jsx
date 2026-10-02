@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
+import { preloadPages } from '@/lib/pages';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { base44 } from '@/api/base44Client';
@@ -24,6 +25,7 @@ export default function AppLayout() {
   const chatScreen = pathname === '/DirectMessages' || pathname === '/SocialChat';
   const inConversation = (pathname === '/DirectMessages' && /[?&](dm|group)=/.test(search)) || pathname === '/SocialChat';
   useEffect(() => { setMobileOpen(false); }, [pathname, search]);
+  useEffect(() => { preloadPages(); }, []);
   // Messaging screens are pinned to the visible screen: the page can't be dragged up, and when the
   // phone keyboard opens the conversation shrinks to the space above it instead of the page scrolling.
   useEffect(() => {
@@ -102,7 +104,14 @@ export default function AppLayout() {
           ? cn('fixed left-0 right-0 md:left-64 top-16 md:top-0 overflow-hidden [--chat-top:4rem] md:[--chat-top:0px]', !inConversation && 'pb-20 lg:pb-0')
           : 'md:ml-64 pt-16 md:pt-0 pb-20 min-h-screen'}
         style={chatScreen ? { height: 'calc(var(--vvh, 100dvh) - var(--chat-top))' } : undefined}>
-        <PageErrorBoundary resetKey={pathname}><Outlet context={{ user, brokerageId: user?.brokerage_id }} /></PageErrorBoundary>
+        <PageErrorBoundary resetKey={pathname}>
+          {/* Only the page area waits; the menu stays put. Moving between pages keeps the current one up until the next is ready. */}
+          <Suspense fallback={<div className="flex justify-center pt-[20vh]"><div className="w-6 h-6 border-[3px] border-slate-200 border-t-slate-700 rounded-full animate-spin" /></div>}>
+            <div key={pathname.split('/')[1]} className={chatScreen ? 'h-full' : 'gbh-page-in'}>
+              <Outlet context={{ user, brokerageId: user?.brokerage_id }} />
+            </div>
+          </Suspense>
+        </PageErrorBoundary>
       </main>
 
       {/* Mobile Bottom Tab Bar */}

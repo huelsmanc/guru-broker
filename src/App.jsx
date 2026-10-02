@@ -3,7 +3,8 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
 import { BrowserRouter as Router, Route, Routes, Navigate, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
-import { lazy, Suspense, useState, useEffect } from 'react';
+import { Suspense, useState, useEffect } from 'react';
+import { page } from '@/lib/pages';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import SecondStepGate from '@/components/auth/SecondStepGate';
@@ -12,55 +13,55 @@ import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import AppLayout from '@/components/layout/AppLayout';
 
 // Lazy load all pages
-const Dashboard = lazy(() => import('@/pages/Dashboard'));
-const Chat = lazy(() => import('@/pages/Chat'));
-const ScheduleCalls = lazy(() => import('@/pages/ScheduleCalls'));
-const BrokerMonitor = lazy(() => import('@/pages/BrokerMonitor'));
-const SocialChat = lazy(() => import('@/pages/SocialChat'));
-const Settings = lazy(() => import('@/pages/Settings'));
-const SuperAdmin = lazy(() => import('@/pages/SuperAdmin'));
-const Privacy = lazy(() => import('@/pages/Privacy'));
-const Support = lazy(() => import('@/pages/Support'));
-const BrokerageUsers = lazy(() => import('@/pages/BrokerageUsers'));
-const Profile = lazy(() => import('@/pages/Profile'));
-const JoinBrokerage = lazy(() => import('@/pages/JoinBrokerage'));
-const DirectMessages = lazy(() => import('@/pages/DirectMessages'));
-const AgentLeaderboard = lazy(() => import('@/pages/AgentLeaderboard'));
-const ComplianceTraining = lazy(() => import('@/pages/ComplianceTraining'));
-const ComplianceQuiz = lazy(() => import('@/pages/ComplianceQuiz'));
-const ESignDocuments = lazy(() => import('@/pages/ESignDocuments'));
-const ESignAdmin = lazy(() => import('@/pages/ESignAdmin'));
-const CustomESign = lazy(() => import('@/pages/CustomESign'));
-const CustomSign = lazy(() => import('@/pages/CustomSign'));
-const PublicSigner = lazy(() => import('@/pages/PublicSigner.jsx'));
-const VerifyDocument = lazy(() => import('@/pages/VerifyDocument.jsx'));
-const BulkSign = lazy(() => import('@/pages/BulkSign'));
-const EventBoard = lazy(() => import('@/pages/EventBoard'));
-const FileRepository = lazy(() => import('@/pages/FileRepository'));
-const Culture = lazy(() => import('@/pages/Culture'));
-const TechLinks = lazy(() => import('@/pages/TechLinks'));
-const SalesCoach = lazy(() => import('@/pages/SalesCoach'));
-const Onboarding = lazy(() => import('@/pages/Onboarding'));
-const MarketingHub = lazy(() => import('@/pages/MarketingHub'));
-const GearStore = lazy(() => import('@/pages/GearStore'));
-const PublicReview = lazy(() => import('@/pages/PublicReview'));
-const Transactions = lazy(() => import('@/pages/Transactions'));
-const Contacts = lazy(() => import('@/pages/Contacts'));
-const ClientPortal = lazy(() => import('@/pages/ClientPortal'));
-const Login = lazy(() => import('@/pages/Login'));
-const Offers = lazy(() => import('@/pages/Offers'));
-const TransactionWorkspace = lazy(() => import('@/pages/TransactionWorkspace'));
-const ClientStatus = lazy(() => import('@/pages/ClientStatus'));
-const PortalPage = lazy(() => import('@/pages/PortalPage'));
-const ResetPassword = lazy(() => import('@/pages/ResetPassword'));
-const MyCommissions = lazy(() => import('@/pages/MyCommissions'));
-const Payouts = lazy(() => import('@/pages/Payouts'));
-const CommissionPlans = lazy(() => import('@/pages/CommissionPlans'));
-const Reports = lazy(() => import('@/pages/Reports'));
-const Activity = lazy(() => import('@/pages/Activity'));
-const ApproveDocs = lazy(() => import('@/pages/ApproveDocs'));
-const ChecklistTemplates = lazy(() => import('@/pages/ChecklistTemplates'));
-const Import = lazy(() => import('@/pages/Import'));
+const Dashboard = page(() => import('@/pages/Dashboard'));
+const Chat = page(() => import('@/pages/Chat'));
+const ScheduleCalls = page(() => import('@/pages/ScheduleCalls'));
+const BrokerMonitor = page(() => import('@/pages/BrokerMonitor'));
+const SocialChat = page(() => import('@/pages/SocialChat'));
+const Settings = page(() => import('@/pages/Settings'));
+const SuperAdmin = page(() => import('@/pages/SuperAdmin'));
+const Privacy = page(() => import('@/pages/Privacy'));
+const Support = page(() => import('@/pages/Support'));
+const BrokerageUsers = page(() => import('@/pages/BrokerageUsers'));
+const Profile = page(() => import('@/pages/Profile'));
+const JoinBrokerage = page(() => import('@/pages/JoinBrokerage'));
+const DirectMessages = page(() => import('@/pages/DirectMessages'));
+const AgentLeaderboard = page(() => import('@/pages/AgentLeaderboard'));
+const ComplianceTraining = page(() => import('@/pages/ComplianceTraining'));
+const ComplianceQuiz = page(() => import('@/pages/ComplianceQuiz'));
+const ESignDocuments = page(() => import('@/pages/ESignDocuments'));
+const ESignAdmin = page(() => import('@/pages/ESignAdmin'));
+const CustomESign = page(() => import('@/pages/CustomESign'));
+const CustomSign = page(() => import('@/pages/CustomSign'));
+const PublicSigner = page(() => import('@/pages/PublicSigner.jsx'));
+const VerifyDocument = page(() => import('@/pages/VerifyDocument.jsx'));
+const BulkSign = page(() => import('@/pages/BulkSign'));
+const EventBoard = page(() => import('@/pages/EventBoard'));
+const FileRepository = page(() => import('@/pages/FileRepository'));
+const Culture = page(() => import('@/pages/Culture'));
+const TechLinks = page(() => import('@/pages/TechLinks'));
+const SalesCoach = page(() => import('@/pages/SalesCoach'));
+const Onboarding = page(() => import('@/pages/Onboarding'));
+const MarketingHub = page(() => import('@/pages/MarketingHub'));
+const GearStore = page(() => import('@/pages/GearStore'));
+const PublicReview = page(() => import('@/pages/PublicReview'));
+const Transactions = page(() => import('@/pages/Transactions'));
+const Contacts = page(() => import('@/pages/Contacts'));
+const ClientPortal = page(() => import('@/pages/ClientPortal'));
+const Login = page(() => import('@/pages/Login'));
+const Offers = page(() => import('@/pages/Offers'));
+const TransactionWorkspace = page(() => import('@/pages/TransactionWorkspace'));
+const ClientStatus = page(() => import('@/pages/ClientStatus'));
+const PortalPage = page(() => import('@/pages/PortalPage'));
+const ResetPassword = page(() => import('@/pages/ResetPassword'));
+const MyCommissions = page(() => import('@/pages/MyCommissions'));
+const Payouts = page(() => import('@/pages/Payouts'));
+const CommissionPlans = page(() => import('@/pages/CommissionPlans'));
+const Reports = page(() => import('@/pages/Reports'));
+const Activity = page(() => import('@/pages/Activity'));
+const ApproveDocs = page(() => import('@/pages/ApproveDocs'));
+const ChecklistTemplates = page(() => import('@/pages/ChecklistTemplates'));
+const Import = page(() => import('@/pages/Import'));
 
 
 // Old page addresses that moved into a tab: keep their query (e.g. ?tab=saved) and add the tab.
@@ -201,7 +202,7 @@ const AuthenticatedApp = () => {
 function App() {
   return (
     <QueryClientProvider client={queryClientInstance}>
-      <Router>
+      <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <AuthProvider>
           <MobileTabBarProvider>
             <AuthenticatedApp />

@@ -23,7 +23,7 @@ function reloadOnce() {
 if (!CONFIG_MISSING) { installErrorReporting(); installNative(); }
 // Don't swallow the error: if we did, the page would try to draw with a missing piece for a moment
 // ("undefined is not an object (evaluating '..._result.default')") before the reload.
-window.addEventListener('vite:preloadError', () => { reloadOnce(); });
+window.addEventListener('vite:preloadError', () => { if (!window.__gbhPreloading) reloadOnce(); });
 window.addEventListener('unhandledrejection', (e) => { if (isStaleChunk(e.reason?.message)) reloadOnce(); });
 
 // Shows what went wrong instead of a blank white page.
