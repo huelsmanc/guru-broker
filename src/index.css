@@ -114,3 +114,12 @@
     @apply select-none;
   }
 }
+/* iPhones zoom the whole page when you tap a text box with text under 16px, and the page then
+   slides sideways. Phones get 16px in every text box so that never happens. */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}

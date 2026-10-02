@@ -59,7 +59,7 @@ export default function DealCopilot({ tx, user, refresh, canEdit, open, onOpenCh
             {msgs.length > 0 && <button type="button" className="text-xs text-muted-foreground hover:underline" onClick={() => setMsgs([])}>Clear</button>}
             <button type="button" onClick={() => onOpenChange(false)} className="w-8 h-8 rounded-full hover:bg-muted flex items-center justify-center" aria-label="Close"><X className="w-4 h-4" /></button>
           </div>
-          <div className="flex-1 overflow-y-auto p-4 space-y-3 overscroll-contain">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-3 overscroll-contain">
             {!msgs.length && (
               <div className="space-y-2">
                 <p className="text-sm text-muted-foreground">Ask anything about this deal. I can also draft emails and texts, add tasks and update dates; nothing changes until you tap it.</p>
