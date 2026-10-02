@@ -33,9 +33,9 @@ function form(obj, prefix = '', out = new URLSearchParams()) {
   }
   return out;
 }
-async function stripe(method, path, body) {
+async function stripe(method, path, body, idempotencyKey) {
   const res = await fetch(`https://api.stripe.com/v1${path}`, {
-    method, headers: { Authorization: `Bearer ${process.env.STRIPE_SECRET_KEY}`, ...(body ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}) },
+    method, headers: { Authorization: `Bearer ${process.env.STRIPE_SECRET_KEY}`, ...(body ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}), ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}) },
     body: body ? form(body).toString() : undefined,
   });
   const data = await res.json().catch(() => ({}));
@@ -131,7 +131,29 @@ export async function sendPostcards(order, { budgetMs = 40_000 } = {}) {
   const done = sent + failed >= recipients.length;
   const patch = { sent_count: sent, failed_count: failed, problems, vendor_ids: ids, status: done ? (sent ? 'mailed' : 'failed') : 'mailing', ...(done ? { fulfilled_at: new Date().toISOString() } : {}) };
   await db.from('print_order').update(patch).eq('id', order.id);
-  return { ...order, ...patch };
+  let out = { ...order, ...patch };
+  if (done && failed > 0) out = await refundUndelivered(out).catch((err) => { console.error('refund', order.id, err.message); return out; });
+  return out;
+}
+
+/**
+ * Postcards Lob refused (bad or undeliverable addresses) are refunded to the agent's card
+ * automatically, so they only pay for what was mailed. Once per order.
+ */
+export async function refundUndelivered(order) {
+  const extra = order.extra || {};
+  if (extra.refund || order.test_mode || !order.stripe_session_id || !process.env.STRIPE_SECRET_KEY) return order;
+  const failed = Number(order.failed_count || 0); const total = Number(order.recipient_count || (order.recipients || []).length || 0);
+  if (!failed || !total) return order;
+  const amount = Number(order.sent_count || 0) === 0 ? Number(order.amount_cents) : Math.round(Number(order.amount_cents) * failed / total);
+  if (amount < 1) return order;
+  const session = await getSession(order.stripe_session_id);
+  const pi = typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id;
+  if (!pi) return order;
+  const r = await stripe('POST', '/refunds', { payment_intent: pi, amount, reason: 'requested_by_customer', metadata: { order_id: order.id, undeliverable: String(failed) } }, `refund-undelivered-${order.id}`);
+  const refund = { id: r.id, amount_cents: amount, count: failed, at: new Date().toISOString() };
+  await adminClient().from('print_order').update({ extra: { ...extra, refund } }).eq('id', order.id);
+  return { ...order, extra: { ...extra, refund }, refund };
 }
 
 // ---- Gelato ---------------------------------------------------------------------------------

@@ -18,7 +18,8 @@ globalThis.fetch = async (url, init = {}) => {
   if (url.startsWith('https://order.gelatoapis.com/v3/orders/gel_1')) return Response.json({ id: 'gel_1', fulfillmentStatus: 'shipped', shipment: { packages: [{ trackingCode: '1Z999', trackingUrl: 'https://ups/1Z999' }] } });
   if (url.startsWith('https://product.gelatoapis.com/v3/products/')) return Response.json({ productUid: 'x', title: 'Business cards' });
   if (url === 'https://api.stripe.com/v1/checkout/sessions') return Response.json({ id: 'cs_1', url: 'https://checkout.stripe.com/cs_1' });
-  if (url.startsWith('https://api.stripe.com/v1/checkout/sessions/cs_1')) return Response.json({ id: 'cs_1', payment_status: globalThis.__paid ? 'paid' : 'unpaid' });
+  if (url.startsWith('https://api.stripe.com/v1/checkout/sessions/cs_1')) return Response.json({ id: 'cs_1', payment_status: globalThis.__paid ? 'paid' : 'unpaid', payment_intent: 'pi_1' });
+  if (url === 'https://api.stripe.com/v1/refunds') return Response.json({ id: `re_${calls.length}`, amount: Number(new URLSearchParams(body).get('amount')) });
   throw new Error('unexpected ' + url);
 };
 globalThis.__users = { ann: { id: 'u1', email: 'ann@x.com' }, root: { id: 'u0', email: 'root@x.com' }, bob: { id: 'u4', email: 'bob@x.com' } };
@@ -105,4 +106,20 @@ assert.deepEqual(r.body.results.map((x) => x.ok), [true, false]);
 // Cancel only unpaid
 r = await call('ann', { action: 'cancel', order_id: orderId });
 assert.equal(r.status, 400);
+// Paid postcards that Lob refuses are refunded to the agent's card, once.
+globalThis.__paid = true;
+r = await call('ann', { action: 'order', product: 'postcard_4x6', files, recipients: [addr(1), { ...addr(2), address_line1: '2 BAD Way' }, { ...addr(3), address_line1: '3 BAD Way' }, { ...addr(4), address_line1: '4 BAD Way' }] });
+assert.ok(r.body.checkout_url, JSON.stringify(r.body));
+const pcOrder = r.body.order_id;
+r = await call('ann', { action: 'confirm', order_id: pcOrder });
+assert.equal(r.body.order.sent_count, 1); assert.equal(r.body.order.failed_count, 3);
+let refunds = calls.filter((c) => c.url === 'https://api.stripe.com/v1/refunds');
+assert.equal(refunds.length, 1, 'refunded');
+const rb = new URLSearchParams(refunds[0].body);
+assert.equal(rb.get('payment_intent'), 'pi_1'); assert.equal(rb.get('amount'), String(Math.round(4 * 119 * 3 / 4)));
+assert.equal(refunds[0].headers['Idempotency-Key'], `refund-undelivered-${pcOrder}`);
+o = __db.print_order.find((x) => x.id === pcOrder);
+assert.equal((o.extra?.refund || o.refund).amount_cents, 357);
+await svc();
+assert.equal(calls.filter((c) => c.url === 'https://api.stripe.com/v1/refunds').length, 1, 'never refunded twice');
 console.log('print shop: all checks passed');

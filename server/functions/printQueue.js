@@ -2,7 +2,7 @@
 // checks shipping on printed orders so agents can see tracking. Also catches card payments the
 // webhook missed (and the agent never came back from checkout), and drops checkouts left unpaid.
 import { createClientFromRequest, adminClient } from '../lib/base44.js';
-import { sendPostcards, gelatoOrder, configured, getSession, markPaidAndFulfill } from '../lib/print.js';
+import { sendPostcards, gelatoOrder, configured, getSession, markPaidAndFulfill, refundUndelivered } from '../lib/print.js';
 
 const BUDGET_MS = 45_000;
 
@@ -24,6 +24,15 @@ export default async (req) => {
             await db.from('print_order').update({ status: 'cancelled' }).eq('id', o.id).eq('status', 'awaiting_payment'); report.expired += 1;
           }
         } catch (err) { console.error('printQueue payment check', o.id, err.message); }
+      }
+    }
+    if (conn.stripe) {
+      // Refunds for undeliverable postcards that weren't issued yet (e.g. orders mailed before this existed).
+      const since = new Date(Date.now() - 30 * 864e5).toISOString();
+      const { data: owed } = await db.from('print_order').select('*').in('status', ['mailed', 'failed']).gt('failed_count', 0).not('stripe_session_id', 'is', null).eq('test_mode', false).is('extra->refund', null).gte('created_date', since).limit(20);
+      for (const o of owed || []) {
+        if (Date.now() - started > 25_000) break;
+        try { const r = await refundUndelivered({ ...(o.extra || {}), ...o }); if (r.refund) report.refunded = (report.refunded || 0) + 1; } catch (err) { console.error('printQueue refund', o.id, err.message); }
       }
     }
     if (conn.lob) {

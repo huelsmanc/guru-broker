@@ -647,7 +647,7 @@ function Orders({ user, brokerageId, catalog }) {
     enabled: !!brokerageId && !!user,
     refetchInterval: 15000,
   });
-  const total = useMemo(() => orders.filter((o) => !['awaiting_payment', 'cancelled'].includes(o.status) && !o.test_mode).reduce((s, o) => s + Number(o.amount_cents || 0), 0), [orders]);
+  const total = useMemo(() => orders.filter((o) => !['awaiting_payment', 'cancelled'].includes(o.status) && !o.test_mode).reduce((s, o) => s + Number(o.amount_cents || 0) - Number(o.refund?.amount_cents || 0), 0), [orders]);
   const act = async (action, o) => { try { await shop(action, { order_id: o.id }); queryClient.invalidateQueries({ queryKey: ['print-orders'] }); } catch (err) { window.alert(err.message); } };
   return (
     <div>
@@ -669,10 +669,16 @@ function Orders({ user, brokerageId, catalog }) {
                   {o.vendor_ids?.expected_delivery && <p className="text-xs text-muted-foreground">Expected around {fmtDate(new Date(`${o.vendor_ids.expected_delivery}T12:00:00`), 'MMM d')}</p>}
                   {o.tracking?.url && <a href={o.tracking.url} target="_blank" rel="noreferrer" className="text-xs text-primary inline-flex items-center gap-1"><Truck className="w-3 h-3" /> Track package {o.tracking.code ? `(${o.tracking.code})` : ''}</a>}
                   {o.status === 'needs_attention' && o.problems?.length > 0 && <p className="text-xs text-red-600 mt-0.5">{o.problems[o.problems.length - 1].error}</p>}
+                  {o.vendor === 'lob' && o.failed_count > 0 && o.problems?.length > 0 && (
+                    <details className="text-xs text-muted-foreground mt-0.5"><summary className="cursor-pointer">Which addresses didn't go out</summary>
+                      <ul className="mt-1 space-y-0.5">{o.problems.slice(0, 50).map((x) => <li key={x.i}>{x.address}: <span className="text-red-600">{x.error}</span></li>)}</ul>
+                    </details>
+                  )}
                 </div>
                 <div className="text-right">
                   <span className={cn('text-[11px] font-semibold rounded-full px-2 py-0.5', cls)}>{label}</span>
-                  <p className="text-sm font-semibold mt-1">{money(o.amount_cents)}</p>
+                  <p className="text-sm font-semibold mt-1">{money(o.amount_cents - Number(o.refund?.amount_cents || 0))}</p>
+                  {o.refund?.amount_cents > 0 && <p className="text-[11px] text-emerald-700">{money(o.refund.amount_cents)} refunded for {o.refund.count} undeliverable</p>}
                   {o.status === 'awaiting_payment' && <button className="text-xs text-muted-foreground underline" onClick={() => act('cancel', o)}>Cancel</button>}
                   {o.status === 'needs_attention' && catalog.is_owner && <button className="text-xs text-primary underline" onClick={() => act('retry', o)}>Retry</button>}
                 </div>
