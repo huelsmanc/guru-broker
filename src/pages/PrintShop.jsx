@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Loader2, Mail, Printer, CreditCard, Package, Upload, Users, Check, X, AlertTriangle, ExternalLink, Trash2, ShieldCheck, ArrowLeft, Settings as SettingsIcon, ListChecks, Truck, Pencil, Wand2, RotateCcw } from 'lucide-react';
+import { Loader2, Mail, Printer, CreditCard, Package, Upload, Users, Check, X, AlertTriangle, ExternalLink, Trash2, ShieldCheck, ArrowLeft, Settings as SettingsIcon, ListChecks, Truck, Pencil, Wand2, RotateCcw, Save } from 'lucide-react';
 import { format as fmtDate } from 'date-fns';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
@@ -95,6 +95,7 @@ function OrderFlow({ user, brokerageId, catalog, preselect, preselectProduct, op
   const [docTitle, setDocTitle] = useState('');
   const [docDesignId, setDocDesignId] = useState(null);
   const [editorOpen, setEditorOpen] = useState(false);
+  const [saveState, setSaveState] = useState(''); // '', 'saving', 'saved', or an error
   const [upFront, setUpFront] = useState(null);
   const [upBack, setUpBack] = useState(null);
   const [backMode, setBackMode] = useState('ours'); // postcards: our back with their message, or their own art
@@ -140,6 +141,15 @@ function OrderFlow({ user, brokerageId, catalog, preselect, preselectProduct, op
     else { const r = await base44.entities.MarketingDesign.create(rec); setDocDesignId(r.id); }
     queryClient.invalidateQueries({ queryKey: ['designs-for-print'] });
     queryClient.invalidateQueries({ queryKey: ['designs'] });
+  };
+  const saveNow = async (d = doc, title = docTitle) => {
+    setSaveState('saving');
+    try { await saveDoc(d, (title || '').trim() || `${p.short} design`); setSaveState('saved'); } catch (e) { setSaveState(e.message || 'Could not save'); }
+  };
+  // Leaving the editor: keep the changes, and update My designs if it's already saved there.
+  const closeEditor = (d, t) => {
+    setDoc(d); if (t) setDocTitle(t); setEditorOpen(false);
+    if (docDesignId) saveNow(d, t || docTitle); else setSaveState('');
   };
   const editorDesigns = designs.filter((d) => d.data?.editor && product && sameShape(d.data.editor.product, product));
   const aiDesigns = designs.filter((d) => !d.data?.editor);
@@ -268,9 +278,12 @@ function OrderFlow({ user, brokerageId, catalog, preselect, preselectProduct, op
       </div>
       <div className="flex flex-wrap gap-2 mt-3">
         <Button onClick={() => setEditorOpen(true)} className="gap-1.5"><Pencil className="w-4 h-4" /> Edit design</Button>
-        <Button variant="outline" onClick={() => { if (window.confirm('Start over with a new design?')) { setDoc(null); setDocDesignId(null); } }} className="gap-1.5"><RotateCcw className="w-4 h-4" /> Start over</Button>
+        <Button variant="outline" onClick={() => saveNow()} disabled={saveState === 'saving'} className="gap-1.5">{saveState === 'saving' ? <Loader2 className="w-4 h-4 animate-spin" /> : saveState === 'saved' ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}{saveState === 'saved' ? 'Saved' : docDesignId ? 'Save changes' : 'Save to My designs'}</Button>
+        <Button variant="outline" onClick={() => { if (window.confirm('Start over with a new design?')) { setDoc(null); setDocDesignId(null); setSaveState(''); } }} className="gap-1.5"><RotateCcw className="w-4 h-4" /> Start over</Button>
       </div>
-      {docDesignId && <p className="text-xs text-muted-foreground mt-2">Saved in My designs{docTitle ? ` as "${docTitle}"` : ''}.</p>}
+      {!docDesignId && <Input value={docTitle} onChange={(e) => { setDocTitle(e.target.value); setSaveState(''); }} placeholder="Name this design (optional)" className="mt-2 max-w-xs h-8 text-sm" />}
+      {saveState && !['saving', 'saved'].includes(saveState) && <p className="text-xs text-red-600 mt-2">{saveState}</p>}
+      {docDesignId && <p className="text-xs text-muted-foreground mt-2">Saved in Marketing → Designs → My designs{docTitle ? ` as "${docTitle}"` : ''}. Changes save automatically when you close the editor.</p>}
     </div>
   ) : (
     <div className="space-y-4">
@@ -310,9 +323,9 @@ function OrderFlow({ user, brokerageId, catalog, preselect, preselectProduct, op
   return (
     <div className="grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-6">
       {editorOpen && doc && (
-        <PrintEditor key={docDesignId || 'new'} product={product} initialDoc={doc} agent={agent} brand={brand} title={docTitle}
-          onClose={(d, t) => { setDoc(d); if (t) setDocTitle(t); setEditorOpen(false); }}
-          onUse={(d, t) => { setDoc(d); if (t) setDocTitle(t); setEditorOpen(false); }}
+        <PrintEditor product={product} initialDoc={doc} agent={agent} brand={brand} title={docTitle}
+          onClose={closeEditor}
+          onUse={closeEditor}
           onSave={saveDoc} />
       )}
       <div className="space-y-5 min-w-0">
