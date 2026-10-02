@@ -6,7 +6,8 @@ import { BookOpen, Plus, Award } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
 import TrainingList from '@/components/compliance/TrainingList';
-import CreateTrainingDialog from '@/components/compliance/CreateTrainingDialog';
+import TrainingEditor from '@/components/compliance/TrainingEditor';
+import { openCertificate, passesByTraining } from '@/components/compliance/certificate';
 import TrainingAnalytics from '@/components/compliance/TrainingAnalytics';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { isAdminRole, normalizeRole, can } from '../../shared/permissions.generated.js';
@@ -15,6 +16,7 @@ export default function ComplianceTraining() {
   const { user, brokerageId } = useOutletContext();
   const isAdmin = isAdminRole(user?.role);
   const [showCreate, setShowCreate] = useState(false);
+  const [editId, setEditId] = useState(null);
 
   const { data: trainings = [] } = useQuery({
     queryKey: ['compliance-trainings', brokerageId],
@@ -33,15 +35,16 @@ export default function ComplianceTraining() {
 
   // Get passed trainings for badges
   const passedTrainings = new Set(attempts.filter(a => a.passed).map(a => a.training_id));
+  const passes = passesByTraining(attempts);
 
   return (
     <div className="p-6 lg:p-10 max-w-6xl mx-auto">
-      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-between mb-8">
+      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-wrap items-center justify-between gap-3 mb-8">
         <div className="flex items-center gap-3">
           <BookOpen className="w-7 h-7 text-primary" />
           <div>
             <h1 className="text-2xl lg:text-3xl font-bold text-foreground tracking-tight">Compliance Training</h1>
-            <p className="text-muted-foreground text-sm mt-0.5">Complete trainings to earn certification badges</p>
+            <p className="text-muted-foreground text-sm mt-0.5">Take classes and quizzes to earn signed certificates</p>
           </div>
         </div>
         {isAdmin && (
@@ -64,16 +67,16 @@ export default function ComplianceTraining() {
                 {trainings
                   .filter(t => passedTrainings.has(t.id))
                   .map((training) => (
-                    <div key={training.id} className="bg-accent/20 rounded-lg px-4 py-2 text-sm font-medium text-accent flex items-center gap-2">
+                    <button key={training.id} onClick={() => passes[training.id] && openCertificate(passes[training.id].id)} title="Open certificate" className="bg-accent/20 hover:bg-accent/30 rounded-lg px-4 py-2 text-sm font-medium text-accent flex items-center gap-2">
                       <Award className="w-4 h-4" />
                       {training.title}
-                    </div>
+                    </button>
                   ))}
               </div>
             </div>
           )}
 
-          <TrainingList trainings={trainings} passedTrainings={passedTrainings} isAdmin={isAdmin} />
+          <TrainingList trainings={trainings} passedTrainings={passedTrainings} passes={passes} isAdmin={isAdmin} onEdit={setEditId} />
         </>
       )}
 
@@ -86,7 +89,7 @@ export default function ComplianceTraining() {
             </TabsList>
 
             <TabsContent value="trainings">
-              <TrainingList trainings={trainings} passedTrainings={passedTrainings} isAdmin={isAdmin} />
+              <TrainingList trainings={trainings} passedTrainings={passedTrainings} passes={passes} isAdmin={isAdmin} onEdit={setEditId} />
             </TabsContent>
 
             <TabsContent value="analytics">
@@ -94,7 +97,7 @@ export default function ComplianceTraining() {
             </TabsContent>
           </Tabs>
 
-          <CreateTrainingDialog open={showCreate} onClose={() => setShowCreate(false)} brokerageId={brokerageId} />
+          <TrainingEditor open={showCreate || !!editId} trainingId={editId} onClose={() => { setShowCreate(false); setEditId(null); }} />
         </>
       )}
     </div>

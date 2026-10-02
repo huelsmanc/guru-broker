@@ -6,7 +6,7 @@ import { createClientFromRequest } from '../lib/base44.js';
 import { notifyPeople } from '../lib/team.js';
 import { normalizeRole } from '../../shared/permissions.generated.js';
 
-const LEARNERS = new Set(['agent', 'team_leader', 'tc']);
+const LEARNERS = new Set(['agent', 'team_leader', 'tc', 'state_broker']);
 
 export default async (req) => {
   try {

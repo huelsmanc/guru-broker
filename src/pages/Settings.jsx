@@ -12,6 +12,7 @@ import { motion } from 'framer-motion';
 import NotificationSettings from '@/components/NotificationSettings';
 import TechLinksTab from '@/components/settings/TechLinksTab';
 import BrokerageUsers from '@/pages/BrokerageUsers';
+import CertificateSigner from '@/components/compliance/CertificateSigner';
 import { isAdminRole, normalizeRole, can } from '../../shared/permissions.generated.js';
 
 export default function Settings() {
@@ -235,6 +236,7 @@ export default function Settings() {
           </Button>
         </div>
             </div>
+            <CertificateSigner />
           </TabsContent>
         )}
 

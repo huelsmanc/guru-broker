@@ -442,8 +442,11 @@ export const SCHEMA = {
     "table": "compliance_attempt",
     "columns": [
       "agent_email",
+      "agent_name",
       "answers",
       "brokerage_id",
+      "certificate_no",
+      "certificate_url",
       "passed",
       "score",
       "training_id",
@@ -484,6 +487,9 @@ export const SCHEMA = {
       "brokerage_id",
       "category",
       "description",
+      "kind",
+      "lessons",
+      "minutes",
       "passing_score",
       "title",
       "type",
@@ -493,6 +499,8 @@ export const SCHEMA = {
       "created_by"
     ],
     "typed": [
+      "lessons",
+      "minutes",
       "passing_score"
     ]
   },

@@ -24,9 +24,9 @@ ENTITIES = {
     "ChannelMember": "brokerage_id channel_id user_email user_name",
     "ClientReview": "agent_email agent_id agent_name brokerage_id client_name comment property_address rating reactions review_token status submitted",
     "Comment": "author_email author_name brokerage_id content idea_id mentions parent_comment_id",
-    "ComplianceAttempt": "agent_email brokerage_id training_id score passed answers",
+    "ComplianceAttempt": "agent_email brokerage_id training_id score passed answers agent_name certificate_no certificate_url",
     "ComplianceQuestion": "explanation options order question_text question_type training_id correct_answer",
-    "ComplianceTraining": "brokerage_id category description passing_score title type",
+    "ComplianceTraining": "brokerage_id category description passing_score title type kind lessons minutes",
     "Conversation": "agent_email agent_name broker_email brokerage_id category handled_by last_message_preview status summary tags title",
     "CultureCalendarEntry": "brokerage_id created_by_email created_by_name date description event_type month person_email person_name title",
     "CultureCalendarRSVP": "brokerage_id culture_calendar_entry_id response_date status user_email user_name",
@@ -82,9 +82,9 @@ USER_FIELDS = "email full_name display_name role brokerage_id suspended headshot
 
 JSON_FIELDS = set("""co_agents referral deductions commission_calc config calc items changed mls_ids answers buyers checklist completed_dates details documents encryption_metadata esign_docs fields items
 data members invitees mentions messages options reactions read_by sellers signatories signature_fields signers tags tech_links updates
-versions cma_report roles states transcript scorecard files ship_to recipients vendor_ids tracking problems""".split())
+versions cma_report roles states transcript scorecard lessons files ship_to recipients vendor_ids tracking problems""".split())
 BOOL_FIELDS = set("test_mode auto_name is_private is_client is_default active appraisal_contingency read pinned encrypted suspended submitted checked_in is_active is_anonymous is_featured signed passed require_sequential_signing".split())
-INT_FIELDS = set("quantity recipient_count sent_count failed_count amount_cents level inspection_days financing_days bathrooms bedrooms downloads_count downvotes upvotes guests_count order passing_score rating signer_index version file_size score duration_seconds".split())
+INT_FIELDS = set("minutes quantity recipient_count sent_count failed_count amount_cents level inspection_days financing_days bathrooms bedrooms downloads_count downvotes upvotes guests_count order passing_score rating signer_index version file_size score duration_seconds".split())
 NUM_FIELDS = set("""lead_pct gross_share company_dollar agent_net fees team_lead revshare_total amount list_price offer_price earnest_money down_payment_percent loan_amount seller_concessions agent_net agent_split_percentage brokerage_fee brokerage_fee_flat brokerage_fee_percentage commission_amount
 commission_flat commission_percentage commission_sale_price sale_price sales_amount transaction_fee transaction_fee_flat
 transaction_fee_percentage purchase_price""".split())
@@ -363,6 +363,18 @@ for ent, fields in sorted(ENTITIES.items()):
         pw(f"create policy {t}_insert on public.{t} for insert with check {same};")
         pw(f"create policy {t}_update on public.{t} for update using {cond} with check {same};")
         pw(f"create policy {t}_delete on public.{t} for delete using ((brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin());")
+    elif ent == "ComplianceTraining":
+        # Everyone in the brokerage takes trainings; only admins add, change or remove them.
+        pw(f"create policy {t}_access on public.{t} for select using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());")
+        for op in ("insert", "update", "delete"): pw(f"drop policy if exists {t}_{op} on public.{t};")
+        adm = "((brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin())"
+        pw(f"create policy {t}_insert on public.{t} for insert with check {adm};")
+        pw(f"create policy {t}_update on public.{t} for update using {adm} with check {adm};")
+        pw(f"create policy {t}_delete on public.{t} for delete using {adm};")
+    elif ent == "ComplianceAttempt":
+        # Graded and recorded by the server (training route), so a score can't be made up.
+        pw(f"create policy {t}_access on public.{t} for select using ((brokerage_id = public.auth_brokerage_id() and (lower(agent_email) = public.auth_email() or public.is_brokerage_admin())) or public.is_super_admin());")
+        pw(f"-- {t}: written only by the server.")
     elif ent == "Offer":
         cond = "(lower(agent_email) = public.auth_email() or (brokerage_id = public.auth_brokerage_id() and (public.is_brokerage_admin() or public.has_perm('offers.all') or public.leads_agent(agent_email))) or public.is_super_admin())"
         pw(f"create policy {t}_access on public.{t} for all using {cond} with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());")
@@ -435,9 +447,11 @@ for ent, fields in sorted(ENTITIES.items()):
         # Child rows (questions, submitters, signature data, audit log): server-side only,
         # except compliance questions which agents read while taking a quiz.
         if ent == "ComplianceQuestion":
-            pw(f"create policy {t}_access on public.{t} for select using (auth.uid() is not null);")
+            # Answers stay hidden from learners: they get questions through the training route.
+            own = "(exists (select 1 from public.compliance_training ct where ct.id = compliance_question.training_id and ct.brokerage_id = public.auth_brokerage_id()) and public.is_brokerage_admin()) or public.is_super_admin()"
+            pw(f"create policy {t}_access on public.{t} for select using ({own});")
             pw(f"drop policy if exists {t}_admin on public.{t};")
-            pw(f"create policy {t}_admin on public.{t} for all using (public.is_brokerage_admin());")
+            pw(f"create policy {t}_admin on public.{t} for all using ({own}) with check ({own});")
         else:
             pw(f"-- {t}: no client policy; reached only through server routes (service role).")
     if ent == "ESignSubmission":

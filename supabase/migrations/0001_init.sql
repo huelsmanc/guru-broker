@@ -862,8 +862,11 @@ create index if not exists commission_record_transaction_id_idx on public.commis
 create table if not exists public.compliance_attempt (
   id text primary key default replace(gen_random_uuid()::text, '-', ''),
   agent_email text,
+  agent_name text,
   answers jsonb,
   brokerage_id text,
+  certificate_no text,
+  certificate_url text,
   passed boolean,
   score integer,
   training_id text,
@@ -873,8 +876,11 @@ create table if not exists public.compliance_attempt (
   created_by text
 );
 alter table public.compliance_attempt add column if not exists agent_email text;
+alter table public.compliance_attempt add column if not exists agent_name text;
 alter table public.compliance_attempt add column if not exists answers jsonb;
 alter table public.compliance_attempt add column if not exists brokerage_id text;
+alter table public.compliance_attempt add column if not exists certificate_no text;
+alter table public.compliance_attempt add column if not exists certificate_url text;
 alter table public.compliance_attempt add column if not exists passed boolean;
 alter table public.compliance_attempt add column if not exists score integer;
 alter table public.compliance_attempt add column if not exists training_id text;
@@ -920,6 +926,9 @@ create table if not exists public.compliance_training (
   brokerage_id text,
   category text,
   description text,
+  kind text,
+  lessons jsonb,
+  minutes integer,
   passing_score integer,
   title text,
   type text,
@@ -931,6 +940,9 @@ create table if not exists public.compliance_training (
 alter table public.compliance_training add column if not exists brokerage_id text;
 alter table public.compliance_training add column if not exists category text;
 alter table public.compliance_training add column if not exists description text;
+alter table public.compliance_training add column if not exists kind text;
+alter table public.compliance_training add column if not exists lessons jsonb;
+alter table public.compliance_training add column if not exists minutes integer;
 alter table public.compliance_training add column if not exists passing_score integer;
 alter table public.compliance_training add column if not exists title text;
 alter table public.compliance_training add column if not exists type text;
@@ -2538,13 +2550,20 @@ drop policy if exists commission_record_access on public.commission_record;
 create policy commission_record_access on public.commission_record for select using (lower(agent_email) = public.auth_email() or (brokerage_id = public.auth_brokerage_id() and (public.is_brokerage_admin() or public.has_perm('accounting.access'))) or public.is_super_admin());
 -- commission_record: written only by server routes.
 drop policy if exists compliance_attempt_access on public.compliance_attempt;
-create policy compliance_attempt_access on public.compliance_attempt for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+create policy compliance_attempt_access on public.compliance_attempt for select using ((brokerage_id = public.auth_brokerage_id() and (lower(agent_email) = public.auth_email() or public.is_brokerage_admin())) or public.is_super_admin());
+-- compliance_attempt: written only by the server.
 drop policy if exists compliance_question_access on public.compliance_question;
-create policy compliance_question_access on public.compliance_question for select using (auth.uid() is not null);
+create policy compliance_question_access on public.compliance_question for select using ((exists (select 1 from public.compliance_training ct where ct.id = compliance_question.training_id and ct.brokerage_id = public.auth_brokerage_id()) and public.is_brokerage_admin()) or public.is_super_admin());
 drop policy if exists compliance_question_admin on public.compliance_question;
-create policy compliance_question_admin on public.compliance_question for all using (public.is_brokerage_admin());
+create policy compliance_question_admin on public.compliance_question for all using ((exists (select 1 from public.compliance_training ct where ct.id = compliance_question.training_id and ct.brokerage_id = public.auth_brokerage_id()) and public.is_brokerage_admin()) or public.is_super_admin()) with check ((exists (select 1 from public.compliance_training ct where ct.id = compliance_question.training_id and ct.brokerage_id = public.auth_brokerage_id()) and public.is_brokerage_admin()) or public.is_super_admin());
 drop policy if exists compliance_training_access on public.compliance_training;
-create policy compliance_training_access on public.compliance_training for all using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+create policy compliance_training_access on public.compliance_training for select using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());
+drop policy if exists compliance_training_insert on public.compliance_training;
+drop policy if exists compliance_training_update on public.compliance_training;
+drop policy if exists compliance_training_delete on public.compliance_training;
+create policy compliance_training_insert on public.compliance_training for insert with check ((brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin());
+create policy compliance_training_update on public.compliance_training for update using ((brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin()) with check ((brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin());
+create policy compliance_training_delete on public.compliance_training for delete using ((brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin());
 drop policy if exists contact_access on public.contact;
 create policy contact_access on public.contact for all using (lower(owner_email) = public.auth_email() or (brokerage_id = public.auth_brokerage_id() and (public.is_brokerage_admin() or public.has_perm('contacts.private_all'))) or public.is_super_admin()) with check ((brokerage_id = public.auth_brokerage_id() and (lower(owner_email) = public.auth_email() or public.is_brokerage_admin())) or public.is_super_admin());
 drop policy if exists contract_form_access on public.contract_form;
