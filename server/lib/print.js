@@ -43,7 +43,7 @@ async function stripe(method, path, body) {
   return data;
 }
 
-export async function checkoutSession(order, email) {
+export async function checkoutSession(order, email, returnBase = appUrl()) {
   const session = await stripe('POST', '/checkout/sessions', {
     mode: 'payment',
     customer_email: email,
@@ -51,8 +51,8 @@ export async function checkoutSession(order, email) {
     metadata: { order_id: order.id },
     payment_intent_data: { metadata: { order_id: order.id }, description: `${order.product_label} · ${order.id}` },
     line_items: [{ quantity: 1, price_data: { currency: 'usd', unit_amount: order.amount_cents, product_data: { name: order.product_label, description: order.vendor === 'lob' ? `${order.recipient_count} addresses, postage included` : `Quantity ${order.quantity}` } } }],
-    success_url: `${appUrl()}/Marketing?tool=print&order=${order.id}&paid=1`,
-    cancel_url: `${appUrl()}/Marketing?tool=print&order=${order.id}&cancelled=1`,
+    success_url: `${returnBase}/Marketing?tool=print&order=${order.id}&paid=1`,
+    cancel_url: `${returnBase}/Marketing?tool=print&order=${order.id}&cancelled=1`,
   });
   return session;
 }

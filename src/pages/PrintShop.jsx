@@ -54,7 +54,10 @@ export default function PrintShop() {
       shop('confirm', { order_id: orderId }).then(({ order }) => {
         setBanner(order?.status === 'awaiting_payment' ? { tone: 'info', text: 'Payment is processing. Your order starts as soon as it clears.' } : { tone: 'ok', text: 'Paid. Your order is on its way to the printer.' });
         go('orders');
-      }).catch((e) => setBanner({ tone: 'warn', text: e.message }));
+      }).catch((e) => {
+        setBanner({ tone: 'warn', text: /not found/i.test(e.message) ? "Payment received, but this order was placed from a different login. Sign in with the account that placed it to see it in My orders. It's still sent to the printer." : e.message });
+        go('orders');
+      });
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 

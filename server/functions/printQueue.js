@@ -1,7 +1,8 @@
 // New (scheduled every 5 minutes): mails the next batch of postcards for big orders, and
-// checks shipping on printed orders so agents can see tracking.
+// checks shipping on printed orders so agents can see tracking. Also catches card payments the
+// webhook missed (and the agent never came back from checkout), and drops checkouts left unpaid.
 import { createClientFromRequest, adminClient } from '../lib/base44.js';
-import { sendPostcards, gelatoOrder, configured } from '../lib/print.js';
+import { sendPostcards, gelatoOrder, configured, getSession, markPaidAndFulfill } from '../lib/print.js';
 
 const BUDGET_MS = 45_000;
 
@@ -11,7 +12,20 @@ export default async (req) => {
     const started = Date.now();
     const db = adminClient();
     const conn = configured();
-    const report = { mailed: 0, tracked: 0 };
+    const report = { mailed: 0, tracked: 0, confirmed: 0, expired: 0 };
+    if (conn.stripe) {
+      const { data: waiting } = await db.from('print_order').select('id, stripe_session_id, created_date').eq('status', 'awaiting_payment').not('stripe_session_id', 'is', null).order('created_date', { ascending: true }).limit(25);
+      for (const o of waiting || []) {
+        if (Date.now() - started > 15_000) break;
+        try {
+          const sess = await getSession(o.stripe_session_id);
+          if (sess.payment_status === 'paid') { await markPaidAndFulfill(o.id, { paidVia: 'stripe' }); report.confirmed += 1; }
+          else if (sess.status === 'expired' || Date.now() - new Date(o.created_date).getTime() > 26 * 3600e3) {
+            await db.from('print_order').update({ status: 'cancelled' }).eq('id', o.id).eq('status', 'awaiting_payment'); report.expired += 1;
+          }
+        } catch (err) { console.error('printQueue payment check', o.id, err.message); }
+      }
+    }
     if (conn.lob) {
       const { data: mailing } = await db.from('print_order').select('*').in('status', ['mailing']).order('created_date', { ascending: true }).limit(20);
       for (const o of mailing || []) {

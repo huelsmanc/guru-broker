@@ -8,7 +8,7 @@
 //   cancel { order_id }                       -> drops an unpaid order
 //   verify { recipients }                     -> address check (up to 500)
 //   settings_save { settings } | check_product { uid } | retry { order_id }   (platform owner)
-import { createClientFromRequest, adminClient } from '../lib/base44.js';
+import { appUrl, createClientFromRequest, adminClient } from '../lib/base44.js';
 import { isAdminRole } from '../lib/team.js';
 import { parsePath, pathFromUrl } from '../lib/files.js';
 import { PRODUCTS, priceFor, cleanAddress, withDefaults } from '../../shared/print.js';
@@ -24,6 +24,19 @@ function ownFile(me, url) {
   const info = path && parsePath(path);
   if (!info || info.kind !== 'user' || info.id !== me.id || info.brokerageId !== me.brokerage_id) throw new PrintProblem('Print files must be made from your design. Try again.');
   return url;
+}
+
+// After paying, send the agent back to the address they ordered from (gurubroker.app or one of
+// this project's Vercel addresses), so they come back signed in as the same person.
+function returnBaseFor(req) {
+  const fallback = appUrl();
+  try {
+    const origin = new URL(req.headers.get('origin') || req.headers.get('referer') || '');
+    const app = new URL(fallback);
+    const ok = origin.protocol === 'https:' && (origin.hostname === app.hostname || origin.hostname === `www.${app.hostname}`
+      || (origin.hostname.endsWith('.vercel.app') && origin.hostname.startsWith('guru-broker')));
+    return ok ? origin.origin : fallback;
+  } catch { return fallback; }
 }
 
 export default async (req) => {
@@ -120,7 +133,7 @@ export default async (req) => {
       }).select('*').single();
       if (error) throw new PrintProblem(error.message, 500);
       if (testMode) return Response.json({ order: await markPaidAndFulfill(order.id, { paidVia: 'test' }), test: true });
-      const session = await checkoutSession(order, me.email);
+      const session = await checkoutSession(order, me.email, returnBaseFor(req));
       await db.from('print_order').update({ stripe_session_id: session.id }).eq('id', order.id);
       return Response.json({ checkout_url: session.url, order_id: order.id });
     }
