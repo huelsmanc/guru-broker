@@ -73,6 +73,19 @@ export const money = (cents) => `$${(Number(cents || 0) / 100).toLocaleString('e
 
 const US_STATES = new Set('AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY PR VI GU'.split(' '));
 
+const STATE_NAMES = { alabama: 'AL', alaska: 'AK', arizona: 'AZ', arkansas: 'AR', california: 'CA', colorado: 'CO', connecticut: 'CT', delaware: 'DE', 'district of columbia': 'DC', florida: 'FL', georgia: 'GA', hawaii: 'HI', idaho: 'ID', illinois: 'IL', indiana: 'IN', iowa: 'IA', kansas: 'KS', kentucky: 'KY', louisiana: 'LA', maine: 'ME', maryland: 'MD', massachusetts: 'MA', michigan: 'MI', minnesota: 'MN', mississippi: 'MS', missouri: 'MO', montana: 'MT', nebraska: 'NE', nevada: 'NV', 'new hampshire': 'NH', 'new jersey': 'NJ', 'new mexico': 'NM', 'new york': 'NY', 'north carolina': 'NC', 'north dakota': 'ND', ohio: 'OH', oklahoma: 'OK', oregon: 'OR', pennsylvania: 'PA', 'rhode island': 'RI', 'south carolina': 'SC', 'south dakota': 'SD', tennessee: 'TN', texas: 'TX', utah: 'UT', vermont: 'VT', virginia: 'VA', washington: 'WA', 'west virginia': 'WV', wisconsin: 'WI', wyoming: 'WY', 'puerto rico': 'PR' };
+
+// Spreadsheets drop the leading zero from New England ZIPs (06473 -> 6473): put it back.
+function fixZip(z) {
+  const raw = String(z ?? '').trim();
+  const d = raw.replace(/\D/g, '');
+  if (/^\d{5}(-\d{4})?$/.test(raw)) return raw;
+  if (d.length === 3 || d.length === 4) return d.padStart(5, '0');
+  if (d.length === 5) return d;
+  if (d.length === 8 || d.length === 9) { const n = d.padStart(9, '0'); return `${n.slice(0, 5)}-${n.slice(5)}`; }
+  return raw;
+}
+
 /** Cleans one mailing address. Returns { address } or { error }. */
 export function cleanAddress(a = {}) {
   const t = (v, n = 64) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
@@ -81,13 +94,13 @@ export function cleanAddress(a = {}) {
     address_line1: t(a.address_line1 || a.address || a.street, 64),
     address_line2: t(a.address_line2 || a.unit || '', 64),
     city: t(a.city, 40),
-    state: t(a.state, 2).toUpperCase(),
-    zip: t(a.zip || a.zip_code || a.postal_code, 10).replace(/[^\d-]/g, ''),
+    state: STATE_NAMES[t(a.state, 30).toLowerCase().replace(/\./g, '')] || t(a.state, 30).replace(/\./g, '').toUpperCase(),
+    zip: fixZip(a.zip || a.zip_code || a.postal_code),
   };
   if (!out.address_line1) return { error: 'missing street address' };
   if (!out.city) return { error: 'missing city' };
-  if (!US_STATES.has(out.state)) return { error: 'state must be a 2-letter US state' };
-  if (!/^\d{5}(-\d{4})?$/.test(out.zip)) return { error: 'ZIP must be 5 digits' };
+  if (!US_STATES.has(out.state)) return { error: `state "${out.state}" isn't a US state (use CT or Connecticut)` };
+  if (!/^\d{5}(-\d{4})?$/.test(out.zip)) return { error: `ZIP "${out.zip}" isn't 5 digits` };
   return { address: out };
 }
 
@@ -112,7 +125,7 @@ export function parseAddressCsv(text) {
   const col = {
     name: find('name', 'fullname', 'owner', 'ownername', 'recipient', 'contact'),
     first: find('firstname', 'first'), last: find('lastname', 'last'),
-    line1: find('address', 'address1', 'addressline1', 'street', 'streetaddress', 'mailingaddress', 'propertyaddress'),
+    line1: find('address', 'address1', 'addressline1', 'street', 'streetaddress', 'mailingaddress', 'propertyaddress', 'mailingstreet', 'siteaddress'),
     line2: find('address2', 'addressline2', 'unit', 'apt', 'suite'),
     city: find('city', 'town', 'mailingcity'), state: find('state', 'st', 'mailingstate'), zip: find('zip', 'zipcode', 'postalcode', 'postcode', 'mailingzip'),
   };

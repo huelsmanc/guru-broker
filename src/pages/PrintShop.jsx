@@ -15,6 +15,13 @@ import { useBrand } from '@/pages/Marketing';
 import { drawTrim, addBleed, toBlob, makePdf, uploadPrintFile } from '@/lib/printFiles';
 import { PRODUCTS, priceFor, money, parseAddressCsv, splitAddress, cleanAddress } from '../../shared/print.js';
 
+// Whole sentences that fit, so the message never stops mid-word.
+const fitSentences = (text, max) => {
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max);
+  const end = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('! '), cut.lastIndexOf('? '));
+  return end > 60 ? cut.slice(0, end + 1) : cut.slice(0, cut.lastIndexOf(' ')).replace(/[,;:\s]+$/, '') + '…';
+};
 const shop = (action, body = {}) => base44.functions.invoke('printShop', { action, ...body }).then((r) => r.data);
 const ICON = { postcard_4x6: Mail, postcard_6x9: Mail, flyer_letter: Printer, business_cards: CreditCard };
 const STATUS = {
@@ -103,7 +110,7 @@ function OrderFlow({ user, brokerageId, catalog, preselect, preselectProduct, on
     if (!design) return;
     const c = design.data?.content || {};
     setBackHeadline((h) => h || c.headline || '');
-    setBackMessage((m) => m || String(c.body || c.subheadline || '').slice(0, 320));
+    setBackMessage((m) => m || fitSentences(String(c.body || c.subheadline || ''), 320));
   }, [design?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (ship || !user) return;
@@ -355,7 +362,7 @@ function CsvSummary({ csv }) {
   return (
     <div className="mt-2 text-sm">
       <p className="text-emerald-700 flex items-center gap-1"><Check className="w-4 h-4" /> {csv.recipients.length.toLocaleString()} addresses ready</p>
-      {csv.problems.length > 0 && <details className="text-amber-700"><summary className="cursor-pointer">{csv.problems.length} rows skipped</summary><ul className="text-xs mt-1 max-h-32 overflow-y-auto">{csv.problems.slice(0, 100).map((p) => <li key={p.row}>Row {p.row}: {p.error}</li>)}</ul></details>}
+      {csv.problems.length > 0 && <details open className="text-amber-700"><summary className="cursor-pointer">{csv.problems.length} row{csv.problems.length === 1 ? '' : 's'} skipped</summary><ul className="text-xs mt-1 max-h-32 overflow-y-auto">{csv.problems.slice(0, 100).map((p) => <li key={p.row}>Row {p.row}: {p.error}</li>)}</ul></details>}
     </div>
   );
 }
