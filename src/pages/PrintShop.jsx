@@ -689,6 +689,14 @@ function PrintSettings({ catalog, onSaved }) {
   const [checks, setChecks] = useState({});
   const setPrice = (k, q, dollars) => setS((x) => ({ ...x, prices: { ...x.prices, [k]: { ...x.prices[k], [q]: Math.round(Number(dollars || 0) * 100) } } }));
   const save = async () => { setBusy(true); try { const r = await shop('settings_save', { settings: s }); setS(r.settings); onSaved(); } catch (err) { window.alert(err.message); } finally { setBusy(false); } };
+  const [testSaved, setTestSaved] = useState(false);
+  // Test mode saves on click, so it can't be left "off" on screen but still on for orders.
+  const toggleTest = async (on) => {
+    const next = { ...s, test_mode: on };
+    setS(next); setBusy(true); setTestSaved(false);
+    try { const r = await shop('settings_save', { settings: next }); setS(r.settings); setTestSaved(true); onSaved(); }
+    catch (err) { setS((x) => ({ ...x, test_mode: !on })); window.alert(err.message); } finally { setBusy(false); }
+  };
   const check = async (k) => { setChecks((c) => ({ ...c, [k]: 'checking' })); try { const r = await shop('check_product', { uid: s.gelato_uids[k] }); setChecks((c) => ({ ...c, [k]: `OK: ${r.product.name || 'found'}` })); } catch (err) { setChecks((c) => ({ ...c, [k]: `Not found: ${err.message}` })); } };
   const c = catalog.connected;
   const row = (ok, label, hint) => <li className="flex items-start gap-2 text-sm">{ok ? <Check className="w-4 h-4 text-emerald-600 mt-0.5" /> : <X className="w-4 h-4 text-red-500 mt-0.5" />}<span><b>{label}</b>{!ok && hint ? <span className="block text-xs text-muted-foreground">{hint}</span> : null}</span></li>;
@@ -702,8 +710,8 @@ function PrintSettings({ catalog, onSaved }) {
           {row(c.lob, `Lob (mailing)${c.lob ? (catalog.lob_test_key ? ': test key, nothing is mailed' : ': live') : ''}`, 'Add LOB_API_KEY in Vercel.')}
           {row(c.gelato, 'Gelato (printing and shipping)', 'Add GELATO_API_KEY in Vercel.')}
         </ul>
-        <label className="flex items-start gap-2 text-sm rounded-xl border p-3"><input type="checkbox" className="mt-1" checked={!!s.test_mode} onChange={(e) => setS((x) => ({ ...x, test_mode: e.target.checked }))} />
-          <span><b>Test mode</b><span className="block text-xs text-muted-foreground">Orders skip payment, Gelato orders are saved as drafts, and Lob only mails with a live key. Turn off to go live.</span></span></label>
+        <label className="flex items-start gap-2 text-sm rounded-xl border p-3"><input type="checkbox" className="mt-1" checked={!!s.test_mode} disabled={busy} onChange={(e) => toggleTest(e.target.checked)} />
+          <span><b>Test mode {s.test_mode ? 'is on' : 'is off'}</b>{testSaved && <span className="ml-2 text-xs text-emerald-700">Saved</span>}<span className="block text-xs text-muted-foreground">{s.test_mode ? 'Orders skip payment and nothing is printed or mailed. Untick to take card payments.' : 'Agents pay by card at checkout. Real printing and mailing happen only with live Lob and Gelato keys.'} This saves as soon as you click it.</span></span></label>
         <div>
           <p className="text-sm font-medium mb-2">Gelato product codes</p>
           {Object.keys(s.gelato_uids).map((k) => (
