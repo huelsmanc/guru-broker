@@ -5,7 +5,7 @@ import { logError, emailFromRequest } from '../lib/errors.js';
 
 const MAX_NEW_PER_HOUR = 300;
 // Noise that isn't ours to fix: browser extensions, network blips, a tab left open across a deploy.
-const IGNORE = /ResizeObserver loop|^Script error\.?$|AbortError|aborted|Load failed|Failed to fetch|NetworkError|network error|chrome-extension:|moz-extension:|safari-(web-)?extension:|webkit-masked-url|dynamically imported module|Importing a module script failed|not a valid JavaScript MIME type|Unable to preload CSS/i;
+const IGNORE = /ResizeObserver loop|^Script error\.?$|AbortError|aborted|Load failed|Failed to fetch|NetworkError|network error|chrome-extension:|moz-extension:|safari-(web-)?extension:|webkit-masked-url|dynamically imported module|Importing a module script failed|not a valid JavaScript MIME type|Unable to preload CSS|_result\.default/i;
 const clip = (v, n) => (v == null ? null : String(v).slice(0, n));
 
 export default async (req) => {

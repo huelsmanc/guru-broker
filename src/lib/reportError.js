@@ -3,7 +3,7 @@
 // and stops after a handful so a broken page can't send hundreds.
 import { supabase } from '@/api/base44Client';
 
-const IGNORE = /ResizeObserver loop|^Script error\.?$|AbortError|aborted|Load failed|Failed to fetch|NetworkError|network error|chrome-extension:|moz-extension:|safari-(web-)?extension:|webkit-masked-url|dynamically imported module|Importing a module script failed|not a valid JavaScript MIME type|Unable to preload CSS/i;
+const IGNORE = /ResizeObserver loop|^Script error\.?$|AbortError|aborted|Load failed|Failed to fetch|NetworkError|network error|chrome-extension:|moz-extension:|safari-(web-)?extension:|webkit-masked-url|dynamically imported module|Importing a module script failed|not a valid JavaScript MIME type|Unable to preload CSS|_result\.default/i;
 const sent = new Set();
 let total = 0;
 

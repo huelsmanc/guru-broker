@@ -3,13 +3,17 @@
 import React from 'react';
 import { reportError } from '@/lib/reportError';
 
-const stale = (m) => /dynamically imported module|Importing a module script failed|Failed to fetch module|not a valid JavaScript MIME type|Unable to preload CSS/i.test(String(m || ''));
+const stale = (m) => /dynamically imported module|Importing a module script failed|Failed to fetch module|not a valid JavaScript MIME type|Unable to preload CSS|_result\.default/i.test(String(m || ''));
 
 export default class PageErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { error: null }; }
   static getDerivedStateFromError(error) { return { error }; }
   componentDidCatch(error, info) {
-    if (stale(error?.message)) { window.location.reload(); return; }
+    if (stale(error?.message)) {
+      // A newer version was deployed while this page was open: reload once to get it.
+      let last = 0; try { last = Number(sessionStorage.getItem('gbh-reloaded') || 0); } catch { /* ignore */ }
+      if (Date.now() - last > 20000) { try { sessionStorage.setItem('gbh-reloaded', String(Date.now())); } catch { /* ignore */ } window.location.reload(); return; }
+    }
     reportError(error, { component: info?.componentStack });
   }
   componentDidUpdate(prev) { if (prev.resetKey !== this.props.resetKey && this.state.error) this.setState({ error: null }); }

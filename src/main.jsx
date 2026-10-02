@@ -9,7 +9,7 @@ import { installNative } from '@/lib/native'
 // After a new version is deployed, a tab that was already open asks for page files that no
 // longer exist. Reload once to get the new version instead of leaving the page stuck.
 // (Safari words it as "'text/html' is not a valid JavaScript MIME type".)
-const isStaleChunk = (msg) => /dynamically imported module|Importing a module script failed|error loading dynamically imported|Failed to fetch module|not a valid JavaScript MIME type|Unable to preload CSS|Loading (CSS )?chunk/i.test(String(msg || ''));
+const isStaleChunk = (msg) => /dynamically imported module|Importing a module script failed|error loading dynamically imported|Failed to fetch module|not a valid JavaScript MIME type|Unable to preload CSS|Loading (CSS )?chunk|_result\.default/i.test(String(msg || ''));
 const freshReload = () => { const u = new URL(window.location.href); u.searchParams.set('v', Date.now().toString(36)); window.location.replace(u.href); };
 function reloadOnce() {
   try {
@@ -21,7 +21,9 @@ function reloadOnce() {
   return true;
 }
 if (!CONFIG_MISSING) { installErrorReporting(); installNative(); }
-window.addEventListener('vite:preloadError', (e) => { if (reloadOnce()) e.preventDefault(); });
+// Don't swallow the error: if we did, the page would try to draw with a missing piece for a moment
+// ("undefined is not an object (evaluating '..._result.default')") before the reload.
+window.addEventListener('vite:preloadError', () => { reloadOnce(); });
 window.addEventListener('unhandledrejection', (e) => { if (isStaleChunk(e.reason?.message)) reloadOnce(); });
 
 // Shows what went wrong instead of a blank white page.
