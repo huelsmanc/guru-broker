@@ -50,6 +50,7 @@ alter table public.profiles add column if not exists annual_cap numeric;        
 alter table public.profiles add column if not exists team_id text;
 alter table public.profiles add column if not exists permissions jsonb not null default '{}'::jsonb;
 alter table public.profiles add column if not exists alerts_sent jsonb not null default '[]'::jsonb;
+alter table public.profiles add column if not exists managed_states jsonb not null default '[]'::jsonb;  -- state brokers: states they oversee
 create index if not exists profiles_brokerage_idx on public.profiles (brokerage_id);
 
 -- Create a profile row whenever someone signs up
@@ -162,37 +163,37 @@ $$;
 
 create or replace function public.perm_default(role text, key text) returns boolean language sql immutable as $$
   select case key
-    when 'tx.create' then r in ('agent','broker','office_admin','owner','tc','team_leader')
-    when 'tx.edit' then r in ('agent','broker','office_admin','owner','tc','team_leader')
+    when 'tx.create' then r in ('agent','broker','office_admin','owner','state_broker','tc','team_leader')
+    when 'tx.edit' then r in ('agent','broker','office_admin','owner','state_broker','tc','team_leader')
     when 'tx.delete' then r in ('broker','office_admin','owner')
-    when 'tx.cancel' then r in ('agent','broker','office_admin','owner','tc','team_leader')
-    when 'tx.all' then r in ('broker','office_admin','owner')
+    when 'tx.cancel' then r in ('agent','broker','office_admin','owner','state_broker','tc','team_leader')
+    when 'tx.all' then r in ('broker','office_admin','owner','tc')
     when 'tx.checklist_manage' then r in ('broker','office_admin','owner','tc')
-    when 'tx.checklist_add' then r in ('agent','broker','office_admin','owner','tc','team_leader')
+    when 'tx.checklist_add' then r in ('agent','broker','office_admin','owner','state_broker','tc','team_leader')
     when 'tx.checklist_remove' then r in ('broker','office_admin','owner','tc')
     when 'tx.close' then r in ('broker','office_admin','owner','tc')
     when 'tx.reopen' then r in ('broker','office_admin','owner')
-    when 'tx.edit_emd' then r in ('agent','broker','office_admin','owner','tc','team_leader')
-    when 'tx.view_commissions' then r in ('agent','broker','office_admin','owner','tc','team_leader')
-    when 'tx.share' then r in ('agent','broker','office_admin','owner','tc','team_leader')
-    when 'offers.access' then r in ('agent','broker','office_admin','owner','tc','team_leader')
-    when 'offers.create' then r in ('agent','broker','office_admin','owner','tc','team_leader')
-    when 'offers.edit' then r in ('agent','broker','office_admin','owner','tc','team_leader')
-    when 'offers.delete' then r in ('agent','broker','office_admin','owner','tc','team_leader')
+    when 'tx.edit_emd' then r in ('agent','broker','office_admin','owner','state_broker','tc','team_leader')
+    when 'tx.view_commissions' then r in ('agent','broker','office_admin','owner','state_broker','tc','team_leader')
+    when 'tx.share' then r in ('agent','broker','office_admin','owner','state_broker','tc','team_leader')
+    when 'offers.access' then r in ('agent','broker','office_admin','owner','state_broker','tc','team_leader')
+    when 'offers.create' then r in ('agent','broker','office_admin','owner','state_broker','tc','team_leader')
+    when 'offers.edit' then r in ('agent','broker','office_admin','owner','state_broker','tc','team_leader')
+    when 'offers.delete' then r in ('agent','broker','office_admin','owner','state_broker','tc','team_leader')
     when 'offers.all' then r in ('broker','office_admin','owner')
-    when 'pipeline.individual' then r in ('agent','broker','office_admin','owner','tc','team_leader')
-    when 'reports.personal' then r in ('agent','broker','office_admin','owner','tc','team_leader')
+    when 'pipeline.individual' then r in ('agent','broker','office_admin','owner','state_broker','tc','team_leader')
+    when 'reports.personal' then r in ('agent','broker','office_admin','owner','state_broker','tc','team_leader')
     when 'reports.company' then r in ('broker','office_admin','owner')
     when 'contacts.private_all' then r in ('broker','office_admin','owner')
     when 'activity.account' then r in ('broker','office_admin','owner')
-    when 'activity.transaction' then r in ('agent','broker','office_admin','owner','tc','team_leader')
-    when 'library.access' then r in ('agent','broker','office_admin','owner','tc','team_leader')
+    when 'activity.transaction' then r in ('agent','broker','office_admin','owner','state_broker','tc','team_leader')
+    when 'library.access' then r in ('agent','broker','office_admin','owner','state_broker','tc','team_leader')
     when 'library.manage' then r in ('broker','office_admin','owner')
     when 'library.private_all' then r in ('broker','office_admin','owner')
     when 'docs.approve' then r in ('broker','office_admin','owner')
     when 'docs.approve2' then r in ('broker','owner')
-    when 'docs.submit_tx' then r in ('agent','broker','office_admin','owner','tc','team_leader')
-    when 'docs.submit_individual' then r in ('agent','broker','office_admin','owner','tc','team_leader')
+    when 'docs.submit_tx' then r in ('agent','broker','office_admin','owner','state_broker','tc','team_leader')
+    when 'docs.submit_individual' then r in ('agent','broker','office_admin','owner','state_broker','tc','team_leader')
     when 'settings.manage' then r in ('broker','owner')
     when 'accounting.access' then r in ('broker','office_admin','owner')
     when 'users.manage' then r in ('broker','office_admin','owner')
@@ -272,8 +273,9 @@ begin
      or new.permissions is distinct from old.permissions
      or new.annual_cap is distinct from old.annual_cap
      or new.team_id is distinct from old.team_id
+     or new.managed_states is distinct from old.managed_states
      or new.tc_email is distinct from old.tc_email then
-    raise exception 'Only an admin can change role, permissions, team, plan, cap, TC or sponsor fields';
+    raise exception 'Only an admin can change role, permissions, team, states, plan, cap, TC or sponsor fields';
   end if;
   return new;
 end $$;
@@ -2310,6 +2312,7 @@ create table if not exists public.transaction (
   inspection_date date,
   loan_approval_date date,
   property_address text,
+  property_state text,
   referral jsonb,
   sale_price numeric,
   seller_name text,
@@ -2362,6 +2365,7 @@ alter table public.transaction add column if not exists inspection_contingency_d
 alter table public.transaction add column if not exists inspection_date date;
 alter table public.transaction add column if not exists loan_approval_date date;
 alter table public.transaction add column if not exists property_address text;
+alter table public.transaction add column if not exists property_state text;
 alter table public.transaction add column if not exists referral jsonb;
 alter table public.transaction add column if not exists sale_price numeric;
 alter table public.transaction add column if not exists seller_name text;

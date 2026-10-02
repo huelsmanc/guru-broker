@@ -66,7 +66,7 @@ ENTITIES = {
     "SignatureData": "fields ip_address signed_at signer_email signer_name submission_id user_agent",
     "SocialMessage": "brokerage_id edited_at call_id channel content mentions pinned pinned_by reactions read_by sender_email sender_name sender_photo",
     "ThreadReply": "brokerage_id edited_at mentions content message_id reactions sender_email sender_name sender_photo",
-    "Transaction": "co_agents referral deductions commission_calc closed_date checklist_template_id thank_you_sent_at agent_email agent_name agent_net agent_split_percentage brokerage_fee brokerage_fee_flat brokerage_fee_percentage brokerage_fee_type brokerage_id buyer_name buyers checklist closing_date commission_amount commission_flat commission_notes commission_percentage commission_sale_price commission_type completed_dates documents esign_docs property_address sale_price seller_name sellers status tc_email tc_name transaction_fee transaction_fee_flat transaction_fee_percentage transaction_fee_type updates inspection_date appraisal_date financing_contingency_date inspection_contingency_date loan_approval_date title_deadline_date",
+    "Transaction": "co_agents referral deductions commission_calc closed_date checklist_template_id thank_you_sent_at agent_email agent_name agent_net agent_split_percentage brokerage_fee brokerage_fee_flat brokerage_fee_percentage brokerage_fee_type brokerage_id buyer_name buyers checklist closing_date commission_amount commission_flat commission_notes commission_percentage commission_sale_price commission_type completed_dates documents esign_docs property_address sale_price seller_name sellers status tc_email tc_name transaction_fee transaction_fee_flat transaction_fee_percentage transaction_fee_type updates inspection_date appraisal_date financing_contingency_date inspection_contingency_date loan_approval_date title_deadline_date property_state",
     "UserBadge": "brokerage_id user_email badge_type",
     "Call": "brokerage_id room_name room_url kind title created_by_email created_by_name invitees conversation_kind conversation_key status started_at ended_at",
     "MarketingDesign": "brokerage_id owner_email title kind format template data thumbnail_url transaction_id listing_id",
@@ -78,7 +78,7 @@ ENTITIES = {
 }
 
 # User lives in `profiles`, linked 1:1 to Supabase auth.users.
-USER_FIELDS = "email full_name display_name role brokerage_id suspended headshot agent_status duties license_number license_state license_expiration eo_expiration mls_ids phone start_date cap_start_date commission_plan_id team_lead_email sponsor_email first_name last_name personal_company birthday address city state zip alternate_name tc_email licenses annual_cap team_id permissions alerts_sent"
+USER_FIELDS = "email full_name display_name role brokerage_id suspended headshot agent_status duties license_number license_state license_expiration eo_expiration mls_ids phone start_date cap_start_date commission_plan_id team_lead_email sponsor_email first_name last_name personal_company birthday address city state zip alternate_name tc_email licenses annual_cap team_id permissions alerts_sent managed_states"
 
 JSON_FIELDS = set("""co_agents referral deductions commission_calc config calc items changed mls_ids answers buyers checklist completed_dates details documents encryption_metadata esign_docs fields items
 data members invitees mentions messages options reactions read_by sellers signatories signature_fields signers tags tech_links updates
@@ -164,6 +164,7 @@ alter table public.profiles add column if not exists annual_cap numeric;        
 alter table public.profiles add column if not exists team_id text;
 alter table public.profiles add column if not exists permissions jsonb not null default '{}'::jsonb;
 alter table public.profiles add column if not exists alerts_sent jsonb not null default '[]'::jsonb;
+alter table public.profiles add column if not exists managed_states jsonb not null default '[]'::jsonb;  -- state brokers: states they oversee
 create index if not exists profiles_brokerage_idx on public.profiles (brokerage_id);
 
 -- Create a profile row whenever someone signs up
@@ -253,8 +254,9 @@ begin
      or new.permissions is distinct from old.permissions
      or new.annual_cap is distinct from old.annual_cap
      or new.team_id is distinct from old.team_id
+     or new.managed_states is distinct from old.managed_states
      or new.tc_email is distinct from old.tc_email then
-    raise exception 'Only an admin can change role, permissions, team, plan, cap, TC or sponsor fields';
+    raise exception 'Only an admin can change role, permissions, team, states, plan, cap, TC or sponsor fields';
   end if;
   return new;
 end $$;
@@ -265,7 +267,7 @@ create trigger profiles_touch before update on public.profiles for each row exec
 """)
 
 colmap = {"User": {"table": "profiles", "columns": USER_FIELDS.split() + ["id","created_date","updated_date","created_by"],
-                    "typed": ["suspended", "duties", "mls_ids", "license_expiration", "eo_expiration", "start_date", "cap_start_date", "birthday", "licenses", "annual_cap", "permissions", "alerts_sent"]}}
+                    "typed": ["suspended", "duties", "mls_ids", "license_expiration", "eo_expiration", "start_date", "cap_start_date", "birthday", "licenses", "annual_cap", "permissions", "alerts_sent", "managed_states"]}}
 
 pol = []
 pw = pol.append

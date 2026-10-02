@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Loader2, Save, Plus, Trash2, Landmark, RotateCcw, ShieldCheck } from 'lucide-react';
 import { ROLES, PERMS, normalizeRole } from '../../../shared/permissions.generated.js';
 import WorkspaceChecklists from '@/components/workspace/WorkspaceChecklists';
+import { ROLE_HELP } from '@/components/users/RoleOptions';
 
 const TABS = [['profile', 'Profile'], ['licenses', 'Licenses'], ['commission', 'Commission & team'], ['permissions', 'Role & permissions'], ['payouts', 'Direct deposit'], ['onboarding', 'Onboarding']];
 const US = 'AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY'.split(' ');
@@ -57,6 +58,7 @@ export default function UserAdminDialog({ person, me, onClose }) {
         commission_plan_id: f.commission_plan_id || null, annual_cap: f.annual_cap === '' || f.annual_cap == null ? null : Number(f.annual_cap),
         cap_start_date: f.cap_start_date || null, team_id: f.team_id || null, tc_email: f.tc_email || null, sponsor_email: f.sponsor_email || null,
         role: f.role, permissions: f.permissions,
+        managed_states: normalizeRole(f.role) === 'state_broker' ? (f.managed_states || []) : [],
       };
       if (patch.role === 'super_admin' && me.role !== 'super_admin') delete patch.role;
       await base44.entities.User.update(person.id, patch);
@@ -159,6 +161,22 @@ export default function UserAdminDialog({ person, me, onClose }) {
                 try { await base44.functions.invoke('twoStep', { action: 'reset_user', user_id: person.id }); window.alert('Done. They will be asked to set up 2-step sign-in again.'); } catch (e) { window.alert(e.message); }
               }}><ShieldCheck className="w-4 h-4" /> Reset 2-step sign-in</Button>
             </div>
+            {ROLE_HELP[role] && <p className="text-sm text-muted-foreground -mt-1">{ROLE_HELP[role]}</p>}
+            {role === 'team_leader' && <p className="text-xs text-muted-foreground">Put them and their agents on the same team (Commission &amp; team tab), or pick them as the team's leader there.</p>}
+            {role === 'state_broker' && (
+              <div className="rounded-lg border p-3">
+                <p className="text-sm font-medium">States they oversee</p>
+                <p className="text-xs text-muted-foreground mb-2">They see deals with a property in these states, or by an agent licensed in them, and can approve those deals' documents and checklists.</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {US.map((st) => {
+                    const on = (f.managed_states || []).includes(st);
+                    return <button key={st} type="button" onClick={() => setF((x) => ({ ...x, managed_states: on ? (x.managed_states || []).filter((y) => y !== st) : [...(x.managed_states || []), st].sort() }))}
+                      className={`min-w-[2.75rem] rounded-md border px-2 py-1.5 text-xs font-medium ${on ? 'bg-primary text-primary-foreground border-primary' : 'bg-background hover:bg-muted'}`}>{st}</button>;
+                  })}
+                </div>
+                {!(f.managed_states || []).length && <p className="text-xs text-amber-700 mt-2">Pick at least one state, or they'll only see their own deals.</p>}
+              </div>
+            )}
             <div className="grid md:grid-cols-2 gap-x-8 gap-y-4">
               {groups.map(([g, items]) => (
                 <div key={g}>

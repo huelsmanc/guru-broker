@@ -14,6 +14,7 @@
 //    request {transaction_id, title, note} | cancel_request {transaction_id, request_id}
 import { createClientFromRequest, adminClient } from '../lib/base44.js';
 import { isAdminRole, can, notifyPeople } from '../lib/team.js';
+import { reviewsAllDeals } from '../../shared/access.js';
 import { scopeFolder, safeName, fileUrl, PRIVATE_BUCKET } from '../lib/files.js';
 import {
   signSession, readSession, randomToken, hashCode, maskEmail, isClientContact, ensureClientChat,
@@ -189,7 +190,7 @@ async function teamAction(base44, action, body) {
   const tx = await base44.entities.Transaction.get(String(body.transaction_id || '')).catch(() => null);
   if (!tx) throw new Problem('Deal not found', 404);
   const onDeal = [tx.agent_email, tx.tc_email, ...(tx.co_agents || []).map((a) => a?.email)].map(lc).includes(lc(me.email));
-  if (!onDeal && !isAdminRole(me.role) && !can(me, 'tx.all') && me.role !== 'super_admin') throw new Problem('Only the people on this deal can manage its clients.', 403);
+  if (!onDeal && !isAdminRole(me.role) && !reviewsAllDeals(me) && me.role !== 'super_admin') throw new Problem('Only the people on this deal can manage its clients.', 403);
   const E = base44.asServiceRole.entities;
   const contacts = (await E.TransactionContact.filter({ transaction_id: tx.id }, 'created_date', 200)).filter(isClientContact);
   const brand = await brandFor(E, tx.brokerage_id);

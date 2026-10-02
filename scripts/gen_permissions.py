@@ -13,6 +13,7 @@ ROLES = {
     "owner": "Owner",
     "broker": "Broker",
     "office_admin": "Office administrator",
+    "state_broker": "State broker",
     "team_leader": "Team leader",
     "tc": "Transaction coordinator",
     "agent": "Agent",
@@ -29,7 +30,8 @@ PERMS = {
     "tx.edit":              ("Transactions", "Can edit transactions", ALL),
     "tx.delete":            ("Transactions", "Can delete transactions", ADMINS),
     "tx.cancel":            ("Transactions", "Can cancel transactions", ALL),
-    "tx.all":               ("Transactions", "Can access all company transactions", ADMINS),
+    # TC / compliance see and work every deal (but no payouts, settings or other agents' contacts).
+    "tx.all":               ("Transactions", "Can access all company transactions", ADMINS | {"tc"}),
     "tx.checklist_manage":  ("Transactions", "Can manage transaction checklist tasks", ADMINS | {"tc"}),
     "tx.checklist_add":     ("Transactions", "Can add checklists to transaction", ALL),
     "tx.checklist_remove":  ("Transactions", "Can remove checklists from transaction", ADMINS | {"tc"}),

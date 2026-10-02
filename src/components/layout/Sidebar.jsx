@@ -8,6 +8,7 @@ import ChatChannelsDropdown from './ChatChannelsDropdown';
 import { useQuery } from '@tanstack/react-query';
 import { useChat } from '@/lib/chat/ChatProvider';
 import { isAdminRole, normalizeRole, can } from '../../../shared/permissions.generated.js';
+import { approvesDealItems } from '../../../shared/access.js';
 
 export default function Sidebar({ user, brokerageId, onChannelClick, mobile }) {
   const location = useLocation();
@@ -127,7 +128,7 @@ export default function Sidebar({ user, brokerageId, onChannelClick, mobile }) {
   const inBrokerage = !!brokerageId;
   const backOffice = inBrokerage ? [
     { to: '/MyCommissions', icon: Wallet, label: 'My Commissions', show: !isSuperAdmin },
-    { to: '/ApproveDocs', icon: FileCheck2, label: 'Approve Docs', show: isAdmin || can(user, 'docs.approve') },
+    { to: '/ApproveDocs', icon: FileCheck2, label: 'Approve Docs', show: isAdmin || can(user, 'docs.approve') || approvesDealItems(user) },
     { to: '/Payouts', icon: Banknote, label: 'Payouts', show: can(user, 'accounting.access') },
     { to: '/CommissionPlans', icon: Percent, label: 'Commission Plans', show: isAdmin },
     { to: '/ChecklistTemplates', icon: ListChecks, label: 'Checklist Templates', show: isAdmin },

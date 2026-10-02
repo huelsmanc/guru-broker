@@ -14,6 +14,7 @@ import WorkspaceActivity from '@/components/workspace/WorkspaceActivity';
 import WorkspaceClients from '@/components/workspace/WorkspaceClients';
 import { useLiveTable } from '@/hooks/useLiveTable';
 import DealCopilot from '@/components/workspace/DealCopilot';
+import { reviewsAllDeals } from '../../shared/access.js';
 
 const STATUS = {
   active: 'bg-blue-100 text-blue-800', pending: 'bg-amber-100 text-amber-800', clear_to_close: 'bg-emerald-100 text-emerald-800',
@@ -47,7 +48,7 @@ export default function TransactionWorkspace() {
   const isOwner = [tx.agent_email, ...(tx.co_agents || []).map((a) => a.email)].map((e) => String(e || '').toLowerCase()).includes(email);
   const isTc = String(tx.tc_email || '').toLowerCase() === email;
   const admin = isAdminRole(user?.role);
-  const ctx = { tx, user, refresh, isOwner, isTc, admin, canEdit: admin || isOwner || isTc || can(user, 'tx.all'), openCopilot: () => setCopilotOpen(true) };
+  const ctx = { tx, user, refresh, isOwner, isTc, admin, canEdit: admin || isOwner || isTc || reviewsAllDeals(user), openCopilot: () => setCopilotOpen(true) };
 
   const sections = [
     ['overview', 'Overview', LayoutDashboard],

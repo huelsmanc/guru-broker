@@ -3,6 +3,7 @@ export const ROLES = {
   "owner": "Owner",
   "broker": "Broker",
   "office_admin": "Office administrator",
+  "state_broker": "State broker",
   "team_leader": "Team leader",
   "tc": "Transaction coordinator",
   "agent": "Agent"
@@ -17,6 +18,7 @@ export const PERMS = {
       "broker",
       "office_admin",
       "owner",
+      "state_broker",
       "tc",
       "team_leader"
     ]
@@ -29,6 +31,7 @@ export const PERMS = {
       "broker",
       "office_admin",
       "owner",
+      "state_broker",
       "tc",
       "team_leader"
     ]
@@ -50,6 +53,7 @@ export const PERMS = {
       "broker",
       "office_admin",
       "owner",
+      "state_broker",
       "tc",
       "team_leader"
     ]
@@ -60,7 +64,8 @@ export const PERMS = {
     "roles": [
       "broker",
       "office_admin",
-      "owner"
+      "owner",
+      "tc"
     ]
   },
   "tx.checklist_manage": {
@@ -81,6 +86,7 @@ export const PERMS = {
       "broker",
       "office_admin",
       "owner",
+      "state_broker",
       "tc",
       "team_leader"
     ]
@@ -122,6 +128,7 @@ export const PERMS = {
       "broker",
       "office_admin",
       "owner",
+      "state_broker",
       "tc",
       "team_leader"
     ]
@@ -134,6 +141,7 @@ export const PERMS = {
       "broker",
       "office_admin",
       "owner",
+      "state_broker",
       "tc",
       "team_leader"
     ]
@@ -146,6 +154,7 @@ export const PERMS = {
       "broker",
       "office_admin",
       "owner",
+      "state_broker",
       "tc",
       "team_leader"
     ]
@@ -158,6 +167,7 @@ export const PERMS = {
       "broker",
       "office_admin",
       "owner",
+      "state_broker",
       "tc",
       "team_leader"
     ]
@@ -170,6 +180,7 @@ export const PERMS = {
       "broker",
       "office_admin",
       "owner",
+      "state_broker",
       "tc",
       "team_leader"
     ]
@@ -182,6 +193,7 @@ export const PERMS = {
       "broker",
       "office_admin",
       "owner",
+      "state_broker",
       "tc",
       "team_leader"
     ]
@@ -194,6 +206,7 @@ export const PERMS = {
       "broker",
       "office_admin",
       "owner",
+      "state_broker",
       "tc",
       "team_leader"
     ]
@@ -215,6 +228,7 @@ export const PERMS = {
       "broker",
       "office_admin",
       "owner",
+      "state_broker",
       "tc",
       "team_leader"
     ]
@@ -227,6 +241,7 @@ export const PERMS = {
       "broker",
       "office_admin",
       "owner",
+      "state_broker",
       "tc",
       "team_leader"
     ]
@@ -266,6 +281,7 @@ export const PERMS = {
       "broker",
       "office_admin",
       "owner",
+      "state_broker",
       "tc",
       "team_leader"
     ]
@@ -278,6 +294,7 @@ export const PERMS = {
       "broker",
       "office_admin",
       "owner",
+      "state_broker",
       "tc",
       "team_leader"
     ]
@@ -325,6 +342,7 @@ export const PERMS = {
       "broker",
       "office_admin",
       "owner",
+      "state_broker",
       "tc",
       "team_leader"
     ]
@@ -337,6 +355,7 @@ export const PERMS = {
       "broker",
       "office_admin",
       "owner",
+      "state_broker",
       "tc",
       "team_leader"
     ]

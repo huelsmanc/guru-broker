@@ -17,6 +17,7 @@ import { applyTemplate } from '../lib/checklists.js';
 import { esc } from '../lib/esign.js';
 import { createClientFromRequest } from '../lib/base44.js';
 import { isAdminRole, can, notifyPeople, mentionablePeople } from '../lib/team.js';
+import { approvesDealItems, oversees, reviewsAllDeals } from '../../shared/access.js';
 import { isPrivateUrl, canAccess, parsePath, pathFromUrl } from '../lib/files.js';
 
 const DOC = (title, extra = {}) => ({ title, requires_document: true, ...extra });
@@ -101,7 +102,7 @@ export default async (req) => {
         }
         if (!tx) throw Object.assign(new Error('Transaction not found'), { status: 404 });
         const isTc = String(tx.tc_email || '').toLowerCase() === myEmail;
-        return { tx, owner: true, manage: admin || isTc || can(me, 'tx.checklist_manage') };
+        return { tx, owner: true, manage: admin || isTc || can(me, 'tx.checklist_manage') || reviewsAllDeals(me) };
       }
       const own = String(subjectEmail || '').toLowerCase() === myEmail;
       if (!own && !admin && !can(me, 'users.manage')) throw Object.assign(new Error('Not allowed'), { status: 403 });
@@ -127,7 +128,8 @@ export default async (req) => {
     const idx = items.findIndex((i) => i.id === body.item_id);
     const item = idx >= 0 ? { ...items[idx], comments: [...(items[idx].comments || [])], history: [...(items[idx].history || [])] } : null;
     const log = (what) => item && item.history.push({ at: now, by: myEmail, what });
-    const approver = admin || can(me, 'docs.approve');
+    // Deal checklists: also TCs / compliance and state brokers (who only reach deals they oversee).
+    const approver = admin || can(me, 'docs.approve') || (cl.subject_type === 'transaction' && approvesDealItems(me));
     const fail = (msg, status = 403) => Response.json({ error: msg }, { status });
     let mentioned = [];
     if (body.action === 'mentionable') {
@@ -223,8 +225,13 @@ export default async (req) => {
     // Onboarding: reviewers go to the approvals list; the agent goes to their own checklist on My Profile.
     const link = cl.subject_type === 'transaction' ? `/Transactions/${cl.subject_id}?tab=checklists&checklist=${cl.id}` : body.action === 'submit' ? '/ApproveDocs' : '/Profile#onboarding';
     if (body.action === 'submit') {
-      const people = (await E.User.filter({ brokerage_id: me.brokerage_id }, 'full_name', 2000))
-        .filter((u) => !u.suspended && can(u, 'docs.approve') && u.email.toLowerCase() !== myEmail);
+      const everyone = await E.User.filter({ brokerage_id: me.brokerage_id }, 'full_name', 2000);
+      const tx = acc.tx;
+      const agent = tx && everyone.find((u) => String(u.email || '').toLowerCase() === String(tx.agent_email || '').toLowerCase());
+      const dealTc = String(tx?.tc_email || '').toLowerCase();
+      // Document approvers, plus on a deal: its TC, compliance, and the state brokers over it.
+      const people = everyone.filter((u) => !u.suspended && u.email.toLowerCase() !== myEmail && (can(u, 'docs.approve')
+        || (tx && (u.email.toLowerCase() === dealTc || (u.duties || []).includes('compliance') || oversees(u, tx, agent)))));
       await notifyPeople(E, { brokerageId: me.brokerage_id, people, link, referenceId: cl.id, referenceType: 'Checklist',
         title: `Review requested: ${item.title}`, message: `${me.full_name || me.email} submitted "${item.title}" (${label}) for approval.` });
     } else if (['approve', 'reject'].includes(body.action) && item.uploaded_by && item.uploaded_by !== myEmail) {

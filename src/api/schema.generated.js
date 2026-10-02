@@ -38,6 +38,7 @@ export const SCHEMA = {
       "team_id",
       "permissions",
       "alerts_sent",
+      "managed_states",
       "id",
       "created_date",
       "updated_date",
@@ -55,7 +56,8 @@ export const SCHEMA = {
       "licenses",
       "annual_cap",
       "permissions",
-      "alerts_sent"
+      "alerts_sent",
+      "managed_states"
     ]
   },
   "ActivityEvent": {
@@ -1415,6 +1417,7 @@ export const SCHEMA = {
       "inspection_date",
       "loan_approval_date",
       "property_address",
+      "property_state",
       "referral",
       "sale_price",
       "seller_name",

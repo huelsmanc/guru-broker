@@ -7,6 +7,7 @@ import { SendEmail } from './integrations.js';
 import { esc } from './esign.js';
 
 import { isAdminRole, can, normalizeRole } from '../../shared/permissions.generated.js';
+import { reviewsAllDeals } from '../../shared/access.js';
 export { isAdminRole, can };
 // Kept for older call sites; prefer isAdminRole(role) / can(profile, key).
 export const ADMIN_ROLES = ['admin', 'broker', 'owner', 'office_admin', 'super_admin'];
@@ -82,7 +83,7 @@ export async function mentionablePeople(entities, brokerageId, { tx, subjectEmai
   if (extra.length) people.push(...(await entities.User.filter({ email: { $in: extra } }, 'full_name', 50).catch(() => [])).filter((u) => !u.suspended));
   for (const u of people) {
     const e = String(u.email || '').toLowerCase();
-    const ok = onDeal.has(e) || isAdminRole(u.role) || can(u, 'docs.approve') || (tx ? can(u, 'tx.all') : can(u, 'users.manage'));
+    const ok = onDeal.has(e) || isAdminRole(u.role) || can(u, 'docs.approve') || (tx ? reviewsAllDeals(u) : can(u, 'users.manage'));
     if (ok) out.set(e, { email: e, name: u.display_name || u.full_name || e });
   }
   return out;

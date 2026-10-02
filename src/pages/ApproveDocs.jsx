@@ -8,6 +8,7 @@ import { Loader2, Check, X, ExternalLink, FileText } from 'lucide-react';
 import { useLiveTable } from '@/hooks/useLiveTable';
 import { can, isAdminRole } from '../../shared/permissions.generated.js';
 import { Empty } from '@/components/workspace/ui';
+import { approvesDealItems } from '../../shared/access.js';
 
 export default function ApproveDocs() {
   const { user, brokerageId } = useOutletContext();
@@ -32,7 +33,7 @@ export default function ApproveDocs() {
     .sort((a, b) => String(a.item.submitted_at || '').localeCompare(String(b.item.submitted_at || ''))), [data]);
   const cur = queue.find((q) => `${q.cl.id}:${q.item.id}` === active) || queue[0];
 
-  if (!isAdminRole(user?.role) && !can(user, 'docs.approve')) return <div className="p-8 text-sm">You need the "approve documents" permission.</div>;
+  if (!isAdminRole(user?.role) && !can(user, 'docs.approve') && !approvesDealItems(user)) return <div className="p-8 text-sm">You need the "approve documents" permission.</div>;
 
   const decide = async (action) => {
     if (action === 'reject' && !note.trim()) return window.alert('Say what needs to change so the agent can fix it.');

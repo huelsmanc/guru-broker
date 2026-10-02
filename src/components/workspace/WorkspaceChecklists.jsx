@@ -12,6 +12,7 @@ import { Section, Empty, Pill } from './ui';
 import UnifiedESignCreator from '@/components/esign/UnifiedESignCreator';
 import { useLiveTable } from '@/hooks/useLiveTable';
 import MentionInput, { CommentText } from './MentionInput';
+import { approvesDealItems, reviewsAllDeals } from '../../../shared/access.js';
 
 // Plain words for item statuses.
 const WORD = { open: 'To do', uploaded: 'Uploaded', review_requested: 'In review', approved: 'Approved', rejected: 'Needs changes', exempt: 'Not needed', done: 'Done' };
@@ -39,8 +40,8 @@ export default function WorkspaceChecklists({ tx, user, subjectType = 'transacti
   // Phones and tablets: the item's panel opens right under the item (beside the list on wide screens).
   const wide = useWide();
   const admin = isAdminRole(user?.role);
-  const approver = admin || can(user, 'docs.approve');
-  const manage = admin || can(user, 'tx.checklist_manage') || String(tx?.tc_email || '').toLowerCase() === user?.email?.toLowerCase();
+  const approver = admin || can(user, 'docs.approve') || (subjectType === 'transaction' && approvesDealItems(user));
+  const manage = admin || can(user, 'tx.checklist_manage') || (subjectType === 'transaction' && reviewsAllDeals(user)) || String(tx?.tc_email || '').toLowerCase() === user?.email?.toLowerCase();
 
   // Uploads are private to the deal (or to the person, for onboarding).
   const fileScope = subjectType === 'transaction' ? { kind: 'tx', id: tx.id } : { kind: 'user', id: subjectUserId || user?.id };

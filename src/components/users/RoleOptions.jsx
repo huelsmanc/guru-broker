@@ -16,8 +16,9 @@ export const ROLE_HELP = {
   owner: 'Runs the brokerage: everything, including billing and settings.',
   broker: 'Manages the brokerage: deals, people, approvals, payouts.',
   office_admin: 'Office staff: deals, documents and people, as permissions allow.',
-  team_leader: 'Leads a team: sees their team\'s deals.',
-  tc: 'Transaction coordinator: works the deals they\'re assigned.',
+  state_broker: 'Oversees states: sees deals in their states and approves their documents and checklists.',
+  team_leader: 'Leads a team: sees and works their team\'s deals.',
+  tc: 'Transaction coordinator / compliance: reviews, approves and edits every deal; nothing else about other agents.',
   agent: 'Their own deals, contacts and marketing.',
   [SUPER]: 'You: the whole platform, every brokerage, print and payment settings.',
 };
