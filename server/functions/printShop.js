@@ -33,7 +33,8 @@ function returnBaseFor(req) {
   try {
     const origin = new URL(req.headers.get('origin') || req.headers.get('referer') || '');
     const app = new URL(fallback);
-    const ok = origin.protocol === 'https:' && (origin.hostname === app.hostname || origin.hostname === `www.${app.hostname}`
+    const mine = [app.hostname, 'gurubroker.app', ...String(process.env.APP_DOMAINS || '').split(',').map((d) => d.trim()).filter(Boolean)];
+    const ok = origin.protocol === 'https:' && (mine.some((h) => origin.hostname === h || origin.hostname === `www.${h}`)
       || (origin.hostname.endsWith('.vercel.app') && origin.hostname.startsWith('guru-broker')));
     return ok ? origin.origin : fallback;
   } catch { return fallback; }
