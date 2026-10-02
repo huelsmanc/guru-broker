@@ -2,6 +2,10 @@
 
 import { FUNCTIONS } from '../functions/index.js';
 import { setInvoker, SERVICE_HEADER, isServiceRequest } from './base44.js';
+import { logError, emailFromRequest } from './errors.js';
+
+// The error functions themselves are never logged (a broken error log must not loop).
+const NOT_LOGGED = new Set(['reportError', 'appErrors']);
 
 // Only the system (scheduled jobs, database automations, other functions) may run these.
 // Some are the reminder jobs and automations; the rest are old Base44 functions nothing
@@ -41,12 +45,22 @@ export async function run(name, request) {
     return Response.json({ error: 'Not available' }, { status: 403 });
   }
   const mod = await load();
+  const who = { userEmail: emailFromRequest(request), userAgent: request.headers.get('user-agent'), url: request.headers.get('referer') };
   try {
-    const res = await mod.default(request);
-    return res instanceof Response ? res : Response.json(res ?? null);
+    const out = await mod.default(request);
+    const res = out instanceof Response ? out : Response.json(out ?? null);
+    // Most functions catch their own errors and answer 500: record those for the error list.
+    if (res.status >= 500 && !NOT_LOGGED.has(name)) {
+      let message = `Answered ${res.status}`;
+      try { const body = await res.clone().json(); if (body?.error) message = String(body.error); } catch { /* not JSON */ }
+      await logError({ source: 'server', location: name, message, ...who });
+    }
+    return res;
   } catch (err) {
     console.error(`[fn:${name}]`, err);
-    return Response.json({ error: err.message || 'Server error', ...(err.code ? { code: err.code } : {}) }, { status: err.status || 500 });
+    const status = err.status || 500;
+    if (status >= 500 && !NOT_LOGGED.has(name)) await logError({ source: 'server', location: name, message: err.message || 'Server error', detail: err.stack, ...who });
+    return Response.json({ error: err.message || 'Server error', ...(err.code ? { code: err.code } : {}) }, { status });
   }
 }
 

@@ -11,6 +11,7 @@ import { Users, Trash2, ToggleLeft, ToggleRight, Plus, ShieldCheck, Crown, Brief
 import { motion } from 'framer-motion';
 import OnboardingChecklist from '@/components/onboarding/OnboardingChecklist';
 import UserAdminDialog from '@/components/users/UserAdminDialog';
+import RoleOptions from '@/components/users/RoleOptions';
 import { isAdminRole, normalizeRole, can } from '../../shared/permissions.generated.js';
 
 export default function BrokerageUsers() {
@@ -18,7 +19,7 @@ export default function BrokerageUsers() {
   const queryClient = useQueryClient();
   const isAdmin = isAdminRole(user?.role);
   const [showInvite, setShowInvite] = useState(false);
-  const [inviteForm, setInviteForm] = useState({ email: '', full_name: '', role: 'user' });
+  const [inviteForm, setInviteForm] = useState({ email: '', full_name: '', role: 'agent' });
   const [inviting, setInviting] = useState(false);
   const [selectedOnboarding, setSelectedOnboarding] = useState(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -123,7 +124,7 @@ export default function BrokerageUsers() {
     }
     
     // Auto-create onboarding for agents only
-    if (inviteForm.role === 'user') {
+    if (normalizeRole(inviteForm.role) === 'agent') {
       await base44.entities.Onboarding.create({
         brokerage_id: brokerageId,
         agent_email: inviteForm.email,
@@ -133,7 +134,7 @@ export default function BrokerageUsers() {
     
     setInviting(false);
     setShowInvite(false);
-    setInviteForm({ email: '', full_name: '', role: 'user' });
+    setInviteForm({ email: '', full_name: '', role: 'agent' });
     queryClient.invalidateQueries({ queryKey: ['brokerage-users', brokerageId] });
     queryClient.invalidateQueries({ queryKey: ['onboarding', brokerageId] });
   };
@@ -282,7 +283,7 @@ export default function BrokerageUsers() {
                     variant="ghost"
                     size="icon"
                     className="rounded-xl text-destructive hover:text-destructive"
-                    onClick={() => deleteUser.mutate(u.id)}
+                    onClick={() => { if (u.id === user?.id) { window.alert("You can't delete your own account here."); return; } if (window.confirm(`Delete ${u.display_name || u.full_name || u.email}? Their login is removed for good. Deals and documents stay. To keep them out but keep the account, use Active/Suspend instead.`)) deleteUser.mutate(u.id); }}
                   >
                     <Trash2 className="w-4 h-4" />
                   </Button>
@@ -336,8 +337,7 @@ export default function BrokerageUsers() {
                 onChange={(e) => setInviteForm({ ...inviteForm, role: e.target.value })}
                 className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               >
-                <option value="user">Agent</option>
-                <option value="admin">Admin</option>
+                <RoleOptions />
               </select>
             </div>
           </div>

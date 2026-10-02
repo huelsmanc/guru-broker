@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import App from '@/App.jsx'
 import '@/index.css'
 import { CONFIG_MISSING } from '@/api/base44Client'
+import { installErrorReporting, reportError } from '@/lib/reportError'
 
 // After a new version is deployed, a tab that was already open asks for page files that no
 // longer exist. Reload once to get the new version instead of leaving the page stuck.
@@ -18,6 +19,7 @@ function reloadOnce() {
   freshReload();
   return true;
 }
+if (!CONFIG_MISSING) installErrorReporting();
 window.addEventListener('vite:preloadError', (e) => { if (reloadOnce()) e.preventDefault(); });
 window.addEventListener('unhandledrejection', (e) => { if (isStaleChunk(e.reason?.message)) reloadOnce(); });
 
@@ -34,7 +36,7 @@ function Problem({ title, children }) {
 class ErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { error: null } }
   static getDerivedStateFromError(error) { return { error } }
-  componentDidCatch(error) { if (isStaleChunk(error?.message)) reloadOnce() }
+  componentDidCatch(error, info) { if (isStaleChunk(error?.message)) reloadOnce(); else reportError(error, { component: info?.componentStack }) }
   render() {
     if (!this.state.error) return this.props.children
     return (

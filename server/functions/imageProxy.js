@@ -17,6 +17,7 @@ export default async (req) => {
     const { bytes, type } = await safeFetch(target, { accept: OK_TYPES, maxBytes: 15 * 1024 * 1024 });
     return new Response(bytes, { status: 200, headers: { 'content-type': type, 'cache-control': 'private, max-age=3600', 'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'" } });
   } catch (e) {
-    return new Response(e.message || 'Could not load that picture', { status: e.status && e.status < 600 ? e.status : 502 });
+    // Another site's broken photo isn't our error: answer 4xx so it isn't logged as one.
+    return new Response(e.message || 'Could not load that picture', { status: e.status && e.status < 500 ? e.status : 424 });
   }
 };

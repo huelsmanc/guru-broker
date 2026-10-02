@@ -78,6 +78,7 @@ export function createClient(url, key, clientOpts) {
   };
   return {
     from,
+    rpc: async (name, args) => (globalThis.__rpc?.[name] ? { data: await globalThis.__rpc[name](args), error: null } : { data: null, error: { message: `no function ${name}` } }),
     auth: { getUser: async (t) => (globalThis.__users?.[t] ? { data: { user: globalThis.__users[t] } } : { data: {}, error: { message: 'bad' } }), admin: {
       // Logins. Like the real database, creating one also creates the profile row (handle_new_user).
       createUser: async ({ email, user_metadata }) => newLogin(email, user_metadata),

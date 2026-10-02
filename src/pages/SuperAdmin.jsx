@@ -15,13 +15,16 @@ import {
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { isAdminRole, normalizeRole, can } from '../../shared/permissions.generated.js';
+import RoleOptions, { roleValue } from '@/components/users/RoleOptions';
+import PlatformUsers from '@/components/admin/PlatformUsers';
+import AppErrors from '@/components/admin/AppErrors';
 
 export default function SuperAdmin() {
   const { user } = useOutletContext();
   const [params, setParams] = useSearchParams();
-  const platformTab = ['users'].includes(params.get('tab')) ? params.get('tab') : 'brokerages';
+  const platformTab = ['users', 'errors'].includes(params.get('tab')) ? params.get('tab') : 'brokerages';
   const queryClient = useQueryClient();
-  const isSuperAdmin = true;
+  const isSuperAdmin = user?.role === 'super_admin';
 
   // Top-level state
   const [showCreate, setShowCreate] = useState(false);
@@ -29,7 +32,7 @@ export default function SuperAdmin() {
   const [form, setForm] = useState({ name: '', broker_name: '', broker_title: '', phone: '', email: '', welcome_message: '', logo_url: '' });
   const [assignOwnerDialog, setAssignOwnerDialog] = useState(null);
   const [inviteDialog, setInviteDialog] = useState(null);
-  const [inviteForm, setInviteForm] = useState({ email: '', role: 'user' });
+  const [inviteForm, setInviteForm] = useState({ email: '', role: 'agent' });
   const [inviting, setInviting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [editingNameId, setEditingNameId] = useState(null);
@@ -53,8 +56,8 @@ export default function SuperAdmin() {
   });
 
   const updateUserName = useMutation({
-    mutationFn: async ({ id, display_name }) => {
-      await base44.entities.User.update(id, { display_name });
+    mutationFn: async ({ id, display_name, full_name }) => {
+      await base44.entities.User.update(id, { display_name: (display_name ?? full_name ?? '').trim() });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['all-users'] });
@@ -117,7 +120,7 @@ export default function SuperAdmin() {
     } catch (err) { window.alert(err.message || 'The invite could not be sent.'); setInviting(false); return; }
     setInviting(false);
     setInviteDialog(null);
-    setInviteForm({ email: '', role: 'user' });
+    setInviteForm({ email: '', role: 'agent' });
     refetchUsers();
   };
 
@@ -174,7 +177,8 @@ export default function SuperAdmin() {
       <Tabs value={platformTab} onValueChange={(v) => setParams(v === 'brokerages' ? {} : { tab: v }, { replace: true })}>
         <TabsList className="mb-6">
           <TabsTrigger value="brokerages">Brokerages</TabsTrigger>
-          <TabsTrigger value="users">All Users</TabsTrigger>
+          <TabsTrigger value="users">All users</TabsTrigger>
+          <TabsTrigger value="errors">Errors</TabsTrigger>
         </TabsList>
 
 
@@ -209,7 +213,7 @@ export default function SuperAdmin() {
                   key={b.id}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.04 }}
+                  transition={{ delay: Math.min(i, 12) * 0.04 }}
                   className="bg-card rounded-2xl border border-border p-5 flex flex-col md:flex-row md:items-center gap-4 hover:border-primary/30 transition-colors cursor-pointer"
                   onClick={() => setSelectedBrokerage(b)}
                 >
@@ -249,87 +253,11 @@ export default function SuperAdmin() {
         </TabsContent>
 
         <TabsContent value="users">
-          <div className="space-y-3">
-            {allUsers.map((u, i) => {
-              const isAccountOwner = brokerages.some(b => b.account_owner_id === u.id);
-              const brokerageName = brokerages.find(b => b.id === u.brokerage_id)?.name;
-              return (
-                <motion.div
-                  key={u.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.03 }}
-                  className={`bg-card rounded-2xl border p-4 flex flex-col sm:flex-row sm:items-center gap-3 ${isAccountOwner ? 'border-primary/30 bg-primary/5' : 'border-border'}`}
-                >
-                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                    <span className="text-sm font-bold text-primary">{u.full_name?.[0]?.toUpperCase() || '?'}</span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {editingNameId === u.id ? (
-                        <div className="flex items-center gap-1.5">
-                          <Input
-                            value={editingNameValue}
-                            onChange={(e) => setEditingNameValue(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') { updateUserName.mutate({ id: u.id, email: u.email, full_name: editingNameValue }); setEditingNameId(null); }
-                              if (e.key === 'Escape') setEditingNameId(null);
-                            }}
-                            className="h-7 text-sm w-40"
-                            autoFocus
-                          />
-                          <Button size="sm" className="h-7 text-xs px-2" onClick={() => { updateUserName.mutate({ id: u.id, email: u.email, full_name: editingNameValue }); setEditingNameId(null); }}>Save</Button>
-                          <Button size="sm" variant="ghost" className="h-7 text-xs px-2" onClick={() => setEditingNameId(null)}>Cancel</Button>
-                        </div>
-                      ) : (
-                        <p
-                          className="font-semibold text-sm text-foreground cursor-pointer hover:text-primary transition-colors"
-                          title="Click to edit name"
-                          onClick={() => { setEditingNameId(u.id); setEditingNameValue(u.display_name || u.full_name || ''); }}
-                        >
-                          {u.full_name}
-                        </p>
-                      )}
-                      {isAccountOwner && (
-                        <Badge className="gap-1 bg-primary/20 text-primary border-primary/30 text-xs">
-                          <Crown className="w-3 h-3" /> Account Owner
-                        </Badge>
-                      )}
-                    </div>
-                    <p className="text-xs text-muted-foreground">{u.email}</p>
-                    {brokerageName && <p className="text-xs text-muted-foreground mt-0.5">🏢 {brokerageName}</p>}
-                  </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <Badge variant={isAdminRole(u.role) ? 'default' : 'secondary'} className="text-xs capitalize">
-                      {isAdminRole(u.role) ? 'Broker/Admin' : normalizeRole(u.role) === 'agent' ? 'Agent' : u.role || 'unknown'}
-                    </Badge>
-                    <select
-                      value={u.role || 'user'}
-                      onChange={(e) => updateUserRole.mutate({ id: u.id, role: e.target.value })}
-                      className="rounded-lg border border-input bg-background px-2 py-1.5 text-xs"
-                    >
-                      <option value="user">Agent</option>
-                      <option value="admin">Broker / Admin</option>
-                    </select>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="rounded-xl text-destructive hover:text-destructive"
-                      onClick={() => deleteUser.mutate(u.id)}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </motion.div>
-              );
-            })}
-            {allUsers.length === 0 && (
-              <div className="text-center py-16">
-                <Users className="w-12 h-12 text-muted-foreground/20 mx-auto mb-3" />
-                <p className="text-muted-foreground">No users found.</p>
-              </div>
-            )}
-          </div>
+          <PlatformUsers />
+        </TabsContent>
+
+        <TabsContent value="errors">
+          <AppErrors />
         </TabsContent>
       </Tabs>
 
@@ -416,8 +344,7 @@ export default function SuperAdmin() {
                 onChange={(e) => setInviteForm({ ...inviteForm, role: e.target.value })}
                 className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               >
-                <option value="user">Agent</option>
-                <option value="admin">Broker / Admin</option>
+                <RoleOptions />
               </select>
             </div>
           </div>
@@ -460,12 +387,12 @@ function BrokerageManagement({ brokerage, allUsers, currentUser, onBack, onUpdat
 
   // Invite state
   const [showInvite, setShowInvite] = useState(false);
-  const [inviteForm, setInviteForm] = useState({ email: '', role: 'user' });
+  const [inviteForm, setInviteForm] = useState({ email: '', role: 'agent' });
   const [inviting, setInviting] = useState(false);
 
   // Force-add state
   const [showForceAdd, setShowForceAdd] = useState(false);
-  const [forceForm, setForceForm] = useState({ full_name: '', email: '', role: 'user' });
+  const [forceForm, setForceForm] = useState({ full_name: '', email: '', role: 'agent' });
   const [forceAdding, setForceAdding] = useState(false);
   const [forceError, setForceError] = useState('');
   const [forceSuccess, setForceSuccess] = useState('');
@@ -521,7 +448,7 @@ function BrokerageManagement({ brokerage, allUsers, currentUser, onBack, onUpdat
     } catch (err) { window.alert(err.message || 'The invite could not be sent.'); setInviting(false); return; }
     setInviting(false);
     setShowInvite(false);
-    setInviteForm({ email: '', role: 'user' });
+    setInviteForm({ email: '', role: 'agent' });
     refetchUsers();
   };
 
@@ -538,7 +465,7 @@ function BrokerageManagement({ brokerage, allUsers, currentUser, onBack, onUpdat
         brokerage_id: brokerage.id,
       });
       setForceSuccess(`✅ ${response.data.message}`);
-      setForceForm({ full_name: '', email: '', role: 'user' });
+      setForceForm({ full_name: '', email: '', role: 'agent' });
       refetchUsers();
     } catch (err) {
       setForceError(err?.message || 'Failed to create user. Email may already exist.');
@@ -657,7 +584,7 @@ function BrokerageManagement({ brokerage, allUsers, currentUser, onBack, onUpdat
                   key={u.id}
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.03 }}
+                  transition={{ delay: Math.min(i, 12) * 0.03 }}
                   className={`bg-card rounded-2xl border p-4 flex flex-col sm:flex-row sm:items-center gap-3 ${isOwner ? 'border-primary/30 bg-primary/5' : 'border-border'}`}
                 >
                   <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 overflow-hidden">
@@ -712,12 +639,11 @@ function BrokerageManagement({ brokerage, allUsers, currentUser, onBack, onUpdat
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
                     <select
-                      value={u.role || 'user'}
-                      onChange={(e) => updateUserRole.mutate({ id: u.id, role: e.target.value })}
+                      value={roleValue(u.role)}
+                      onChange={(e) => { const role = e.target.value; if (role === 'super_admin' && !window.confirm(`Make ${u.display_name || u.full_name || u.email} a platform owner (super admin)? They'll see and manage every brokerage.`)) return; updateUserRole.mutate({ id: u.id, role }); }}
                       className="rounded-lg border border-input bg-background px-2 py-1.5 text-xs"
                     >
-                      <option value="user">Agent</option>
-                      <option value="admin">Broker / Admin</option>
+                      <RoleOptions allowSuper />
                     </select>
                     {!isOwner && (
                       <Button
@@ -742,7 +668,7 @@ function BrokerageManagement({ brokerage, allUsers, currentUser, onBack, onUpdat
                       variant="ghost"
                       size="icon"
                       className="rounded-xl text-destructive hover:text-destructive"
-                      onClick={() => deleteUser.mutate(u.id)}
+                      onClick={() => { if (u.id === currentUser?.id) { window.alert("You can't delete your own account here."); return; } if (window.confirm(`Delete ${u.display_name || u.full_name || u.email}? Their login is removed for good. To keep them out but keep the account, use Suspend instead.`)) deleteUser.mutate(u.id); }}
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>
@@ -842,8 +768,7 @@ function BrokerageManagement({ brokerage, allUsers, currentUser, onBack, onUpdat
                 onChange={(e) => setForceForm({ ...forceForm, role: e.target.value })}
                 className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               >
-                <option value="user">Agent</option>
-                <option value="admin">Broker / Admin</option>
+                <RoleOptions />
               </select>
             </div>
           </div>
@@ -881,8 +806,7 @@ function BrokerageManagement({ brokerage, allUsers, currentUser, onBack, onUpdat
                 onChange={(e) => setInviteForm({ ...inviteForm, role: e.target.value })}
                 className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               >
-                <option value="user">Agent</option>
-                <option value="admin">Broker / Admin</option>
+                <RoleOptions />
               </select>
             </div>
           </div>

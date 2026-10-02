@@ -8,6 +8,7 @@ import NotificationSetup from '@/components/notifications/NotificationSetup';
 import PushNotificationBanner from '@/components/notifications/PushNotificationBanner';
 import NotificationManager from '@/components/notifications/notificationManager';
 import MobileTabBar from './MobileTabBar';
+import PageErrorBoundary from './PageErrorBoundary';
 import IdeaPadBubble from '@/components/ideapad/IdeaPadBubble';
 import { Menu, X } from 'lucide-react';
 import { ChatProvider } from '@/lib/chat/ChatProvider';
@@ -101,7 +102,7 @@ export default function AppLayout() {
           ? cn('fixed left-0 right-0 md:left-64 top-16 md:top-0 overflow-hidden [--chat-top:4rem] md:[--chat-top:0px]', !inConversation && 'pb-20 lg:pb-0')
           : 'md:ml-64 pt-16 md:pt-0 pb-20 min-h-screen'}
         style={chatScreen ? { height: 'calc(var(--vvh, 100dvh) - var(--chat-top))' } : undefined}>
-        <Outlet context={{ user, brokerageId: user?.brokerage_id }} />
+        <PageErrorBoundary resetKey={pathname}><Outlet context={{ user, brokerageId: user?.brokerage_id }} /></PageErrorBoundary>
       </main>
 
       {/* Mobile Bottom Tab Bar */}

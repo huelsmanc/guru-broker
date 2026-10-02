@@ -1,34 +1,31 @@
-// Ported from Base44 function `notifyAgentsNewTraining`. Logic unchanged.
+// Database automation: a new compliance training was added. Tells everyone in that brokerage
+// who isn't running it (agents, team leaders, TCs): a notification, a push and an email each.
+// (The Base44 version only reached people stored with the old "user" role name, and posted one
+// identical chat message per agent instead of telling each person.)
 import { createClientFromRequest } from '../lib/base44.js';
+import { notifyPeople } from '../lib/team.js';
+import { normalizeRole } from '../../shared/permissions.generated.js';
 
-export default (async (req) => {
+const LEARNERS = new Set(['agent', 'team_leader', 'tc']);
+
+export default async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const { event } = await req.json();
-
-    if (event.type !== 'create' || !event.data) {
-      return Response.json({ success: true });
-    }
-
+    if (event?.type !== 'create' || !event.data?.brokerage_id) return Response.json({ success: true });
     const training = event.data;
-
-    // Get all users in this brokerage (agents only)
-    const allUsers = await base44.asServiceRole.entities.User.list('-created_date', 500);
-    const agents = allUsers.filter(u => u.brokerage_id === training.brokerage_id && u.role === 'user');
-
-    // Create admin message notification for each agent
-    for (const agent of agents) {
-      await base44.asServiceRole.entities.AdminMessage.create({
-        brokerage_id: training.brokerage_id,
-        sender_name: 'Admin',
-        sender_email: 'admin@system',
-        content: `📚 New training available: "${training.title}". Visit Compliance Training to complete it.`,
-      });
-    }
-
-    return Response.json({ success: true, notifiedAgents: agents.length });
+    const E = base44.asServiceRole.entities;
+    const people = (await E.User.filter({ brokerage_id: training.brokerage_id }, '-created_date', 2000))
+      .filter((u) => !u.suspended && u.role !== 'super_admin' && LEARNERS.has(normalizeRole(u.role)));
+    const sent = await notifyPeople(E, {
+      brokerageId: training.brokerage_id, people,
+      title: 'New training to complete',
+      message: `"${training.title || 'New training'}" was added. Open Compliance Training to complete it.`,
+      link: '/ComplianceTraining', referenceId: training.id, referenceType: 'Training',
+    });
+    return Response.json({ success: true, notifiedAgents: sent });
   } catch (error) {
     console.error('Error notifying agents:', error);
     return Response.json({ success: true });
   }
-});
+};
