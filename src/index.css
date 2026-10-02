@@ -128,3 +128,7 @@
 @keyframes gbh-page-in { from { opacity: 0.35; } to { opacity: 1; } }
 .gbh-page-in { animation: gbh-page-in 160ms ease-out; }
 @media (prefers-reduced-motion: reduce) { .gbh-page-in { animation: none; } }
+
+/* Phones: the page never slides sideways; wide things (tables, tab rows) scroll inside their own box. */
+html, body { overflow-x: clip; }
+@supports not (overflow: clip) { html, body { overflow-x: hidden; } }

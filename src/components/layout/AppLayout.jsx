@@ -102,7 +102,7 @@ export default function AppLayout() {
       <main
         className={chatScreen
           ? cn('fixed left-0 right-0 md:left-64 top-16 md:top-0 overflow-hidden [--chat-top:4rem] md:[--chat-top:0px]', !inConversation && 'pb-20 lg:pb-0')
-          : 'md:ml-64 pt-16 md:pt-0 pb-20 min-h-screen'}
+          : 'md:ml-64 pt-16 md:pt-0 pb-20 min-h-screen overflow-x-clip'}
         style={chatScreen ? { height: 'calc(var(--vvh, 100dvh) - var(--chat-top))' } : undefined}>
         <PageErrorBoundary resetKey={pathname}>
           {/* Only the page area waits; the menu stays put. Moving between pages keeps the current one up until the next is ready. */}

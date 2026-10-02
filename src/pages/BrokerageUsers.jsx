@@ -228,7 +228,7 @@ export default function BrokerageUsers({ embedded = false }) {
                 </div>
                 <p className="text-xs text-muted-foreground">{u.email}</p>
                 {isAdmin && (
-                  <div className="flex gap-1.5 mt-1.5">
+                  <div className="flex flex-wrap gap-1.5 mt-1.5">
                     {[['tc', 'Transaction coordinator'], ['compliance', 'Compliance']].map(([duty, label]) => {
                       const on = (u.duties || []).includes(duty);
                       return (
@@ -249,7 +249,7 @@ export default function BrokerageUsers({ embedded = false }) {
                 )}
               </div>
               {!isAccountOwner && (
-                <div className="flex items-center gap-2 flex-shrink-0">
+                <div className="flex flex-wrap items-center gap-x-1 gap-y-1 sm:gap-2 sm:flex-shrink-0">
                   <Badge variant={isAdminRole(u.role) ? 'default' : 'secondary'} className="text-xs capitalize">
                     {roleLabel(u.role)}
                   </Badge>
