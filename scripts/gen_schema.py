@@ -75,6 +75,8 @@ ENTITIES = {
     "RoleplaySession": "brokerage_id agent_email agent_name scenario scenario_title difficulty status started_at ended_at duration_seconds transcript score scorecard",
     "PrintOrder": "brokerage_id owner_email owner_name product product_label vendor status quantity recipient_count sent_count failed_count amount_cents currency files ship_to recipients list_id design_id transaction_id stripe_session_id test_mode paid_at fulfilled_at vendor_ids tracking problems",
     "MailingList": "brokerage_id owner_email name recipients recipient_count source",
+    "Story": "brokerage_id author_email author_name author_photo kind media_url media_type caption bg_color auto_type auto_key title subtitle image_url link pinned expires_at duration_seconds",
+    "StoryView": "brokerage_id story_id viewer_email viewer_name reaction",
 }
 
 # User lives in `profiles`, linked 1:1 to Supabase auth.users.
@@ -89,7 +91,7 @@ NUM_FIELDS = set("""lead_pct gross_share company_dollar agent_net fees team_lead
 commission_flat commission_percentage commission_sale_price sale_price sales_amount transaction_fee transaction_fee_flat
 transaction_fee_percentage purchase_price""".split())
 DATE_FIELDS = set("cap_year_start closed_date license_expiration eo_expiration start_date cap_start_date acceptance_date date closing_date inspection_date appraisal_date financing_contingency_date inspection_contingency_date loan_approval_date title_deadline_date".split())
-TS_FIELDS = set("fulfilled_at edited_at started_at ended_at last_read_at approved_at sent_at paid_at bank_linked_at thank_you_sent_at offer_expiration accepted_at completed_at submitted_at signed_at response_date scheduled_at".split())
+TS_FIELDS = set("expires_at fulfilled_at edited_at started_at ended_at last_read_at approved_at sent_at paid_at bank_linked_at thank_you_sent_at offer_expiration accepted_at completed_at submitted_at signed_at response_date scheduled_at".split())
 
 # Tables not scoped by brokerage (owned by a user or reached via a parent)
 PERSONAL = {"IdeaPadNote": "user_email", "ChatReadState": "user_email", "PushSubscription": "user_email"}
@@ -375,6 +377,18 @@ for ent, fields in sorted(ENTITIES.items()):
         # Graded and recorded by the server (training route), so a score can't be made up.
         pw(f"create policy {t}_access on public.{t} for select using ((brokerage_id = public.auth_brokerage_id() and (lower(agent_email) = public.auth_email() or public.is_brokerage_admin())) or public.is_super_admin());")
         pw(f"-- {t}: written only by the server.")
+    elif ent == "Story":
+        # Seen by everyone in the brokerage until it expires; posted by the server (stories route).
+        pw(f"create policy {t}_access on public.{t} for select using ((brokerage_id = public.auth_brokerage_id() and expires_at > now()) or public.is_super_admin());")
+        pw(f"drop policy if exists {t}_delete on public.{t};")
+        pw(f"create policy {t}_delete on public.{t} for delete using ((brokerage_id = public.auth_brokerage_id() and (lower(author_email) = public.auth_email() or public.is_brokerage_admin())) or public.is_super_admin());")
+    elif ent == "StoryView":
+        # Your own views; a story's author and the admins see who watched.
+        mine = "lower(viewer_email) = public.auth_email()"
+        pw(f"create policy {t}_access on public.{t} for select using ({mine} or (brokerage_id = public.auth_brokerage_id() and (public.is_brokerage_admin() or exists (select 1 from public.story s where s.id = story_view.story_id and lower(s.author_email) = public.auth_email()))) or public.is_super_admin());")
+        for op in ("insert", "update"): pw(f"drop policy if exists {t}_{op} on public.{t};")
+        pw(f"create policy {t}_insert on public.{t} for insert with check ({mine} and brokerage_id = public.auth_brokerage_id() and exists (select 1 from public.story s where s.id = story_view.story_id and s.brokerage_id = public.auth_brokerage_id()));")
+        pw(f"create policy {t}_update on public.{t} for update using ({mine}) with check ({mine} and brokerage_id = public.auth_brokerage_id());")
     elif ent == "Offer":
         cond = "(lower(agent_email) = public.auth_email() or (brokerage_id = public.auth_brokerage_id() and (public.is_brokerage_admin() or public.has_perm('offers.all') or public.leads_agent(agent_email))) or public.is_super_admin())"
         pw(f"create policy {t}_access on public.{t} for all using {cond} with check (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());")

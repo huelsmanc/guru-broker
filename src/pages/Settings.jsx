@@ -76,6 +76,7 @@ export default function Settings() {
           thank_you_video_url: s.thank_you_video_url || '',
           cda_direct_agent_pay: s.cda_direct_agent_pay === true,
           require_2fa_all: s.require_2fa_all === true,
+          stories_auto: s.stories_auto !== false,
           tech_links: s.tech_links || [],
           primary_color: s.primary_color || '#667eea',
           sidebar_color: s.sidebar_color || '#1c231f',
@@ -208,6 +209,10 @@ export default function Settings() {
               ))}
               <div className="sm:col-span-2"><Label>Message</Label><Textarea className="mt-1.5" rows={4} placeholder="Congratulations on your new home at {address}! ..." value={form.thank_you_message || ''} onChange={(e) => setForm({ ...form, thank_you_message: e.target.value })} /></div>
             </div>
+          </div>
+          <div className="sm:col-span-2 border-t pt-5">
+            <h3 className="font-semibold mb-2">Stories</h3>
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.stories_auto !== false} onChange={(e) => setForm({ ...form, stories_auto: e.target.checked })} /> Celebration stories: closings, new listings, certificates, work anniversaries and new agents are posted automatically</label>
           </div>
           <div className="sm:col-span-2 border-t pt-5">
             <h3 className="font-semibold mb-2">Commission disbursements</h3>

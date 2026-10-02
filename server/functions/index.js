@@ -127,6 +127,7 @@ export const FUNCTIONS = {
   sendSigningReminders: () => import('./sendSigningReminders.js'),
   sharedStatus: () => import('./sharedStatus.js'),
   signingPage: () => import('./signingPage.js'),
+  stories: () => import('./stories.js'),
   streetView: () => import('./streetView.js'),
   stripeWebhook: () => import('./stripeWebhook.js'),
   submitPublicSignature: () => import('./submitPublicSignature.js'),

@@ -11,6 +11,7 @@ import { InvokeLLM } from '../lib/integrations.js';
 import { storePrivate, scopeFolder, readFileBytes } from '../lib/files.js';
 import { safeFetch } from '../lib/safeFetch.js';
 import { buildCertificate, certificateNumber } from '../lib/certificate.js';
+import { autoStory } from '../lib/stories.js';
 
 class Problem extends Error { constructor(msg, status = 400) { super(msg); this.status = status; } }
 const clip = (v, n) => String(v ?? '').slice(0, n);
@@ -93,7 +94,11 @@ export default async (req) => {
           brokerage_id: t.brokerage_id, training_id: t.id, agent_email: lc(me.email), agent_name: me.display_name || me.full_name || me.email,
           score, passed, answers: results.map(({ question_id, selected, correct }) => ({ question_id, selected, correct })),
         });
-        if (passed) await E.ComplianceAttempt.update(attempt.id, { certificate_no: certificateNumber(attempt) });
+        if (passed) {
+          await E.ComplianceAttempt.update(attempt.id, { certificate_no: certificateNumber(attempt) });
+          // A celebration story the first time someone passes (once per training per person).
+          await autoStory(E, { brokerageId: t.brokerage_id, person: me, type: 'certified', key: `cert:${t.id}:${lc(me.email)}`, subtitle: t.title }).catch(() => {});
+        }
         return Response.json({ score, passed, passing_score: passing, attempt_id: attempt.id, results });
       }
 

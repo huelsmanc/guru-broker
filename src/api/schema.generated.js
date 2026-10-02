@@ -1350,6 +1350,53 @@ export const SCHEMA = {
       "read_by"
     ]
   },
+  "Story": {
+    "table": "story",
+    "columns": [
+      "author_email",
+      "author_name",
+      "author_photo",
+      "auto_key",
+      "auto_type",
+      "bg_color",
+      "brokerage_id",
+      "caption",
+      "duration_seconds",
+      "expires_at",
+      "image_url",
+      "kind",
+      "link",
+      "media_type",
+      "media_url",
+      "pinned",
+      "subtitle",
+      "title",
+      "id",
+      "created_date",
+      "updated_date",
+      "created_by"
+    ],
+    "typed": [
+      "duration_seconds",
+      "expires_at",
+      "pinned"
+    ]
+  },
+  "StoryView": {
+    "table": "story_view",
+    "columns": [
+      "brokerage_id",
+      "reaction",
+      "story_id",
+      "viewer_email",
+      "viewer_name",
+      "id",
+      "created_date",
+      "updated_date",
+      "created_by"
+    ],
+    "typed": []
+  },
   "Team": {
     "table": "team",
     "columns": [

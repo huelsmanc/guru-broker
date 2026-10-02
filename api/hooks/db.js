@@ -13,8 +13,8 @@ const AUTOMATIONS = {
   esign_document: { UPDATE: ['notifySignatureUpdate'], entity: 'ESignDocument' },
   direct_message: { INSERT: ['pushOnMessage'], entity: 'DirectMessage' },
   group_message: { INSERT: ['pushOnMessage'], entity: 'GroupMessage' },
-  transaction: { INSERT: ['applyDefaultChecklists', 'listingKit'], UPDATE: ['dealChatSync', 'listingKit'], entity: 'Transaction' },
-  profiles: { INSERT: ['applyDefaultChecklists'], UPDATE: ['applyDefaultChecklists'], entity: 'User' },
+  transaction: { INSERT: ['applyDefaultChecklists', 'listingKit'], UPDATE: ['dealChatSync', 'listingKit', 'stories'], entity: 'Transaction' },
+  profiles: { INSERT: ['applyDefaultChecklists', 'stories'], UPDATE: ['applyDefaultChecklists', 'stories'], entity: 'User' },
 };
 
 const TYPE = { INSERT: 'create', UPDATE: 'update', DELETE: 'delete' };
