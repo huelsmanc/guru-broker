@@ -91,6 +91,7 @@ export default function Settings() {
       const created = await base44.entities.BrokerageSettings.create({ ...form, brokerage_id: brokerageId });
       setSettingsId(created.id);
     }
+    queryClient.invalidateQueries({ queryKey: ['branding'] });
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);

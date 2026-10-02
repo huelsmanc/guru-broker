@@ -6,6 +6,7 @@ import NotificationBell from './NotificationBell';
 import ChatChannelsDropdown from './ChatChannelsDropdown';
 
 import { useQuery } from '@tanstack/react-query';
+import { useBranding } from '@/lib/branding';
 import { useChat } from '@/lib/chat/ChatProvider';
 import { isAdminRole, normalizeRole, can } from '../../../shared/permissions.generated.js';
 import { approvesDealItems } from '../../../shared/access.js';
@@ -13,68 +14,12 @@ import { approvesDealItems } from '../../../shared/access.js';
 export default function Sidebar({ user, brokerageId, onChannelClick, mobile }) {
   const location = useLocation();
   const isAdmin = isAdminRole(user?.role);
-  const [brokerageSettings, setBrokerageSettings] = useState(null);
-  const [brokerage, setBrokerage] = useState(null);
+  // Name, logo and colors: shown instantly from this device, refreshed in the background.
+  const brand = useBranding(user?.brokerage_id);
 
   // Unread DMs and group messages (live)
   const chat = useChat();
   const unreadDmCount = chat?.totals.dms || 0;
-
-  useEffect(() => {
-    if (user?.brokerage_id) {
-      base44.entities.BrokerageSettings.filter({ brokerage_id: user.brokerage_id }).then((results) => {
-        if (results.length > 0) setBrokerageSettings(results[0]);
-      });
-      base44.entities.Brokerage.filter({ id: user.brokerage_id }).then((results) => {
-        if (results.length > 0) setBrokerage(results[0]);
-      });
-    }
-  }, [user?.brokerage_id]);
-
-  // Apply colors when brokerageSettings change
-  useEffect(() => {
-    if (brokerageSettings?.primary_color || brokerageSettings?.sidebar_color) {
-      const root = document.documentElement;
-      if (brokerageSettings.primary_color) {
-        const [r, g, b] = hexToRgb(brokerageSettings.primary_color);
-        root.style.setProperty('--primary', `${hslFromRgb(r, g, b)}`);
-      }
-      if (brokerageSettings.sidebar_color) {
-        const [r, g, b] = hexToRgb(brokerageSettings.sidebar_color);
-        root.style.setProperty('--sidebar-background', `${hslFromRgb(r, g, b)}`);
-      }
-    }
-  }, [brokerageSettings]);
-
-  // Helper functions to convert hex to HSL for CSS variables
-  const hexToRgb = (hex) => {
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    return result ? [
-      parseInt(result[1], 16),
-      parseInt(result[2], 16),
-      parseInt(result[3], 16)
-    ] : [0, 0, 0];
-  };
-
-  const hslFromRgb = (r, g, b) => {
-    r /= 255;
-    g /= 255;
-    b /= 255;
-    const max = Math.max(r, g, b), min = Math.min(r, g, b);
-    let h, s, l = (max + min) / 2;
-    if (max === min) {
-      h = s = 0;
-    } else {
-      const d = max - min;
-      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-      switch (max) {
-        case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
-        case g: h = ((b - r) / d + 2) / 6; break;
-        case b: h = ((r - g) / d + 4) / 6; break;
-      }
-    }
-    return `${Math.round(h * 360)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`;
-  };
 
   const isSuperAdmin = user?.role === 'super_admin';
 
@@ -145,8 +90,10 @@ export default function Sidebar({ user, brokerageId, onChannelClick, mobile }) {
     <aside className={mobile ? 'h-full w-full bg-sidebar text-sidebar-foreground flex flex-col shadow-2xl' : 'fixed left-0 top-0 h-screen w-64 bg-sidebar text-sidebar-foreground flex flex-col z-40'}>
       <div className="p-6 border-b border-sidebar-border">
         <div className="flex items-center gap-3">
-          {brokerage?.logo_url ? (
-            <img src={brokerage.logo_url} alt="Logo" className="w-10 h-10 rounded-xl object-cover" />
+          {brand?.logo_url ? (
+            <img src={brand.logo_url} alt="Logo" className="w-10 h-10 rounded-xl object-cover" />
+          ) : !brand && user?.brokerage_id ? (
+            <div className="w-10 h-10 rounded-xl bg-sidebar-accent/40 flex-shrink-0" />
           ) : (
             <div className="w-10 h-10 rounded-xl bg-sidebar-primary flex items-center justify-center flex-shrink-0">
               <span className="text-sidebar-primary-foreground font-bold text-lg">G</span>
@@ -154,10 +101,10 @@ export default function Sidebar({ user, brokerageId, onChannelClick, mobile }) {
           )}
           <div className="flex-1 min-w-0">
             <h1 className="font-bold text-lg text-white tracking-tight truncate">
-              {brokerage?.name || brokerageSettings?.brokerage_name || 'Guru Broker'}
+              {brand?.name || (user?.brokerage_id ? '' : 'Guru Broker')}
             </h1>
             <p className="text-xs text-sidebar-foreground/60 truncate">
-              {brokerageSettings?.broker_name ? `${brokerageSettings.broker_name}` : 'Support Portal'}
+              {brand?.broker_name || (brand ? 'Support Portal' : '')}
             </p>
           </div>
         </div>

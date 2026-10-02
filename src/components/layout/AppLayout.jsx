@@ -1,5 +1,7 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { preloadPages } from '@/lib/pages';
+import { useBranding } from '@/lib/branding';
+import { useAuth } from '@/lib/AuthContext';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { base44 } from '@/api/base44Client';
@@ -16,7 +18,10 @@ import { ChatProvider } from '@/lib/chat/ChatProvider';
 import { CallProvider } from '@/lib/chat/CallProvider';
 
 export default function AppLayout() {
-  const [user, setUser] = useState(null);
+  // Start from the profile already loaded at sign-in, so the menu, logo and colors are right
+  // on the first frame (it's refreshed just below).
+  const { user: signedIn } = useAuth();
+  const [user, setUser] = useState(() => signedIn || null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const navigate = useNavigate();
   const { pathname, search } = useLocation();
@@ -26,6 +31,7 @@ export default function AppLayout() {
   const inConversation = (pathname === '/DirectMessages' && /[?&](dm|group)=/.test(search)) || pathname === '/SocialChat';
   useEffect(() => { setMobileOpen(false); }, [pathname, search]);
   useEffect(() => { preloadPages(); }, []);
+  const brand = useBranding(user?.brokerage_id);
   // Messaging screens are pinned to the visible screen: the page can't be dragged up, and when the
   // phone keyboard opens the conversation shrinks to the space above it instead of the page scrolling.
   useEffect(() => {
@@ -56,7 +62,7 @@ export default function AppLayout() {
 
   useEffect(() => {
     base44.auth.me().then((u) => {
-      setUser(u);
+      setUser((prev) => (prev && JSON.stringify(prev) === JSON.stringify(u) ? prev : u));
       // Super admins don't need a brokerage
       if (u && u.role !== 'super_admin' && !u.brokerage_id) {
         navigate('/JoinBrokerage');
@@ -76,10 +82,10 @@ export default function AppLayout() {
            {mobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
          </button>
         <div className="flex items-center gap-2 ml-3 flex-1">
-          <div className="w-8 h-8 rounded-lg bg-sidebar-primary flex items-center justify-center">
-            <span className="text-sidebar-primary-foreground font-bold">G</span>
-          </div>
-          <span className="text-white font-bold">Guru Broker</span>
+          {brand?.logo_url ? <img src={brand.logo_url} alt="" className="w-8 h-8 rounded-lg object-cover" />
+            : !brand && user?.brokerage_id ? <div className="w-8 h-8 rounded-lg bg-white/10" />
+            : <div className="w-8 h-8 rounded-lg bg-sidebar-primary flex items-center justify-center"><span className="text-sidebar-primary-foreground font-bold">G</span></div>}
+          <span className="text-white font-bold truncate">{brand?.name || (user?.brokerage_id ? '' : 'Guru Broker')}</span>
         </div>
         <NotificationBell user={user} brokerageId={user?.brokerage_id} />
       </div>
