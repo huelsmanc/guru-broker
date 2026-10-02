@@ -15,6 +15,7 @@ import ImageCropModal from '@/components/profile/ImageCropModal';
 import DeleteAccountDialog from '@/components/profile/DeleteAccountDialog';
 import NotificationSettings from '@/components/NotificationSettings';
 import SecuritySettings from '@/components/auth/SecuritySettings';
+import FaceIdLock from '@/components/auth/FaceIdLock';
 import WorkspaceChecklists from '@/components/workspace/WorkspaceChecklists';
 import { useQuery as useQueryOnboarding } from '@tanstack/react-query';
 import { format, differenceInDays } from 'date-fns';
@@ -308,6 +309,7 @@ export default function Profile() {
         <div className="rounded-2xl border p-5"><NotificationSettings /></div>
 
         <div className="rounded-2xl border p-5"><SecuritySettings user={user} /></div>
+        <FaceIdLock />
 
         {saveError && <p className="text-sm text-red-600">{saveError}</p>}
         <div className="flex items-center justify-between gap-3">

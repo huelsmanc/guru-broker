@@ -123,6 +123,7 @@ export default function Login() {
             </button>
           )}
         </div>
+        <p className="mt-6 text-center text-xs text-slate-400"><a href="/privacy" className="hover:text-slate-600">Privacy</a> · <a href="/support" className="hover:text-slate-600">Help</a></p>
       </div>
     </div>
   );

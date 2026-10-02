@@ -7,6 +7,7 @@ export const FUNCTIONS = {
   aiOfferStrategy: () => import('./aiOfferStrategy.js'),
   aiScanDocument: () => import('./aiScanDocument.js'),
   appErrors: () => import('./appErrors.js'),
+  appleAppSite: () => import('./appleAppSite.js'),
   applyDefaultChecklists: () => import('./applyDefaultChecklists.js'),
   bankLink: () => import('./bankLink.js'),
   callAction: () => import('./callAction.js'),

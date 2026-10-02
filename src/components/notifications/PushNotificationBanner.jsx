@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Bell, X, Share } from 'lucide-react';
 import { enablePush, refreshPush, pushSupported, isIos, isInstalled } from '@/lib/push';
+import { isNative, nativePushPermission } from '@/lib/native';
 
 // Asks once to turn on phone/desktop notifications (messages, mentions, calls, approvals).
 export default function PushNotificationBanner({ user }) {
@@ -13,8 +14,9 @@ export default function PushNotificationBanner({ user }) {
     try { dismissed = !!localStorage.getItem('pushBannerDismissed'); } catch { /* private mode */ }
     if (dismissed) return undefined;
     const t = setTimeout(() => {
-      if (isIos() && !isInstalled()) setShow('ios');
-      else if (pushSupported() && Notification.permission === 'default') setShow('ask');
+      if (isNative()) nativePushPermission().then((p) => { if (String(p).startsWith('prompt')) setShow('ask'); });
+      else if (isIos() && !isInstalled()) setShow('ios');
+      else if (pushSupported() && typeof Notification !== 'undefined' && Notification.permission === 'default') setShow('ask');
     }, 2500);
     return () => clearTimeout(t);
   }, [user]);

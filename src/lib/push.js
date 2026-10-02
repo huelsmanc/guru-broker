@@ -1,10 +1,11 @@
 // Turns on phone/desktop push notifications for this browser.
 import { base44 } from '@/api/base44Client';
+import { isNative, enableNativePush, refreshNativePush } from '@/lib/native';
 
 const toKey = (b64) => { const p = '='.repeat((4 - (b64.length % 4)) % 4); const raw = atob((b64 + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from([...raw].map((c) => c.charCodeAt(0))); };
-export const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+export const pushSupported = () => isNative() || ('serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window);
 export const isIos = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
-export const isInstalled = () => window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone === true;
+export const isInstalled = () => isNative() || window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone === true;
 
 export async function registerSw() {
   if (!('serviceWorker' in navigator)) return null;
@@ -20,6 +21,7 @@ async function save(sub, user) {
 
 /** Asks permission (must be called from a tap/click) and subscribes. Returns a status string. */
 export async function enablePush(user) {
+  if (isNative()) return enableNativePush(user); // the iPhone app uses Apple's notifications
   if (!pushSupported()) return isIos() && !isInstalled() ? 'ios-install' : 'unsupported';
   const { data } = await base44.functions.invoke('pushKey', {});
   if (!data.configured) return 'not-configured';
@@ -34,6 +36,7 @@ export async function enablePush(user) {
 
 /** On app load: keep this browser's subscription fresh if notifications are already allowed. */
 export async function refreshPush(user) {
+  if (isNative()) { await refreshNativePush(user); return; }
   if (!user || !pushSupported() || Notification.permission !== 'granted') return;
   const reg = await registerSw();
   if (!reg) return;

@@ -6,17 +6,20 @@ import { useQuery } from '@tanstack/react-query';
 import { Check, ChevronRight, X, Share, Loader2 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { enablePush, pushSupported, isIos, isInstalled } from '@/lib/push';
+import { isNative, nativePushPermission } from '@/lib/native';
 import { cn } from '@/lib/utils';
 
 const isPhone = () => /iphone|ipad|ipod|android/i.test(navigator.userAgent);
 
 export default function GetStarted({ user, brokerageName }) {
   const [hidden, setHidden] = useState(!!user?.getting_started_hidden);
-  const [perm, setPerm] = useState(() => (typeof Notification !== 'undefined' ? Notification.permission : 'unsupported'));
+  const [perm, setPerm] = useState(() => (!isNative() && typeof Notification !== 'undefined' ? Notification.permission : 'unsupported'));
   const [pushBusy, setPushBusy] = useState(false);
   const [pushMsg, setPushMsg] = useState('');
   const [showIos, setShowIos] = useState(false);
   useEffect(() => setHidden(!!user?.getting_started_hidden), [user?.getting_started_hidden]);
+  // In the iPhone app, notification permission comes from iOS, not the browser.
+  useEffect(() => { if (isNative()) nativePushPermission().then(setPerm); }, []);
 
   const { data: openOnboarding = 0 } = useQuery({
     queryKey: ['my-onboarding-open', user?.email],

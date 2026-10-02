@@ -4,6 +4,7 @@ import App from '@/App.jsx'
 import '@/index.css'
 import { CONFIG_MISSING } from '@/api/base44Client'
 import { installErrorReporting, reportError } from '@/lib/reportError'
+import { installNative } from '@/lib/native'
 
 // After a new version is deployed, a tab that was already open asks for page files that no
 // longer exist. Reload once to get the new version instead of leaving the page stuck.
@@ -19,7 +20,7 @@ function reloadOnce() {
   freshReload();
   return true;
 }
-if (!CONFIG_MISSING) installErrorReporting();
+if (!CONFIG_MISSING) { installErrorReporting(); installNative(); }
 window.addEventListener('vite:preloadError', (e) => { if (reloadOnce()) e.preventDefault(); });
 window.addEventListener('unhandledrejection', (e) => { if (isStaleChunk(e.reason?.message)) reloadOnce(); });
 

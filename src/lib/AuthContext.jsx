@@ -4,7 +4,7 @@ import { secondStepStatus } from '@/lib/twoStep';
 
 const AuthContext = createContext();
 
-const PUBLIC_PATHS = ['/sign', '/verify', '/custom-sign', '/BulkSign', '/review', '/login', '/reset-password', '/status'];
+const PUBLIC_PATHS = ['/sign', '/verify', '/custom-sign', '/BulkSign', '/review', '/login', '/reset-password', '/status', '/portal', '/privacy', '/support'];
 
 // Records a sign-in in the admin Activity feed (at most once every 8 hours per browser,
 // since Supabase also reports SIGNED_IN when a tab wakes up).

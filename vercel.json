@@ -19,6 +19,10 @@
   },
   "rewrites": [
     {
+      "source": "/.well-known/apple-app-site-association",
+      "destination": "/api/fn/appleAppSite"
+    },
+    {
       "source": "/api/functions/:name",
       "destination": "/api/fn/:name"
     },

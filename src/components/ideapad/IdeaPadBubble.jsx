@@ -6,7 +6,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 
-export default function IdeaPadBubble({ user }) {
+// tabOnly: a slim tab on the right edge instead of the round bubble (deal pages, where the
+// bubble sat on top of the Ask AI button).
+export default function IdeaPadBubble({ user, tabOnly = false }) {
   const [open, setOpen] = useState(false);
   const [minimized, setMinimized] = useState(false);
   const [view, setView] = useState('chat'); // 'chat' | 'history'
@@ -103,9 +105,21 @@ Respond as the assistant:`,
 
   return (
     <>
+      {/* Slim edge tab (deal pages): tap to open or close the Idea Pad. */}
+      {tabOnly && (
+        <button
+          onClick={() => setOpen((o) => !o)}
+          className={cn('fixed right-0 top-1/2 -translate-y-1/2 z-50 w-7 h-16 rounded-l-xl shadow-lg flex items-center justify-center text-white bg-gradient-to-b from-primary to-accent', open && 'opacity-90')}
+          title={open ? 'Close Idea Pad' : 'Open Idea Pad'}
+          aria-label={open ? 'Close Idea Pad' : 'Open Idea Pad'}
+        >
+          {open ? <X className="w-4 h-4" /> : <Lightbulb className="w-4 h-4" />}
+        </button>
+      )}
+
       {/* Minimized sidebar tab */}
       <AnimatePresence>
-        {minimized && (
+        {!tabOnly && minimized && (
           <motion.button
             initial={{ x: 80 }}
             animate={{ x: 0 }}
@@ -125,7 +139,7 @@ Respond as the assistant:`,
       </AnimatePresence>
 
       {/* Floating bubble button */}
-      {!minimized && (
+      {!tabOnly && !minimized && (
       <motion.button
         onClick={() => {
           if (open) { setOpen(false); setMinimized(true); }

@@ -112,7 +112,7 @@ export default function AppLayout() {
 
       {/* Floating Idea Pad */}
       {/* Kept off messaging screens, where it sat on top of the send button. */}
-      {!chatScreen && <IdeaPadBubble user={user} />}
+      {!chatScreen && <IdeaPadBubble user={user} tabOnly={pathname.startsWith('/Transactions/')} />}
     </div>
     </CallProvider>
     </ChatProvider>

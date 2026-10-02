@@ -19,6 +19,8 @@ const BrokerMonitor = lazy(() => import('@/pages/BrokerMonitor'));
 const SocialChat = lazy(() => import('@/pages/SocialChat'));
 const Settings = lazy(() => import('@/pages/Settings'));
 const SuperAdmin = lazy(() => import('@/pages/SuperAdmin'));
+const Privacy = lazy(() => import('@/pages/Privacy'));
+const Support = lazy(() => import('@/pages/Support'));
 const BrokerageUsers = lazy(() => import('@/pages/BrokerageUsers'));
 const Profile = lazy(() => import('@/pages/Profile'));
 const JoinBrokerage = lazy(() => import('@/pages/JoinBrokerage'));
@@ -80,7 +82,7 @@ const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin, user, checkAppState, logout } = useAuth();
   const location = useLocation();
 
-  const isPublicRoute = ['/sign', '/verify', '/custom-sign', '/BulkSign', '/review', '/login', '/reset-password', '/status', '/portal'].includes(location.pathname);
+  const isPublicRoute = ['/sign', '/verify', '/custom-sign', '/BulkSign', '/review', '/login', '/reset-password', '/status', '/portal', '/privacy', '/support'].includes(location.pathname);
 
   // Always render public routes immediately - no auth required
   if (isPublicRoute) {
@@ -96,6 +98,8 @@ const AuthenticatedApp = () => {
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/status" element={<ClientStatus />} />
           <Route path="/portal" element={<PortalPage />} />
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/support" element={<Support />} />
         </Routes>
       </Suspense>
     );

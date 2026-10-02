@@ -3,6 +3,7 @@
 // Keys are created automatically the first time they're needed and kept in the
 // server-only app_secret table. Setting VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY overrides that.
 import crypto from 'node:crypto';
+import { sendApns } from './apns.js';
 
 const b64u = (buf) => Buffer.from(buf).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 const unb64u = (s) => Buffer.from(String(s).replace(/-/g, '+').replace(/_/g, '/'), 'base64');
@@ -98,12 +99,25 @@ export async function pushTo(entities, emails, data, opts = {}) {
   if (!list.length) return 0;
   const subs = await entities.PushSubscription.filter({ user_email: { $in: list } }, '-created_date', 500);
   if (!subs.length) return 0;
-  const keys = await vapidKeys();
+  // Browsers use Web Push; the iPhone app ("apns:" devices) uses Apple's push service.
+  const web = subs.filter((s) => !String(s.endpoint || '').startsWith('apns:'));
+  const apple = subs.filter((s) => String(s.endpoint || '').startsWith('apns:'));
+  const keys = web.length ? await vapidKeys() : null;
   let sent = 0;
-  await Promise.all(subs.map(async (s) => {
-    const r = await sendOne(s, data, { ...opts, keys });
-    if (r === 'ok') sent += 1;
-    if (r === 'gone') await entities.PushSubscription.delete(s.id).catch(() => {});
-  }));
+  await Promise.all([
+    ...web.map(async (s) => {
+      const r = await sendOne(s, data, { ...opts, keys });
+      if (r === 'ok') sent += 1;
+      if (r === 'gone') await entities.PushSubscription.delete(s.id).catch(() => {});
+    }),
+    ...apple.map(async (s) => {
+      const r = await sendApns(s, data);
+      if (r.result === 'ok') {
+        sent += 1;
+        if (r.env && r.env !== (s.apns_env || s.extra?.apns_env)) await entities.PushSubscription.update(s.id, { apns_env: r.env }).catch(() => {});
+      }
+      if (r.result === 'gone') await entities.PushSubscription.delete(s.id).catch(() => {});
+    }),
+  ]);
   return sent;
 }
