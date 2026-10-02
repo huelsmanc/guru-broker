@@ -8,6 +8,7 @@ import { isPdfUrl } from '@/components/esign/PDFPageRenderer';
 import { Section, Empty, Pill } from './ui';
 import ScanContractButton from '@/components/transactions/ScanContractButton';
 import SignedDownload, { isSignedLink } from '@/components/esign/SignedDownload';
+import { RequestDocButton } from './WorkspaceClients';
 
 // Every document on the deal: checklist uploads plus "unsorted" files that aren't on a
 // checklist yet (assign them to an item from here).
@@ -22,7 +23,10 @@ export default function WorkspaceDocuments({ tx, user, refresh, canEdit }) {
     queryFn: () => base44.entities.Checklist.filter({ subject_type: 'transaction', subject_id: tx.id }, 'created_date', 50),
   });
   const fromChecklists = lists.flatMap((l) => (l.items || []).filter((i) => i.document_url).map((i) => ({ ...i, checklist: l })));
-  const unsorted = (tx.documents || []).map((d, idx) => ({ ...d, idx }));
+  const allLoose = (tx.documents || []).map((d, idx) => ({ ...d, idx }));
+  const clientUploads = allLoose.filter((d) => d.source === 'client');
+  const unsorted = allLoose.filter((d) => d.source !== 'client');
+  const openRequests = (tx.client_requests || []).filter((r) => r.status === 'open');
 
   const upload = async (files) => {
     if (!files?.length) return;
@@ -73,29 +77,13 @@ export default function WorkspaceDocuments({ tx, user, refresh, canEdit }) {
     refresh();
   };
 
-  return (
-    <div className="max-w-5xl">
-      <Section title="Documents" subtitle={`${fromChecklists.length} on checklists · ${unsorted.length} unsorted`}
-        actions={canEdit && <>
-          <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => upload([...e.target.files])} />
-          <Button variant="outline" className="gap-1.5" onClick={() => setShowScan((s) => !s)}><ScanLine className="w-4 h-4" /> Scan with AI</Button>
-          {unsorted.filter(editable).length > 1 && (
-            <Button variant="outline" className="gap-1.5" title="Open all unsorted files together to combine and split them"
-              onClick={() => setTools({ sources: unsorted.filter(editable).map((d) => ({ url: d.url, name: d.name })), replaceIndex: null })}>
-              <Scissors className="w-4 h-4" /> Combine &amp; split
-            </Button>
-          )}
-          <Button className="gap-1.5" disabled={busy} onClick={() => fileRef.current?.click()}>{busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} Add document</Button>
-        </>}>
-        {showScan && <div className="mb-4 max-w-md"><ScanContractButton scope={{ kind: 'tx', id: tx.id }} label="Scan a contract to check it and pull dates" /></div>}
-
-        <h3 className="text-sm font-semibold text-muted-foreground uppercase mb-2">Unsorted</h3>
-        {unsorted.length === 0 ? <Empty>Nothing unsorted. New uploads land here until you assign them to a checklist item.</Empty> : (
-          <ul className="divide-y rounded-xl border bg-card mb-6">
-            {unsorted.map((d) => (
+  const looseRow = (d) => (
               <li key={d.idx} className="flex flex-wrap items-center gap-3 px-4 py-3">
                 <FileText className="w-4 h-4 text-muted-foreground" />
-                <a href={d.url} target="_blank" rel="noreferrer" className="flex-1 min-w-0 truncate text-sm hover:underline">{d.name}</a>
+                <div className="flex-1 min-w-0">
+                  <a href={d.url} target="_blank" rel="noreferrer" className="block truncate text-sm hover:underline">{d.name}</a>
+                  {d.source === 'client' && <p className="text-xs text-muted-foreground truncate">From {d.uploaded_by}{d.uploaded_at ? ` · ${new Date(d.uploaded_at).toLocaleDateString()}` : ''}{d.request_id ? ` · for “${(tx.client_requests || []).find((r) => r.id === d.request_id)?.title || 'a request'}”` : ''}</p>}
+                </div>
                 {canEdit && editable(d) && (
                   <Button size="sm" variant="outline" className="gap-1 h-8" title="Split, rotate, reorder or delete pages" onClick={() => setTools({ sources: [{ url: d.url, name: d.name }], replaceIndex: d.idx, split: true })}>
                     <Scissors className="w-3.5 h-3.5" /> Pages
@@ -111,7 +99,34 @@ export default function WorkspaceDocuments({ tx, user, refresh, canEdit }) {
                   : <a href={d.url} download><Button size="icon" variant="ghost"><Download className="w-4 h-4" /></Button></a>}
                 {canEdit && <Button size="icon" variant="ghost" onClick={() => remove(d)}><Trash2 className="w-4 h-4" /></Button>}
               </li>
-            ))}
+  );
+
+  return (
+    <div className="max-w-5xl">
+      <Section title="Documents" subtitle={`${fromChecklists.length} on checklists · ${clientUploads.length} from clients · ${unsorted.length} unsorted`}
+        actions={canEdit && <>
+          <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => upload([...e.target.files])} />
+          <Button variant="outline" className="gap-1.5" onClick={() => setShowScan((s) => !s)}><ScanLine className="w-4 h-4" /> Scan with AI</Button>
+          {unsorted.filter(editable).length > 1 && (
+            <Button variant="outline" className="gap-1.5" title="Open all unsorted files together to combine and split them"
+              onClick={() => setTools({ sources: unsorted.filter(editable).map((d) => ({ url: d.url, name: d.name })), replaceIndex: null })}>
+              <Scissors className="w-4 h-4" /> Combine &amp; split
+            </Button>
+          )}
+          <RequestDocButton tx={tx} onDone={refresh} />
+          <Button className="gap-1.5" disabled={busy} onClick={() => fileRef.current?.click()}>{busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} Add document</Button>
+        </>}>
+        {showScan && <div className="mb-4 max-w-md"><ScanContractButton scope={{ kind: 'tx', id: tx.id }} label="Scan a contract to check it and pull dates" /></div>}
+
+        <h3 className="text-sm font-semibold text-muted-foreground uppercase mb-2 flex items-center gap-2">Client uploads{openRequests.length > 0 && <span className="normal-case font-normal text-xs text-amber-700">{openRequests.length} request{openRequests.length === 1 ? '' : 's'} waiting</span>}</h3>
+        {clientUploads.length === 0 ? <Empty>Nothing from clients yet. Use “Request from client” and they can upload from their portal.</Empty> : (
+          <ul className="divide-y rounded-xl border bg-card mb-6">{clientUploads.map((d) => looseRow(d))}</ul>
+        )}
+
+        <h3 className="text-sm font-semibold text-muted-foreground uppercase mb-2 mt-6">Unsorted</h3>
+        {unsorted.length === 0 ? <Empty>Nothing unsorted. New uploads land here until you assign them to a checklist item.</Empty> : (
+          <ul className="divide-y rounded-xl border bg-card mb-6">
+            {unsorted.map((d) => looseRow(d))}
           </ul>
         )}
 

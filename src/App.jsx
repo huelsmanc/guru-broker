@@ -50,6 +50,7 @@ const Login = lazy(() => import('@/pages/Login'));
 const Offers = lazy(() => import('@/pages/Offers'));
 const TransactionWorkspace = lazy(() => import('@/pages/TransactionWorkspace'));
 const ClientStatus = lazy(() => import('@/pages/ClientStatus'));
+const PortalPage = lazy(() => import('@/pages/PortalPage'));
 const ResetPassword = lazy(() => import('@/pages/ResetPassword'));
 const MyCommissions = lazy(() => import('@/pages/MyCommissions'));
 const Payouts = lazy(() => import('@/pages/Payouts'));
@@ -80,7 +81,7 @@ const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin, user, checkAppState, logout } = useAuth();
   const location = useLocation();
 
-  const isPublicRoute = ['/sign', '/verify', '/custom-sign', '/BulkSign', '/review', '/login', '/reset-password', '/status'].includes(location.pathname);
+  const isPublicRoute = ['/sign', '/verify', '/custom-sign', '/BulkSign', '/review', '/login', '/reset-password', '/status', '/portal'].includes(location.pathname);
 
   // Always render public routes immediately - no auth required
   if (isPublicRoute) {
@@ -95,6 +96,7 @@ const AuthenticatedApp = () => {
           <Route path="/login" element={<Login />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/status" element={<ClientStatus />} />
+          <Route path="/portal" element={<PortalPage />} />
         </Routes>
       </Suspense>
     );

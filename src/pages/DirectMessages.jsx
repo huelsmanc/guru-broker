@@ -180,6 +180,8 @@ export function Conversation({ kind, convKey, group, chat, onBack, embedded }) {
   const people = members.filter((e) => e !== chat.me).map((e) => chat.personOf(e));
   const title = kind === 'dm' ? chat.personOf(convKey).name : groupName(group, chat);
   const online = kind === 'dm' ? chat.online.has(convKey) : people.some((p) => chat.online.has(p.email));
+  const clientChat = kind === 'group' && !!group?.client_transaction_id;
+  const clientNames = clientChat ? (group.members || []).filter((m) => m.is_client).map((m) => (m.full_name || m.email).split(' ')[0]) : [];
 
   return (
     <div className="flex-1 min-h-0 flex flex-col relative">
@@ -188,14 +190,15 @@ export function Conversation({ kind, convKey, group, chat, onBack, embedded }) {
         {kind === 'dm' ? <Avatar person={chat.personOf(convKey)} size={38} online={online} /> : <span className="w-[38px] h-[38px] rounded-full bg-gradient-to-br from-violet-200 to-sky-200 dark:from-violet-900 dark:to-sky-900 flex items-center justify-center flex-shrink-0"><Users className="w-5 h-5 text-violet-700 dark:text-violet-200" /></span>}
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-[15px] leading-tight truncate">{title}</p>
-          <p className="text-xs text-muted-foreground truncate">{kind === 'dm' ? (online ? <span className="text-emerald-600">Active now</span> : chat.people.get(convKey)?.role ? 'Offline' : '') : group.transaction_id ? `Deal chat · ${people.map((p) => p.name.split(' ')[0]).join(', ')}` : `${members.length} people${online ? ' · some online' : ''}`}</p>
+          <p className="text-xs text-muted-foreground truncate">{kind === 'dm' ? (online ? <span className="text-emerald-600">Active now</span> : chat.people.get(convKey)?.role ? 'Offline' : '') : clientChat ? `Client chat · ${clientNames.join(', ') || 'no clients yet'}` : group.transaction_id ? `Deal chat · ${people.map((p) => p.name.split(' ')[0]).join(', ')}` : `${members.length} ${members.length === 1 ? 'person' : 'people'}${online ? ' · some online' : ''}`}</p>
         </div>
         <div className="flex items-center flex-shrink-0">
           <CatchUp kind={kind} convKey={convKey} since={lastRead || undefined} />
-          <CallButtons kind={kind} convKey={convKey} className="gap-0" />
+          {!clientChat && <CallButtons kind={kind} convKey={convKey} className="gap-0" />}
         </div>
         {kind === 'group' && group.transaction_id && !embedded && <a href={`/Transactions/${group.transaction_id}`} className="text-xs text-primary hover:underline px-2">Open deal</a>}
-        {kind === 'group' && !group.transaction_id && <button onClick={() => setManage(true)} className="p-2 rounded-lg hover:bg-muted text-muted-foreground" title="Group settings"><Users className="w-4 h-4" /></button>}
+        {clientChat && !embedded && <a href={`/Transactions/${group.client_transaction_id}?tab=clients`} className="text-xs text-primary hover:underline px-2">Open deal</a>}
+        {kind === 'group' && !group.transaction_id && !clientChat && <button onClick={() => setManage(true)} className="p-2 rounded-lg hover:bg-muted text-muted-foreground" title="Group settings"><Users className="w-4 h-4" /></button>}
       </header>
       <MessageList key={`${kind}:${convKey}`} conv={conv} kind={kind} chat={chat} variant="bubble" renderCall={renderCall} seenBy={seenBy} typers={room.typers}
         emptyText={kind === 'dm' ? 'No messages yet. Say hi!' : 'Say hi to the group!'}
@@ -208,7 +211,7 @@ export function Conversation({ kind, convKey, group, chat, onBack, embedded }) {
             <p className="text-[11px] text-muted-foreground/80 mt-3">{kind === 'dm' ? 'Private conversation. Only the two of you can see it.' : 'Only members can see this group.'}</p>
           </div>
         )} />
-      <Composer draftKey={`${kind}:${convKey}`} fileScope={kind === 'dm' ? { kind: 'dm', emails: [chat.me, convKey] } : { kind: 'group', id: convKey }} people={kind === 'group' ? people : []} placeholder="Aa" onSend={(t, extra) => conv.send(t, kind === 'group' ? extra : {})}
+      <Composer noFiles={clientChat} placeholder={clientChat ? 'Message your clients…' : 'Aa'} draftKey={`${kind}:${convKey}`} fileScope={kind === 'dm' ? { kind: 'dm', emails: [chat.me, convKey] } : { kind: 'group', id: convKey }} people={kind === 'group' && !clientChat ? people : []} onSend={(t, extra) => conv.send(t, kind === 'group' ? extra : {})}
         onTyping={room.typing} onStopTyping={room.stopTyping} />
       {manage && group && <GroupSettings group={group} chat={chat} onClose={() => setManage(false)} onLeft={onBack} />}
     </div>

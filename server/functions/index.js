@@ -20,6 +20,7 @@ export const FUNCTIONS = {
   chatDigest: () => import('./chatDigest.js'),
   chatNotify: () => import('./chatNotify.js'),
   checklistAction: () => import('./checklistAction.js'),
+  clientPortal: () => import('./clientPortal.js'),
   closingDateReminder: () => import('./closingDateReminder.js'),
   commissionFinalize: () => import('./commissionFinalize.js'),
   commissionPreview: () => import('./commissionPreview.js'),

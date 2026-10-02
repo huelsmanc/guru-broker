@@ -30,9 +30,10 @@ export default async (req) => {
     }
 
     const check = (r) => { if (r?.error) throw new Error(r.error.message); };
-    // Deal chat and its messages.
+    // Deal chat, client chat and their messages.
     const { data: chats = [] } = await db.from('group_chat').select('id').eq('transaction_id', tx.id);
-    const chatIds = (chats || []).map((c) => c.id);
+    const { data: clientChats = [] } = await db.from('group_chat').select('id').eq('extra->>client_transaction_id', tx.id);
+    const chatIds = [...(chats || []), ...(clientChats || [])].map((c) => c.id);
     if (chatIds.length) {
       check(await db.from('group_message').delete().in('group_id', chatIds));
       check(await db.from('group_chat').delete().in('id', chatIds));

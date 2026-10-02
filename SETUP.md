@@ -171,3 +171,13 @@ Nothing to set in Vercel. Each brokerage connects its own Shopify store from **G
 
 The token is kept server-side (app_secret table, `shopify:<brokerage id>`). Agents check out on
 Shopify's own checkout page; orders carry the agent's name and email as order notes/attributes.
+
+## Client portal
+
+Nothing to set up. On a deal, open **Client portal**, then **Invite** each buyer/seller (they must be
+added as a client with an email under Users & contacts). Clients open their link, confirm with a
+6-digit code sent to their email (once per device, 30 days), and can message the deal team in the
+deal's **client chat** (separate from the team's deal chat), see key dates and progress, and upload
+documents you request. Uploads land in the deal's Documents under **Client uploads**.
+The session signing key is created automatically (app_secret `client_portal`); set
+CLIENT_PORTAL_SECRET in Vercel to override.

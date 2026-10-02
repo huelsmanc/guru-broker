@@ -11,7 +11,7 @@ import WorkspaceChat from '@/components/workspace/WorkspaceChat';
 import WorkspaceContacts from '@/components/workspace/WorkspaceContacts';
 import WorkspaceFinances from '@/components/workspace/WorkspaceFinances';
 import WorkspaceActivity from '@/components/workspace/WorkspaceActivity';
-import WorkspaceShared from '@/components/workspace/WorkspaceShared';
+import WorkspaceClients from '@/components/workspace/WorkspaceClients';
 import { useLiveTable } from '@/hooks/useLiveTable';
 import DealCopilot from '@/components/workspace/DealCopilot';
 
@@ -26,7 +26,7 @@ export default function TransactionWorkspace() {
   const [params, setParams] = useSearchParams();
   const { user } = useOutletContext();
   const queryClient = useQueryClient();
-  const tab = params.get('tab') || 'overview';
+  const tab = (params.get('tab') === 'shared' ? 'clients' : params.get('tab')) || 'overview';
   const [copilotOpen, setCopilotOpen] = useState(false);
 
   const { data: tx, isLoading, error } = useQuery({
@@ -56,7 +56,7 @@ export default function TransactionWorkspace() {
     ['chat', 'Deal chat', MessagesSquare],
     ['contacts', 'Users & contacts', Users],
     ...(admin || can(user, 'tx.view_commissions') || isOwner ? [['finances', 'Finances', DollarSign]] : []),
-    ['shared', 'Shared', Share2],
+    ['clients', 'Client portal', Share2],
     ...(admin || can(user, 'activity.transaction') ? [['activity', 'Activity', Activity]] : []),
   ];
 
@@ -87,7 +87,7 @@ export default function TransactionWorkspace() {
         {tab === 'chat' && <WorkspaceChat {...ctx} />}
         {tab === 'contacts' && <WorkspaceContacts {...ctx} />}
         {tab === 'finances' && <WorkspaceFinances {...ctx} />}
-        {tab === 'shared' && <WorkspaceShared {...ctx} />}
+        {tab === 'clients' && <WorkspaceClients {...ctx} />}
         {tab === 'activity' && <WorkspaceActivity {...ctx} />}
       </main>
       <DealCopilot {...ctx} open={copilotOpen} onOpenChange={setCopilotOpen} />

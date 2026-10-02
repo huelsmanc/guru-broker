@@ -11,7 +11,7 @@ const MAX_FILE = 25 * 1024 * 1024;
  * onSend(text, { mentions }) for text; files and voice memos are sent as their own messages.
  * people: [{ email, name, photo }] who can be @mentioned. allowChannel adds @channel.
  */
-export default function Composer({ onSend, people = [], allowChannel, placeholder, disabled, onTyping, onStopTyping, onEditLast, draftKey, fileScope }) {
+export default function Composer({ onSend, people = [], allowChannel, placeholder, disabled, onTyping, onStopTyping, onEditLast, draftKey, fileScope, noFiles }) {
   const [text, setText] = useState(() => { try { return sessionStorage.getItem(`draft:${draftKey}`) || ''; } catch { return ''; } });
   const [picked, setPicked] = useState([]);
   const [query, setQuery] = useState(null);
@@ -85,7 +85,7 @@ export default function Composer({ onSend, people = [], allowChannel, placeholde
   };
   const paste = (e) => {
     const files = [...(e.clipboardData?.files || [])];
-    if (files.length) { e.preventDefault(); sendFiles(files); }
+    if (files.length && !noFiles) { e.preventDefault(); sendFiles(files); }
   };
 
   const startRec = async () => {
@@ -114,7 +114,7 @@ export default function Composer({ onSend, people = [], allowChannel, placeholde
     <div className={cn('relative border-t bg-background px-2 sm:px-4 pt-2 sm:pt-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:pb-3', dragging && 'ring-2 ring-primary ring-inset')}
       onDragOver={(e) => { if (e.dataTransfer?.types?.includes('Files')) { e.preventDefault(); setDragging(true); } }}
       onDragLeave={() => setDragging(false)}
-      onDrop={(e) => { e.preventDefault(); setDragging(false); if (e.dataTransfer.files?.length) sendFiles(e.dataTransfer.files); }}>
+      onDrop={(e) => { e.preventDefault(); setDragging(false); if (!noFiles && e.dataTransfer.files?.length) sendFiles(e.dataTransfer.files); }}>
       {uploads.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-2">
           {uploads.map((u) => (
@@ -146,12 +146,14 @@ export default function Composer({ onSend, people = [], allowChannel, placeholde
       ) : (
         <div className="flex items-end gap-1 rounded-3xl border bg-muted/40 focus-within:border-primary/50 focus-within:bg-background px-2 py-1.5">
           <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => { sendFiles(e.target.files); e.target.value = ''; }} />
-          <button type="button" className="p-2 rounded-full hover:bg-muted text-muted-foreground" title="Attach files" disabled={disabled} onClick={() => fileRef.current?.click()}><Paperclip className="w-4 h-4" /></button>
+          {!noFiles && <button type="button" className="p-2 rounded-full hover:bg-muted text-muted-foreground" title="Attach files" disabled={disabled} onClick={() => fileRef.current?.click()}><Paperclip className="w-4 h-4" /></button>}
           <textarea ref={ta} rows={1} value={text} onChange={change} onKeyDown={key} onPaste={paste} onBlur={() => onStopTyping?.()} disabled={disabled}
             placeholder={placeholder} className="flex-1 min-w-0 resize-none bg-transparent px-1 py-1.5 text-base sm:text-sm outline-none max-h-[180px] placeholder:text-muted-foreground/70" />
           <button type="button" className="p-2 rounded-full hover:bg-muted text-muted-foreground" title="Emoji" onClick={() => setEmoji((x) => !x)}><Smile className="w-4 h-4" /></button>
           {text.trim() ? (
             <button type="button" onClick={submit} onPointerDown={(e) => e.preventDefault()} onMouseDown={(e) => e.preventDefault()} disabled={disabled} className="p-2 rounded-full bg-primary text-primary-foreground hover:bg-primary/90" title="Send (Enter)"><Send className="w-4 h-4" /></button>
+          ) : noFiles ? (
+            <button type="button" disabled className="p-2 rounded-full bg-primary/40 text-primary-foreground" title="Send"><Send className="w-4 h-4" /></button>
           ) : (
             <button type="button" onClick={startRec} disabled={disabled} className="p-2 rounded-full hover:bg-muted text-muted-foreground" title="Record a voice message"><Mic className="w-4 h-4" /></button>
           )}
