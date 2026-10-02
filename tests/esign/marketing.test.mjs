@@ -14,6 +14,7 @@ globalThis.fetch = async (url, init) => {
       headline: prev ? 'Shorter headline' : 'Welcome to 12 Elm', body: 'Bright and updated.', bullets: ['a', 'b', 'c', 'd', 'e', 'f', 'g'], cta: 'Book a tour',
       social_caption: 'New!', hashtags: ['#realestate', 'justlisted'], email_subject: 'Just listed' } }] }));
   }
+  if (url.includes('api.openai.com/v1/images') && globalThis.__imgFail > 0) { globalThis.__imgFail -= 1; return new Response(JSON.stringify({ error: { message: globalThis.__imgMsg || 'The server had an error while processing your request.' } }), { status: globalThis.__imgStatus || 500 }); }
   if (url.includes('api.openai.com/v1/images')) return new Response(JSON.stringify({ data: [{ b64_json: png.toString('base64') }] }));
   if (url.startsWith('https://photos.mls/')) return new Response(png, { headers: { 'content-type': url.endsWith('bad') ? 'text/html' : 'image/png' } });
   throw new Error('unexpected ' + url);
@@ -46,4 +47,18 @@ assert.equal(r.status, 200, JSON.stringify(r.body));
 const img = calls.find((c) => c.url.includes('/v1/images')).body;
 assert.equal(img.size, '1536x1024'); assert.match(img.prompt, /No text/);
 assert.match(r.body.url, /^http/);
+assert.equal(img.quality, 'medium');
+// A hiccup at the image service: tried again (faster), and it works.
+globalThis.__imgFail = 1;
+r = await call('marketingImage', { prompt: 'coastal living room at sunset' });
+assert.equal(r.status, 200, JSON.stringify(r.body));
+assert.equal(calls.filter((c) => c.url.includes('/v1/images')).at(-1).body.quality, 'low');
+// Two failures: a clear message.
+globalThis.__imgFail = 2;
+r = await call('marketingImage', { prompt: 'coastal living room at sunset' });
+assert.equal(r.status, 502); assert.match(r.body.error, /hiccup/);
+// Refused for safety: says how to fix it, no retry.
+globalThis.__imgFail = 1; globalThis.__imgStatus = 400; globalThis.__imgMsg = 'Your request was rejected by the safety system.';
+r = await call('marketingImage', { prompt: 'a famous celebrity at the house' });
+assert.equal(r.status, 400); assert.match(r.body.error, /describing the scene differently/);
 console.log('Marketing: all checks passed');
