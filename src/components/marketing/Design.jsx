@@ -8,17 +8,36 @@ function Fit({ style, children }) {
   const { padding, gap, alignItems, textAlign, ...outer } = style;
   const box = useRef(null); const inner = useRef(null);
   const [k, setK] = useState(1);
+  const kRef = useRef(1); kRef.current = k;
   useLayoutEffect(() => {
+    // Find the scale by measuring right here (a few tries, settling on one that fits), then
+    // update only when it really changes. Shrinking makes lines wrap differently, so going
+    // back and forth through React re-renders could flip forever (React error #185).
     const fit = () => {
-      if (!box.current || !inner.current) return;
-      const avail = box.current.clientHeight - (parseFloat(getComputedStyle(box.current).paddingTop) + parseFloat(getComputedStyle(box.current).paddingBottom));
-      const need = inner.current.scrollHeight;
-      setK(need > avail && avail > 0 ? Math.max(0.55, avail / need) : 1);
+      const b = box.current, el = inner.current;
+      if (!b || !el) return;
+      const cs = getComputedStyle(b);
+      const avail = b.clientHeight - (parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom));
+      if (!(avail > 0)) return;
+      const apply = (x) => { el.style.width = `${100 / x}%`; };
+      let x = 1; let best = 1;
+      for (let i = 0; i < 8; i += 1) {
+        apply(x);
+        const need = el.scrollHeight; // laid out at this width; shown at x times its height
+        if (need * x <= avail + 1) { best = x; break; }
+        x = Math.max(0.55, Math.min(x - 0.02, avail / need));
+        best = x;
+        if (x === 0.55) break;
+      }
+      apply(kRef.current);
+      if (Math.abs(best - kRef.current) > 0.01) setK(best);
     };
     fit();
-    document.fonts?.ready?.then(fit);
+    let alive = true;
+    document.fonts?.ready?.then(() => { if (alive) fit(); });
     const imgs = [...(box.current?.querySelectorAll('img') || [])];
     imgs.forEach((i) => { if (!i.complete) i.addEventListener('load', fit, { once: true }); });
+    return () => { alive = false; imgs.forEach((i) => i.removeEventListener('load', fit)); };
   });
   return (
     <div ref={box} style={{ ...outer, padding, minHeight: 0, overflow: 'hidden' }}>
