@@ -14,6 +14,8 @@ export default async (req) => {
     const { event } = await req.json();
     if (event?.type !== 'create' || !event.data?.brokerage_id) return Response.json({ success: true });
     const training = event.data;
+    // The admin unticked "Let agents know" when publishing.
+    if (training.notify_agents === false) return Response.json({ success: true, notifiedAgents: 0 });
     const E = base44.asServiceRole.entities;
     const people = (await E.User.filter({ brokerage_id: training.brokerage_id }, '-created_date', 2000))
       .filter((u) => !u.suspended && u.role !== 'super_admin' && LEARNERS.has(normalizeRole(u.role)));
@@ -22,6 +24,7 @@ export default async (req) => {
       title: 'New training to complete',
       message: `"${training.title || 'New training'}" was added. Open Compliance Training to complete it.`,
       link: '/ComplianceTraining', referenceId: training.id, referenceType: 'Training',
+      email: false, // an alert in the app (and on their phone), no email
     });
     return Response.json({ success: true, notifiedAgents: sent });
   } catch (error) {

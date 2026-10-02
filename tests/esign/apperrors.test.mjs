@@ -95,10 +95,15 @@ r = await call('platformUsers', ROOT, { action: 'list' });
 assert.equal(r.body.users.length, 7); assert.equal(r.body.users.find((u) => u.id === 'u1').last_sign_in_at, '2026-09-30T10:00:00Z');
 assert.equal(r.body.brokerages[0].name, 'Acme');
 
-// A new training reaches agents (old and new role names), team leaders and TCs in that brokerage only.
+// A new training reaches agents (old and new role names), team leaders and TCs in that brokerage only,
+// as an in-app alert (no email); nobody is told when the admin unticks "Let agents know".
+r = await svc('notifyAgentsNewTraining', { event: { type: 'create', data: { id: 't0', title: 'Quiet one', brokerage_id: 'B1', notify_agents: false } } });
+assert.equal(r.body.notifiedAgents, 0); assert.equal((__db.notification || []).length, 0);
+const emailsBefore = emails.length;
 r = await svc('notifyAgentsNewTraining', { event: { type: 'create', data: { id: 't1', title: 'Fair housing 2026', brokerage_id: 'B1' } } });
 assert.equal(r.body.notifiedAgents, 3, JSON.stringify(r.body));
 const told = __db.notification.map((n) => n.user_email).sort();
 assert.deepEqual(told, ['ann@x.com', 'new@x.com', 'tl@x.com']);
 assert.match(__db.notification[0].description, /Fair housing 2026/);
+assert.equal(emails.length, emailsBefore, 'no training emails');
 console.log('error alerts and platform tools: all checks passed');

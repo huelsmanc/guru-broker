@@ -219,7 +219,7 @@ export default async (req) => {
           saved = await E.ComplianceTraining.update(t.id, fields);
           for (const q of await questionsOf(t.id)) await E.ComplianceQuestion.delete(q.id);
         } else {
-          saved = await E.ComplianceTraining.create({ ...fields, brokerage_id: me.brokerage_id });
+          saved = await E.ComplianceTraining.create({ ...fields, brokerage_id: me.brokerage_id, notify_agents: body.notify !== false });
         }
         for (let i = 0; i < questions.length; i += 1) {
           const q = questions[i];

@@ -24,11 +24,12 @@ export default function TrainingEditor({ open, onClose, trainingId }) {
   const [t, setT] = useState(null);
   const [qs, setQs] = useState([]);
   const [busy, setBusy] = useState('');
+  const [notify, setNotify] = useState(true);
 
   useEffect(() => {
     if (!open) return;
     setBusy('');
-    if (!trainingId) { setStep('choose'); setT(null); setQs([]); return; }
+    if (!trainingId) { setStep('choose'); setT(null); setQs([]); setNotify(true); return; }
     setStep('edit'); setBusy('loading');
     base44.functions.invoke('training', { action: 'get', training_id: trainingId })
       .then(({ data }) => { setT({ ...data.training, lessons: data.training.lessons || [] }); setQs(data.questions.length ? data.questions : [blankQ()]); })
@@ -54,7 +55,7 @@ export default function TrainingEditor({ open, onClose, trainingId }) {
     setBusy('save');
     try {
       const questions = qs.filter((q) => q.question_text.trim()).map((q) => ({ ...q, options: q.options.filter((o) => o.text.trim()) }));
-      await base44.functions.invoke('training', { action: 'save', training: t, questions });
+      await base44.functions.invoke('training', { action: 'save', training: t, questions, notify });
       queryClient.invalidateQueries({ queryKey: ['compliance-trainings'] });
       onClose();
     } catch (e) { window.alert(e.message); } finally { setBusy(''); }
@@ -195,8 +196,13 @@ export default function TrainingEditor({ open, onClose, trainingId }) {
               <Button variant="outline" size="sm" className="mt-2 gap-1" onClick={() => setQs((x) => [...x, blankQ()])}><Plus className="w-4 h-4" /> Add question</Button>
             </section>
 
-            <div className="flex justify-between gap-2 sticky bottom-0 bg-background pt-3 pb-1 border-t">
+            <div className="flex flex-wrap items-center justify-between gap-2 sticky bottom-0 bg-background pt-3 pb-1 border-t">
               <Button variant="outline" onClick={onClose} disabled={!!busy}>Cancel</Button>
+              {!trainingId && (
+                <label className="flex items-center gap-2 text-sm ml-auto">
+                  <input type="checkbox" className="w-4 h-4" checked={notify} onChange={(e) => setNotify(e.target.checked)} /> Let agents know
+                </label>
+              )}
               <Button onClick={save} disabled={!!busy} className="gap-2">{busy === 'save' ? <Loader2 className="w-4 h-4 animate-spin" /> : <PenLine className="w-4 h-4" />} {trainingId ? 'Save changes' : 'Save and publish'}</Button>
             </div>
           </div>
