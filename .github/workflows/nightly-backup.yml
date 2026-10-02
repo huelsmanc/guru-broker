@@ -1,0 +1,95 @@
+# Nightly off-site backup to Cloudflare R2 (see the Backup & Recovery Plan doc).
+#   1. Database: roles, schema and data (Supabase CLI), packed and encrypted with BACKUP_PASSPHRASE.
+#   2. Uploaded files: every Supabase Storage bucket copied, encrypted, into the same R2 bucket.
+#      Copy only adds and updates, never deletes, so a file deleted by mistake is still in the backup.
+# Settings live in GitHub → Settings → Secrets and variables → Actions (never in this file).
+# Scheduled runs only start from the repository's default branch.
+name: Nightly backup
+
+on:
+  schedule:
+    - cron: '17 7 * * *' # about 3:17 a.m. Eastern
+  workflow_dispatch: {}
+
+concurrency:
+  group: nightly-backup
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
+      SB_S3_KEY: ${{ secrets.SUPABASE_S3_ACCESS_KEY_ID }}
+      SB_S3_SECRET: ${{ secrets.SUPABASE_S3_SECRET_ACCESS_KEY }}
+      SB_S3_ENDPOINT: ${{ secrets.SUPABASE_S3_ENDPOINT }}
+      SB_S3_REGION: ${{ secrets.SUPABASE_S3_REGION }}
+      APP_URL: https://gurubroker.app
+    steps:
+      - name: Check settings
+        run: |
+          missing=""
+          for v in SUPABASE_DB_URL BACKUP_PASSPHRASE R2_ACCOUNT_ID R2_BUCKET AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY SB_S3_KEY SB_S3_SECRET SB_S3_ENDPOINT SB_S3_REGION; do
+            [ -n "${!v}" ] || missing="$missing $v"
+          done
+          if [ -n "$missing" ]; then echo "::error::Missing GitHub secrets for:$missing"; exit 1; fi
+          if [ ${#BACKUP_PASSPHRASE} -lt 20 ]; then echo "::error::BACKUP_PASSPHRASE should be at least 20 characters"; exit 1; fi
+          echo "R2_ENDPOINT=https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" >> "$GITHUB_ENV"
+          echo "STAMP=$(date -u +%Y-%m-%d)" >> "$GITHUB_ENV"
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Back up the database
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          supabase db dump --db-url "$SUPABASE_DB_URL" -f out/roles.sql --role-only
+          supabase db dump --db-url "$SUPABASE_DB_URL" -f out/schema.sql
+          supabase db dump --db-url "$SUPABASE_DB_URL" -f out/data.sql --data-only --use-copy
+          test -s out/schema.sql && test -s out/data.sql
+          grep -q 'CREATE TABLE' out/schema.sql
+          tar -czf - -C out . | openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass env:BACKUP_PASSPHRASE -out "db-$STAMP.tar.gz.enc"
+          rm -rf out
+          aws s3 cp "db-$STAMP.tar.gz.enc" "s3://$R2_BUCKET/database/db-$STAMP.tar.gz.enc" --endpoint-url "$R2_ENDPOINT" --only-show-errors
+          echo "Database backup: database/db-$STAMP.tar.gz.enc ($(du -h "db-$STAMP.tar.gz.enc" | cut -f1))" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Install rclone
+        run: curl -fsSL https://rclone.org/install.sh | sudo bash
+
+      - name: Back up uploaded files
+        run: |
+          set -euo pipefail
+          # Supabase Storage (source), R2 (destination) and an encrypting layer over R2's files/ folder.
+          export RCLONE_CONFIG_SB_TYPE=s3 RCLONE_CONFIG_SB_PROVIDER=Other
+          export RCLONE_CONFIG_SB_ACCESS_KEY_ID="$SB_S3_KEY" RCLONE_CONFIG_SB_SECRET_ACCESS_KEY="$SB_S3_SECRET"
+          export RCLONE_CONFIG_SB_ENDPOINT="$SB_S3_ENDPOINT" RCLONE_CONFIG_SB_REGION="$SB_S3_REGION"
+          export RCLONE_CONFIG_R2_TYPE=s3 RCLONE_CONFIG_R2_PROVIDER=Cloudflare RCLONE_CONFIG_R2_ENDPOINT="$R2_ENDPOINT"
+          export RCLONE_CONFIG_R2_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" RCLONE_CONFIG_R2_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY"
+          export RCLONE_CONFIG_R2_NO_CHECK_BUCKET=true
+          export RCLONE_CONFIG_R2C_TYPE=crypt RCLONE_CONFIG_R2C_REMOTE="r2:$R2_BUCKET/files"
+          RCLONE_CONFIG_R2C_PASSWORD="$(rclone obscure "$BACKUP_PASSPHRASE")"; export RCLONE_CONFIG_R2C_PASSWORD
+          buckets=$(rclone lsf sb: --dirs-only | tr -d '/')
+          [ -n "$buckets" ] || { echo "::error::No storage buckets found; check the Supabase S3 settings"; exit 1; }
+          for b in $buckets; do
+            echo "Copying bucket $b"
+            rclone copy "sb:$b" "r2c:$b" --transfers 8 --checkers 16 --stats-one-line --stats 60s
+          done
+          echo "Files: buckets $(echo $buckets | tr ' ' ',') copied to files/ (encrypted)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Tell the app if the backup failed
+        if: failure()
+        run: |
+          curl -s -X POST "$APP_URL/api/fn/reportError" -H 'content-type: application/json' \
+            -d "{\"message\":\"Nightly backup failed on $STAMP. Open GitHub → Actions → Nightly backup for details.\",\"url\":\"$APP_URL/backup\"}" || true
