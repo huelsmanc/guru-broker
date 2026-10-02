@@ -33,6 +33,8 @@ export default function WorkspaceChecklists({ tx, user, subjectType = 'transacti
   const active = lists.find((l) => l.id === activeId) || lists[0];
   const [selectedItem, setSelectedItem] = useState(params.get('item'));
   const item = active?.items?.find((i) => i.id === selectedItem) || null;
+  // Phones and tablets: the item's panel opens right under the item (beside the list on wide screens).
+  const wide = useWide();
   const admin = isAdminRole(user?.role);
   const approver = admin || can(user, 'docs.approve');
   const manage = admin || can(user, 'tx.checklist_manage') || String(tx?.tc_email || '').toLowerCase() === user?.email?.toLowerCase();
@@ -43,6 +45,7 @@ export default function WorkspaceChecklists({ tx, user, subjectType = 'transacti
   const run = async (body) => {
     try { await act({ checklist_id: active.id, ...body }); refresh(); } catch (err) { window.alert(err.message); }
   };
+  const panel = item ? <ItemPanel key={item.id} checklistId={active.id} fileScope={fileScope} item={item} tx={tx} user={user} approver={approver} admin={admin} manage={manage} run={run} /> : null;
 
   return (
     <div className="max-w-6xl">
@@ -66,7 +69,7 @@ export default function WorkspaceChecklists({ tx, user, subjectType = 'transacti
                 const done = ['approved', 'exempt', 'done'].includes(it.status);
                 return (
                   <li key={it.id}>
-                    <button onClick={() => setSelectedItem(it.id)} className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/50 ${selectedItem === it.id ? 'bg-emerald-50 dark:bg-emerald-950/30' : ''}`}>
+                    <button onClick={() => setSelectedItem(!wide && selectedItem === it.id ? null : it.id)} aria-expanded={selectedItem === it.id} className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/50 ${selectedItem === it.id ? 'bg-emerald-50 dark:bg-emerald-950/30' : ''}`}>
                       {it.requires_document ? <FileText className={`w-4 h-4 flex-shrink-0 ${done ? 'text-green-600' : 'text-muted-foreground'}`} />
                         : done ? <CheckSquare className="w-4 h-4 text-green-600 flex-shrink-0" /> : <Square className="w-4 h-4 text-muted-foreground flex-shrink-0" />}
                       <span className={`flex-1 text-sm ${done ? 'text-muted-foreground' : ''}`}>{it.title}{it.required === false ? <span className="text-xs text-muted-foreground"> (optional)</span> : ''}</span>
@@ -75,16 +78,17 @@ export default function WorkspaceChecklists({ tx, user, subjectType = 'transacti
                         ? <span className="text-xs text-emerald-700 flex items-center gap-1"><Library className="w-3 h-3" /> Use form</span>
                         : <span className="text-xs text-emerald-700 flex items-center gap-1"><Upload className="w-3 h-3" /> Upload</span>) : null}
                     </button>
+                    {!wide && selectedItem === it.id && <div className="px-3 pb-3 bg-emerald-50/50 dark:bg-emerald-950/20">{panel}</div>}
                   </li>
                 );
               })}
               {manage && <AddItem onAdd={(b) => run({ action: 'add_item', ...b })} />}
             </ol>
-            <div className="lg:col-span-2">
-              {item ? (
-                <ItemPanel key={item.id} checklistId={active.id} fileScope={fileScope} item={item} tx={tx} user={user} approver={approver} admin={admin} manage={manage} run={run} />
-              ) : <Empty>Select an item to upload, submit, approve or comment.</Empty>}
-            </div>
+            {wide && (
+              <div className="lg:col-span-2">
+                {panel || <Empty>Select an item to upload, submit, approve or comment.</Empty>}
+              </div>
+            )}
           </div>
         )}
       </Section>
@@ -92,6 +96,18 @@ export default function WorkspaceChecklists({ tx, user, subjectType = 'transacti
         onClose={() => setAdding(false)} onAdded={(id) => { setAdding(false); refresh(); if (id) setParams((p) => { p.set('checklist', id); return p; }); }} />}
     </div>
   );
+}
+
+function useWide() {
+  const q = '(min-width: 1024px)';
+  const [wide, setWide] = useState(() => typeof window !== 'undefined' && window.matchMedia(q).matches);
+  useEffect(() => {
+    const m = window.matchMedia(q);
+    const on = () => setWide(m.matches);
+    m.addEventListener?.('change', on);
+    return () => m.removeEventListener?.('change', on);
+  }, []);
+  return wide;
 }
 
 function AddItem({ onAdd }) {
@@ -137,12 +153,13 @@ function ItemPanel({ checklistId, fileScope, item, tx, user, approver, admin, ma
         <div className="mt-2"><Pill status={item.status} /></div>
       </div>
       <div className="flex flex-wrap gap-2">
-        <input ref={fileRef} type="file" className="hidden" onChange={(e) => upload(e.target.files?.[0])} />
         {item.requires_document && (
           <>
-            <Button size="sm" variant="outline" className="gap-1.5" disabled={!!busy} onClick={() => fileRef.current?.click()}>
+            {/* A label wrapping the file picker opens it reliably on iPhone (no scripted click). */}
+            <label className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-md border bg-background text-sm font-medium cursor-pointer hover:bg-muted ${busy ? 'opacity-50 pointer-events-none' : ''}`}>
               {busy === 'upload' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />} Upload
-            </Button>
+              <input ref={fileRef} type="file" className="sr-only" onChange={(e) => upload(e.target.files?.[0])} />
+            </label>
             <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setPicking(true)}><Library className="w-3.5 h-3.5" /> Use forms</Button>
             {item.document_url && <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setSigning(item.document_url)}><PenTool className="w-3.5 h-3.5" /> eSign</Button>}
             {item.document_url && (isSignedLink(item.document_url)
