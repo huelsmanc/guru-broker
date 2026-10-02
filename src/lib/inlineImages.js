@@ -16,8 +16,14 @@ async function asDataUrl(src) {
     const { data } = await supabase.auth.getSession();
     if (data.session?.access_token) headers.Authorization = `Bearer ${data.session.access_token}`;
   }
-  const res = await fetch(url.href, { headers, credentials: sameSite ? 'include' : 'omit', mode: 'cors' });
-  if (!res.ok) throw new Error(`image ${res.status}`);
+  let res = await fetch(url.href, { headers, credentials: sameSite ? 'include' : 'omit', mode: 'cors' }).catch(() => null);
+  // Another site that doesn't allow reading its pictures (most MLS photo hosts): fetch a copy
+  // through our server instead, so the photo still makes it into the file.
+  if ((!res || !res.ok) && !sameSite && /^https?:$/.test(url.protocol)) {
+    const { data } = await supabase.auth.getSession();
+    res = await fetch(`/api/fn/imageProxy?u=${encodeURIComponent(url.href)}`, { headers: data.session?.access_token ? { Authorization: `Bearer ${data.session.access_token}` } : {} }).catch(() => null);
+  }
+  if (!res || !res.ok) throw new Error(`image ${res?.status || 'blocked'}`);
   const blob = await res.blob();
   const out = await new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(r.result); r.onerror = reject; r.readAsDataURL(blob); });
   cache.set(src, out);

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Loader2, Mail, Printer, CreditCard, Package, Upload, Users, Check, X, AlertTriangle, ExternalLink, Trash2, ShieldCheck, ArrowLeft, Settings as SettingsIcon, ListChecks, Truck } from 'lucide-react';
+import { Loader2, Mail, Printer, CreditCard, Package, Upload, Users, Check, X, AlertTriangle, ExternalLink, Trash2, ShieldCheck, ArrowLeft, Settings as SettingsIcon, ListChecks, Truck, Pencil, Wand2, RotateCcw } from 'lucide-react';
 import { format as fmtDate } from 'date-fns';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { isAdminRole } from '../../shared/permissions.generated.js';
 import Design from '@/components/marketing/Design';
-import { PostcardBack, BusinessCard, CARD_STYLES, UploadedArt } from '@/components/print/PrintPieces';
+import { PostcardBack, UploadedArt } from '@/components/print/PrintPieces';
+import EditorPage, { EditorThumb } from '@/components/print/EditorPage';
+import PrintEditor from '@/components/print/PrintEditor';
+import { newDoc, resizeDoc, sameShape, emptySpots, refreshBrand } from '@/lib/editorDoc';
 import { openPdf, pageImage } from '@/lib/pdfText';
 import { useBrand } from '@/pages/Marketing';
 import { drawTrim, addBleed, toBlob, makePdf, uploadPrintFile } from '@/lib/printFiles';
@@ -75,24 +78,28 @@ export default function PrintShop() {
         : view === 'lists' ? <MailingLists user={user} brokerageId={brokerageId} catalog={catalog} />
           : view === 'orders' ? <Orders user={user} brokerageId={brokerageId} catalog={catalog} />
             : view === 'settings' && catalog.is_owner ? <PrintSettings catalog={catalog} onSaved={refetch} />
-              : <OrderFlow user={user} brokerageId={brokerageId} catalog={catalog} preselect={params.get('design')} preselectProduct={params.get('product')} onPlaced={(o, test) => { setBanner({ tone: 'ok', text: test ? 'Test order placed. Nothing was charged, printed or mailed.' : 'Order placed.' }); go('orders'); }} />}
+              : <OrderFlow user={user} brokerageId={brokerageId} catalog={catalog} preselect={params.get('design')} preselectProduct={params.get('product')} openEditor={params.get('edit') === '1'} onPlaced={(o, test) => { setBanner({ tone: 'ok', text: test ? 'Test order placed. Nothing was charged, printed or mailed.' : 'Order placed.' }); go('orders'); }} />}
     </div>
   );
 }
 
 // ---------------------------------------------------------------- ordering
-function OrderFlow({ user, brokerageId, catalog, preselect, preselectProduct, onPlaced }) {
+function OrderFlow({ user, brokerageId, catalog, preselect, preselectProduct, openEditor, onPlaced }) {
+  const queryClient = useQueryClient();
   const { agent: baseAgent, brand } = useBrand(user, brokerageId);
   const [product, setProduct] = useState(null);
   const [designId, setDesignId] = useState(preselect || null);
-  const [source, setSource] = useState('design'); // 'design' (made here) or 'upload' (their own artwork)
+  // 'editor' (designed here, drag and drop), 'design' (an AI design as is) or 'upload' (their own artwork)
+  const [source, setSource] = useState('editor');
+  const [doc, setDoc] = useState(null);
+  const [docTitle, setDocTitle] = useState('');
+  const [docDesignId, setDocDesignId] = useState(null);
+  const [editorOpen, setEditorOpen] = useState(false);
   const [upFront, setUpFront] = useState(null);
   const [upBack, setUpBack] = useState(null);
   const [backMode, setBackMode] = useState('ours'); // postcards: our back with their message, or their own art
   const [backHeadline, setBackHeadline] = useState('');
   const [backMessage, setBackMessage] = useState('');
-  const [cardStyle, setCardStyle] = useState('classic');
-  const [extra, setExtra] = useState({});
   const [recips, setRecips] = useState({ recipients: [], list_id: null, label: '' });
   const [returnAddr, setReturnAddr] = useState(true);
   const [quantity, setQuantity] = useState(null);
@@ -108,9 +115,53 @@ function OrderFlow({ user, brokerageId, catalog, preselect, preselectProduct, on
   });
   const design = designs.find((d) => d.id === designId) || null;
   const p = product ? PRODUCTS[product] : null;
-  const agent = { ...baseAgent, ...extra };
+  const agent = baseAgent;
   const color = design?.data?.content?.palette?.primary || brand.color || '#0f172a';
-  useEffect(() => { if (preselect && designs.length && !product) setProduct(PRODUCTS[preselectProduct] ? preselectProduct : 'postcard_4x6'); }, [preselect, designs.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ---- editor designs
+  const loadSaved = (d) => {
+    setDoc(refreshBrand(resizeDoc(d.data.editor, product || d.data.editor.product), { agent, brand }));
+    setDocDesignId(d.id); setDocTitle(d.title || ''); setSource('editor');
+  };
+  /** A fresh editor design, filled from an AI design / kit piece (or just the agent's info). */
+  const startFrom = (d) => {
+    const data = d ? { listing: d.data?.listing, photos: d.data?.photos, content: d.data?.content, kind: d.kind, bgImage: d.data?.bgImage } : { kind: 'agent_intro' };
+    setDoc(newDoc(product, { ...data, agent, brand }, !d && PRODUCTS[product].mailed ? { front: 'agent_intro' } : {}));
+    setDocDesignId(null); setDocTitle(d?.title || `${p.short} design`); setSource('editor'); setEditorOpen(true);
+  };
+  const saveDoc = async (d, title) => {
+    setDoc(d); setDocTitle(title);
+    const rec = {
+      brokerage_id: brokerageId, owner_email: String(user.email).toLowerCase(), title, kind: d.src?.kind || 'custom', format: d.product,
+      transaction_id: d.src?.listing?.transaction_id || undefined,
+      data: { editor: d, listing: d.src?.listing || {}, photos: d.src?.photos || [], content: d.src?.content || null },
+    };
+    if (docDesignId) await base44.entities.MarketingDesign.update(docDesignId, rec);
+    else { const r = await base44.entities.MarketingDesign.create(rec); setDocDesignId(r.id); }
+    queryClient.invalidateQueries({ queryKey: ['designs-for-print'] });
+    queryClient.invalidateQueries({ queryKey: ['designs'] });
+  };
+  const editorDesigns = designs.filter((d) => d.data?.editor && product && sameShape(d.data.editor.product, product));
+  const aiDesigns = designs.filter((d) => !d.data?.editor);
+  useEffect(() => {
+    if (!preselect || !designs.length || product) return;
+    const d = designs.find((x) => x.id === preselect);
+    setProduct(PRODUCTS[preselectProduct] ? preselectProduct : PRODUCTS[d?.format] ? d.format : d?.format === 'flyer' ? 'flyer_letter' : 'postcard_4x6');
+  }, [preselect, designs.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Opened with a design: one made in the editor opens in the editor; an AI design is used as is.
+  const preselectDone = useRef(false);
+  useEffect(() => {
+    if (preselectDone.current || !preselect || !designs.length || !product) return;
+    const d = designs.find((x) => x.id === preselect); if (!d) return;
+    preselectDone.current = true;
+    if (d.data?.editor && sameShape(d.data.editor.product, product)) { loadSaved(d); if (openEditor) setEditorOpen(true); } else if (!d.data?.editor) setSource('design');
+  }, [preselect, designs.length, product]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Switching between 4x6 and 6x9 keeps the design (scaled); other products start fresh.
+  useEffect(() => {
+    if (!product) return;
+    if (doc && doc.product !== product) { if (sameShape(doc.product, product)) setDoc(resizeDoc(doc, product)); else { setDoc(null); setDocDesignId(null); } }
+    if (product === 'business_cards' && source === 'design') setSource('editor');
+  }, [product]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!design) return;
     const c = design.data?.content || {};
@@ -125,12 +176,18 @@ function OrderFlow({ user, brokerageId, catalog, preselect, preselectProduct, on
 
   const price = p ? priceFor(product, { quantity, recipients: recips.recipients.length }, catalog.settings || { prices: Object.fromEntries(catalog.products.map((x) => [x.key, x.prices])) }) : null;
   const returnAddress = (() => { const a = cleanAddress({ name: agent.name, address_line1: user?.address, city: user?.city, state: user?.state, zip: user?.zip }); return a.address || null; })();
-  const needsDesign = p && p.vendor === 'lob' || product === 'flyer_letter';
+  const editing = source === 'editor';
   const uploading = source === 'upload';
-  const haveFront = uploading ? !!upFront : product === 'business_cards' || !!design;
-  const ready = p && haveFront && (!uploading || product !== 'business_cards' || !!upBack) && (!p.mailed || backMode === 'ours' || !!upBack) && (p.mailed ? recips.recipients.length > 0 : !!quantity && !!cleanAddress(ship || {}).address) && price != null;
+  const haveFront = editing ? !!doc?.pages?.front : uploading ? !!upFront : !!design;
+  const haveBack = !p || p.sides === 1 ? true
+    : editing ? !!doc?.pages?.back
+      : uploading && product === 'business_cards' ? !!upBack
+        : p.mailed ? backMode === 'ours' || !!upBack : true;
+  const ready = p && haveFront && haveBack && (p.mailed ? recips.recipients.length > 0 : !!quantity && !!cleanAddress(ship || {}).address) && price != null;
+  const blanks = editing && doc ? emptySpots(doc) : [];
 
   const place = async () => {
+    if (blanks.length && !window.confirm(`Some spots are still empty (${[...new Set(blanks.map((b) => b.what))].join(', ')}). Empty photo frames print blank. Order anyway?`)) return;
     setBusy('Making your print files…'); setError('');
     try {
       const stamp = Date.now().toString(36);
@@ -148,7 +205,9 @@ function OrderFlow({ user, brokerageId, catalog, preselect, preselectProduct, on
       }
       setBusy(catalog.test_mode ? 'Placing your test order…' : 'Opening secure checkout…');
       const r = await shop('order', {
-        product, quantity, files, design_id: uploading ? undefined : design?.id, transaction_id: uploading ? undefined : design?.transaction_id || design?.data?.listing?.transaction_id || undefined,
+        product, quantity, files,
+        design_id: editing ? docDesignId || undefined : uploading ? undefined : design?.id,
+        transaction_id: editing ? doc?.src?.listing?.transaction_id || undefined : uploading ? undefined : design?.transaction_id || design?.data?.listing?.transaction_id || undefined,
         ...(p.mailed ? (recips.list_id ? { list_id: recips.list_id } : { recipients: recips.recipients }) : {}),
         ship_to: p.mailed ? (returnAddr ? returnAddress : null) : ship,
       });
@@ -177,33 +236,93 @@ function OrderFlow({ user, brokerageId, catalog, preselect, preselectProduct, on
     );
   }
 
-  const frontEl = uploading ? (upFront ? <UploadedArt product={product} src={upFront} /> : null)
-    : product === 'business_cards' ? <BusinessCard side="front" style={cardStyle} agent={agent} brand={brand} color={color} />
-    : design ? <Design format={p.mailed ? product : 'flyer'} content={design.data?.content} listing={design.data?.listing} photos={design.data?.photos} agent={agent} brand={brand} bgImage={design.data?.bgImage} scale={1} /> : null;
-  const ownBack = (uploading && product === 'business_cards') || (p.mailed && backMode === 'upload');
-  const backEl = ownBack ? (upBack ? <UploadedArt product={product} src={upBack} keepAddressClear={p.mailed} /> : null)
-    : product === 'business_cards' ? <BusinessCard side="back" style={cardStyle} agent={agent} brand={brand} color={color} />
-    : p.mailed ? <PostcardBack product={product} headline={backHeadline} message={backMessage} agent={agent} brand={brand} color={color} /> : null;
-  const guideBack = ownBack ? (upBack ? <UploadedArt product={product} src={upBack} keepAddressClear={p.mailed} showGuides /> : null)
-    : p.mailed ? <PostcardBack product={product} headline={backHeadline} message={backMessage} agent={agent} brand={brand} color={color} showGuides /> : backEl;
+  const docBack = doc?.product === product ? doc.pages.back : null;
+  const frontEl = editing ? (doc?.product === product ? <EditorPage product={product} side="front" page={doc.pages.front} /> : null)
+    : uploading ? (upFront ? <UploadedArt product={product} src={upFront} /> : null)
+      : design ? <Design format={p.mailed ? product : 'flyer'} content={design.data?.content} listing={design.data?.listing} photos={design.data?.photos} agent={agent} brand={brand} bgImage={design.data?.bgImage} scale={1} /> : null;
+  const ownBack = (uploading && product === 'business_cards') || (!editing && p.mailed && backMode === 'upload');
+  const backEl = editing ? (docBack ? <EditorPage product={product} side="back" page={docBack} /> : null)
+    : ownBack ? (upBack ? <UploadedArt product={product} src={upBack} keepAddressClear={p.mailed} /> : null)
+      : p.mailed ? <PostcardBack product={product} headline={backHeadline} message={backMessage} agent={agent} brand={brand} color={color} /> : null;
+  const guideBack = editing ? (docBack ? <EditorPage product={product} side="back" page={docBack} showGuides={p.mailed} /> : null)
+    : ownBack ? (upBack ? <UploadedArt product={product} src={upBack} keepAddressClear={p.mailed} showGuides /> : null)
+      : p.mailed ? <PostcardBack product={product} headline={backHeadline} message={backMessage} agent={agent} brand={brand} color={color} showGuides /> : backEl;
   const [tw, th] = p.trim;
   const sizeHint = `${tw}×${th} in (${Math.round(tw * 300)}×${Math.round(th * 300)} px at 300 dpi). A file with a 1/8" bleed works too.`;
   const sourceSwitch = (
     <div className="flex gap-1 rounded-lg bg-muted p-1 text-sm mb-3">
-      {[['design', product === 'business_cards' ? 'Build it here' : 'One of my designs'], ['upload', 'Upload my own']].map(([k, l]) => <button key={k} onClick={() => setSource(k)} className={cn('flex-1 rounded-md py-1.5', source === k ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground')}>{l}</button>)}
+      {[['editor', 'Design it here'], ...(product === 'business_cards' ? [] : [['design', 'AI design as is']]), ['upload', 'Upload my own']].map(([k, l]) => <button key={k} onClick={() => setSource(k)} className={cn('flex-1 rounded-md py-1.5 px-1', source === k ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground')}>{l}</button>)}
+    </div>
+  );
+
+  const thumbH = p.trim[0] > p.trim[1] ? 84 : 120;
+  const editorBlock = doc?.product === product ? (
+    <div>
+      <div className="flex flex-wrap items-end gap-3">
+        {Object.entries(doc.pages).map(([side, pg]) => (
+          <button key={side} onClick={() => setEditorOpen(true)} className="text-left group">
+            <EditorThumb product={product} side={side} page={pg} height={thumbH} className="rounded-md ring-1 ring-black/10 group-hover:ring-primary bg-white" />
+            <span className="text-xs text-muted-foreground capitalize">{side}</span>
+          </button>
+        ))}
+      </div>
+      <div className="flex flex-wrap gap-2 mt-3">
+        <Button onClick={() => setEditorOpen(true)} className="gap-1.5"><Pencil className="w-4 h-4" /> Edit design</Button>
+        <Button variant="outline" onClick={() => { if (window.confirm('Start over with a new design?')) { setDoc(null); setDocDesignId(null); } }} className="gap-1.5"><RotateCcw className="w-4 h-4" /> Start over</Button>
+      </div>
+      {docDesignId && <p className="text-xs text-muted-foreground mt-2">Saved in My designs{docTitle ? ` as "${docTitle}"` : ''}.</p>}
+    </div>
+  ) : (
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-2">
+        <Button onClick={() => startFrom(null)} className="gap-1.5"><Wand2 className="w-4 h-4" /> Start with my info</Button>
+      </div>
+      {aiDesigns.length > 0 && (
+        <div>
+          <p className="text-sm font-medium">Or fill it from one of your designs</p>
+          <p className="text-xs text-muted-foreground mb-2">Uses its words, property details and photos in a layout you can change freely.</p>
+          <div className="flex gap-3 overflow-x-auto pb-2">
+            {aiDesigns.slice(0, 30).map((d) => (
+              <button key={d.id} onClick={() => startFrom(d)} className="flex-shrink-0 w-28 rounded-xl border-2 border-transparent hover:border-primary/50 overflow-hidden text-left">
+                <div className="h-32 bg-muted overflow-hidden">{d.thumbnail_url ? <img src={d.thumbnail_url} alt="" className="w-full h-full object-cover object-top" /> : <div className="origin-top-left" style={{ transform: 'scale(0.14)' }}><Design format={d.format} content={d.data?.content} listing={d.data?.listing} photos={d.data?.photos} agent={agent} brand={brand} bgImage={d.data?.bgImage} /></div>}</div>
+                <p className="text-xs p-1.5 truncate">{d.title}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {editorDesigns.length > 0 && (
+        <div>
+          <p className="text-sm font-medium mb-2">Or open one you made here</p>
+          <div className="flex gap-3 overflow-x-auto pb-2">
+            {editorDesigns.map((d) => (
+              <button key={d.id} onClick={() => loadSaved(d)} className="flex-shrink-0 text-left rounded-xl border-2 border-transparent hover:border-primary/50 p-1">
+                <EditorThumb product={d.data.editor.product} page={d.data.editor.pages.front} height={thumbH} className="rounded-md ring-1 ring-black/10 bg-white" />
+                <p className="text-xs pt-1 truncate max-w-[140px]">{d.title}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 
   return (
     <div className="grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-6">
+      {editorOpen && doc && (
+        <PrintEditor key={docDesignId || 'new'} product={product} initialDoc={doc} agent={agent} brand={brand} title={docTitle}
+          onClose={(d, t) => { setDoc(d); if (t) setDocTitle(t); setEditorOpen(false); }}
+          onUse={(d, t) => { setDoc(d); if (t) setDocTitle(t); setEditorOpen(false); }}
+          onSave={saveDoc} />
+      )}
       <div className="space-y-5 min-w-0">
         <button onClick={() => { setProduct(null); setError(''); }} className="text-sm text-muted-foreground flex items-center gap-1 hover:text-foreground"><ArrowLeft className="w-4 h-4" /> All products</button>
         <h2 className="text-lg font-semibold">{p.label}</h2>
 
-        {needsDesign && (
-          <Step n={1} title="Front">
+        {product !== 'business_cards' && (
+          <Step n={1} title={editing && p.sides === 2 ? 'Your postcard' : p.sides === 2 ? 'Front' : 'Your flyer'}>
             {sourceSwitch}
-            {uploading ? (
+            {editing ? editorBlock : uploading ? (
               <ArtUpload label="Front artwork" hint={sizeHint} width={tw * 300} value={upFront} onChange={setUpFront} onSecondPage={(u) => { if (p.sides === 2 && !upBack) { setUpBack(u); setBackMode('upload'); } }} />
             ) : !designs.length ? <p className="text-sm text-muted-foreground">You don't have saved designs yet. Make one in <b>Designs</b>, save it, then come back.</p> : (
               <div className="flex gap-3 overflow-x-auto pb-2">
@@ -218,7 +337,7 @@ function OrderFlow({ user, brokerageId, catalog, preselect, preselectProduct, on
           </Step>
         )}
 
-        {p.mailed && (
+        {p.mailed && !editing && (
           <Step n={2} title="Back of the postcard">
             <div className="flex gap-1 rounded-lg bg-muted p-1 text-sm mb-3">
               {[['ours', 'Message + my info'], ['upload', 'Upload my own back']].map(([k, l]) => <button key={k} onClick={() => setBackMode(k)} className={cn('flex-1 rounded-md py-1.5', backMode === k ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground')}>{l}</button>)}
@@ -241,21 +360,12 @@ function OrderFlow({ user, brokerageId, catalog, preselect, preselectProduct, on
                 <ArtUpload label="Front" hint={sizeHint} width={tw * 300} value={upFront} onChange={setUpFront} onSecondPage={(u) => { if (!upBack) setUpBack(u); }} />
                 <ArtUpload label="Back" hint="A 2-page PDF fills both sides at once." width={tw * 300} value={upBack} onChange={setUpBack} />
               </div>
-            ) : (<>
-            <div className="flex flex-wrap gap-2 mb-3">{Object.entries(CARD_STYLES).map(([k, l]) => <button key={k} onClick={() => setCardStyle(k)} className={cn('rounded-full border px-3 py-1 text-sm', cardStyle === k ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-muted')}>{l}</button>)}</div>
-            <div className="grid grid-cols-2 gap-2">
-              <Input value={agent.title || ''} onChange={(e) => setExtra((x) => ({ ...x, title: e.target.value }))} placeholder="Title" />
-              <Input value={agent.phone || ''} onChange={(e) => setExtra((x) => ({ ...x, phone: e.target.value }))} placeholder="Phone" />
-              <Input value={agent.website || ''} onChange={(e) => setExtra((x) => ({ ...x, website: e.target.value }))} placeholder="Website (optional)" />
-              <Input value={agent.license || ''} onChange={(e) => setExtra((x) => ({ ...x, license: e.target.value }))} placeholder="License #" />
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">Name, email, headshot and logo come from your Brand kit.</p>
-            </>)}
+            ) : editorBlock}
           </Step>
         )}
 
         {p.mailed ? (
-          <Step n={3} title="Who gets it">
+          <Step n={editing ? 2 : 3} title="Who gets it">
             <RecipientPicker user={user} brokerageId={brokerageId} value={recips} onChange={setRecips} />
             <label className="flex items-start gap-2 text-sm mt-3"><input type="checkbox" className="mt-1" checked={returnAddr && !!returnAddress} disabled={!returnAddress} onChange={(e) => setReturnAddr(e.target.checked)} />
               <span>Print my return address{returnAddress ? ` (${returnAddress.address_line1}, ${returnAddress.city})` : ''}{!returnAddress && <span className="block text-xs text-muted-foreground">Add your address in My Profile to include one.</span>}</span></label>
@@ -284,8 +394,9 @@ function OrderFlow({ user, brokerageId, catalog, preselect, preselectProduct, on
 
       <div className="min-w-0 space-y-4 lg:sticky lg:top-24 self-start">
         <p className="text-xs font-semibold uppercase text-muted-foreground">Proof</p>
-        {frontEl ? <Proof label="Front" el={frontEl} product={product} /> : <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">Pick a design to see the proof.</div>}
+        {frontEl ? <Proof label="Front" el={frontEl} product={product} /> : <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">{editing ? 'Start a design to see the proof.' : 'Pick a design to see the proof.'}</div>}
         {guideBack && <Proof label="Back" el={guideBack} product={product} />}
+        {blanks.length > 0 && <p className="text-xs text-amber-700 flex items-center gap-1.5"><AlertTriangle className="w-3.5 h-3.5" /> Still empty: {[...new Set(blanks.map((b) => b.what))].join(', ')}. Empty photo frames print blank.</p>}
         <p className="text-xs text-muted-foreground">Check spelling, phone and price before ordering. Everything near the edge may be trimmed slightly.</p>
       </div>
 

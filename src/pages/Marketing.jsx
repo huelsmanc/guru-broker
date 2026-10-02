@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 import { isAdminRole } from '../../shared/permissions.generated.js';
 import { renderImage } from '@/lib/inlineImages';
 import Design, { FORMATS, TEMPLATES, KINDS, emailHtml } from '@/components/marketing/Design';
+import { EditorThumb } from '@/components/print/EditorPage';
 
 const STYLES = ['Modern', 'Luxury', 'Classic', 'Bold', 'Minimal', 'Coastal', 'Farmhouse', 'Playful'];
 const loadHtmlToImage = () => import(/* @vite-ignore */ 'https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/+esm');
@@ -425,6 +426,9 @@ function Kits({ user, brokerageId, agent, brand, onOpen }) {
 
 function Gallery({ user, brokerageId, agent, brand, onOpen }) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  // Print designs made in the editor open back in the editor.
+  const open = (d) => (d.data?.editor ? navigate(`/Marketing?tool=print&design=${d.id}&product=${d.data.editor.product}&edit=1`) : onOpen(d));
   const admin = isAdminRole(user?.role);
   const [everyone, setEveryone] = useState(false);
   const { data: designs = [], isLoading } = useQuery({
@@ -435,17 +439,21 @@ function Gallery({ user, brokerageId, agent, brand, onOpen }) {
   const del = async (d) => { if (!window.confirm(`Delete "${d.title}"?`)) return; await base44.entities.MarketingDesign.delete(d.id); queryClient.invalidateQueries({ queryKey: ['designs'] }); };
   return (
     <div>
-      {admin && <label className="flex items-center gap-2 text-sm mb-4"><input type="checkbox" checked={everyone} onChange={(e) => setEveryone(e.target.checked)} /> Show everyone's designs</label>}
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        {admin && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={everyone} onChange={(e) => setEveryone(e.target.checked)} /> Show everyone's designs</label>}
+        <Button size="sm" variant="outline" className="gap-1.5 ml-auto" onClick={() => navigate('/Marketing?tool=print')}><Printer className="w-4 h-4" /> Design a postcard, flyer or card</Button>
+      </div>
       {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : !designs.length ? <p className="text-sm text-muted-foreground">Nothing saved yet. Designs you save show up here.</p> : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
           {designs.map((d) => (
             <div key={d.id} className="group rounded-xl border overflow-hidden bg-card">
-              <button onClick={() => onOpen(d)} className="block w-full aspect-[4/5] bg-muted overflow-hidden">
-                {d.thumbnail_url ? <img src={d.thumbnail_url} alt="" className="w-full h-full object-cover object-top" />
+              <button onClick={() => open(d)} className="block w-full aspect-[4/5] bg-muted overflow-hidden">
+                {d.data?.editor ? <div className="w-full h-full flex items-center justify-center p-2"><EditorThumb product={d.data.editor.product} page={d.data.editor.pages.front} height={d.data.editor.product === 'flyer_letter' ? 190 : d.data.editor.product === 'business_cards' ? 80 : 110} className="shadow ring-1 ring-black/10 bg-white" /></div>
+                  : d.thumbnail_url ? <img src={d.thumbnail_url} alt="" className="w-full h-full object-cover object-top" />
                   : <div className="origin-top-left" style={{ transform: 'scale(0.22)' }}><Design format={d.format} content={d.data?.content} listing={d.data?.listing} photos={d.data?.photos} agent={agent} brand={brand} bgImage={d.data?.bgImage} /></div>}
               </button>
               <div className="p-2.5 flex items-start gap-2">
-                <div className="flex-1 min-w-0"><p className="text-sm font-medium truncate">{d.title}</p><p className="text-xs text-muted-foreground">{KINDS[d.kind] || d.kind} · {fmtDate(new Date(d.updated_date || d.created_date), 'MMM d')}{everyone ? ` · ${d.owner_email}` : ''}</p></div>
+                <div className="flex-1 min-w-0"><p className="text-sm font-medium truncate">{d.title}</p><p className="text-xs text-muted-foreground">{d.data?.editor ? 'Print design' : KINDS[d.kind] || d.kind} · {fmtDate(new Date(d.updated_date || d.created_date), 'MMM d')}{everyone ? ` · ${d.owner_email}` : ''}</p></div>
                 <button onClick={() => del(d)} className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-destructive"><Trash2 className="w-4 h-4" /></button>
               </div>
             </div>

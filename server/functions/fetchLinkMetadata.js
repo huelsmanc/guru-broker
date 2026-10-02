@@ -1,8 +1,11 @@
-// Ported from Base44 function `fetchLinkMetadata`. Logic unchanged.
+// Ported from Base44 function `fetchLinkMetadata`. Now signed-in only, and it never fetches
+// private or internal addresses (see safeFetch).
 import { createClientFromRequest } from '../lib/base44.js';
+import { safeFetch } from '../lib/safeFetch.js';
 
 export default (async (req) => {
   try {
+    try { await createClientFromRequest(req).auth.me(); } catch { return Response.json({ error: 'Sign in required' }, { status: 401 }); }
     const body = await req.json();
     const { url } = body;
 
@@ -18,15 +21,13 @@ export default (async (req) => {
     }
 
     // Fetch the webpage
-    const response = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; LinkUnfurler/1.0)' },
-    });
-
-    if (!response.ok) {
+    let html;
+    try {
+      const { bytes } = await safeFetch(url, { accept: /^(text\/html|application\/xhtml\+xml|)$/, maxBytes: 5 * 1024 * 1024, timeoutMs: 8000, headers: { 'User-Agent': 'Mozilla/5.0 (compatible; LinkUnfurler/1.0)' } });
+      html = bytes.toString('utf8');
+    } catch {
       return Response.json({ error: 'Failed to fetch URL' }, { status: 400 });
     }
-
-    const html = await response.text();
 
     // Extract Open Graph meta tags
     const titleMatch = html.match(/<meta\s+property=["']og:title["']\s+content=["']([^"']*)/i);
