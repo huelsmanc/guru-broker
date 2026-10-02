@@ -1,0 +1,35 @@
+{
+  "appId": "app.gurubroker.ios",
+  "appName": "Guru Broker",
+  "webDir": "www",
+  "server": {
+    "url": "https://gurubroker.app",
+    "errorPath": "offline.html",
+    "allowNavigation": [
+      "gurubroker.app",
+      "*.gurubroker.app",
+      "checkout.stripe.com",
+      "*.stripe.com",
+      "*.supabase.co"
+    ]
+  },
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#0f172a",
+    "limitsNavigationsToAppBoundDomains": false
+  },
+  "plugins": {
+    "PushNotifications": {
+      "presentationOptions": [
+        "badge",
+        "sound",
+        "alert"
+      ]
+    },
+    "SplashScreen": {
+      "launchShowDuration": 600,
+      "backgroundColor": "#0f172a",
+      "showSpinner": false
+    }
+  }
+}

@@ -15,6 +15,7 @@ const Browser = registerPlugin('Browser');
 const AppPlugin = registerPlugin('App');
 const Filesystem = registerPlugin('Filesystem');
 const Biometric = registerPlugin('NativeBiometric');
+const StatusBar = registerPlugin('StatusBar');
 
 // ---------------------------------------------------------------- push notifications
 let pushListeners = false;
@@ -178,6 +179,7 @@ async function lockNow() {
 export function installNative() {
   if (!isNative()) return;
   document.documentElement.classList.add('native-app');
+  StatusBar.setStyle({ style: 'DARK' }).catch(() => {}); // light text over the dark header
   interceptDownloadsAndLinks();
   // gurubroker.app links (emails, texts) open here instead of Safari.
   AppPlugin.addListener('appUrlOpen', ({ url }) => {
