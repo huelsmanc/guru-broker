@@ -105,38 +105,99 @@ export function cleanAddress(a = {}) {
 }
 
 /** Reads a CSV of addresses (any column order; common header names understood). */
-export function parseAddressCsv(text) {
+// Splits CSV text into rows. Handles quotes, and files saved with tabs or semicolons instead of commas.
+function csvRows(text) {
+  const src = String(text || '').replace(/^﻿/, '').replace(/\r\n?/g, '\n');
+  const firstLine = src.split('\n').find((l) => l.trim()) || '';
+  const count = (ch) => firstLine.replace(/"[^"]*"/g, '').split(ch).length - 1;
+  const sep = [',', '\t', ';', '|'].reduce((best, ch) => (count(ch) > count(best) ? ch : best), ',');
   const rows = [];
   let row = []; let cell = ''; let q = false;
-  const s = String(text || '').replace(/\r\n?/g, '\n');
-  for (let i = 0; i < s.length; i += 1) {
-    const ch = s[i];
-    if (q) { if (ch === '"' && s[i + 1] === '"') { cell += '"'; i += 1; } else if (ch === '"') q = false; else cell += ch; continue; }
+  for (let i = 0; i < src.length; i += 1) {
+    const ch = src[i];
+    if (q) { if (ch === '"' && src[i + 1] === '"') { cell += '"'; i += 1; } else if (ch === '"') q = false; else cell += ch; continue; }
     if (ch === '"') q = true;
-    else if (ch === ',') { row.push(cell); cell = ''; }
+    else if (ch === sep) { row.push(cell); cell = ''; }
     else if (ch === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; }
     else cell += ch;
   }
   if (cell || row.length) { row.push(cell); rows.push(row); }
-  const data = rows.filter((r) => r.some((c) => c.trim()));
-  if (!data.length) return { recipients: [], problems: [] };
-  const head = data[0].map((h) => h.toLowerCase().replace(/[^a-z0-9]/g, ''));
-  const find = (...names) => head.findIndex((h) => names.includes(h));
-  const col = {
-    name: find('name', 'fullname', 'owner', 'ownername', 'recipient', 'contact'),
-    first: find('firstname', 'first'), last: find('lastname', 'last'),
-    line1: find('address', 'address1', 'addressline1', 'street', 'streetaddress', 'mailingaddress', 'propertyaddress', 'mailingstreet', 'siteaddress'),
-    line2: find('address2', 'addressline2', 'unit', 'apt', 'suite'),
-    city: find('city', 'town', 'mailingcity'), state: find('state', 'st', 'mailingstate'), zip: find('zip', 'zipcode', 'postalcode', 'postcode', 'mailingzip'),
+  return rows.map((r) => r.map((c) => c.trim())).filter((r) => r.some(Boolean));
+}
+
+const ZIP_RE = /^\d{3,5}(-\d{4})?$/;
+const isState = (v) => /^[A-Za-z]{2}$/.test(v) || !!STATE_NAMES[String(v).toLowerCase().replace(/\./g, '')];
+
+// Finds the columns from the header row. Names vary a lot between CRMs, MLS exports and list
+// vendors ("Mailing Address", "Property Zip Code", "State/Province"...), so this matches on the
+// words inside each name, and prefers mailing columns over property columns when a file has both.
+function headerColumns(header) {
+  const h = header.map((x) => x.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim());
+  const pick = (test, avoid) => {
+    const hits = h.map((x, i) => (test(x) && !(avoid && avoid(x)) ? i : -1)).filter((i) => i >= 0);
+    if (!hits.length) return -1;
+    return hits.find((i) => /mail/.test(h[i])) ?? hits.find((i) => !/propert|site|situs/.test(h[i])) ?? hits[0];
   };
-  if (col.line1 < 0 || col.city < 0 || col.state < 0 || col.zip < 0) {
-    return { recipients: [], problems: [{ row: 1, error: 'The first row needs column names: address, city, state and zip (name is optional).' }] };
+  const notLine1 = (x) => /email|e mail|city|state|zip|postal|\b2\b|line 2|unit|apt|suite|web|url/.test(x);
+  return {
+    name: pick((x) => /^(full )?name$|owner|recipient|contact name|^contact$|addressee|^mail(ing)? name/.test(x), (x) => /first|last|company|address|email|street|city|town|state|province|zip|postal|phone|unit|apt/.test(x)),
+    first: pick((x) => /first/.test(x) && !/address/.test(x)),
+    last: pick((x) => /last|surname/.test(x) && !/address|sale|sold|modified|updated/.test(x)),
+    line1: pick((x) => /address|street|addr\b|^addr/.test(x), notLine1),
+    line2: pick((x) => /address 2|address line 2|addr 2|\bunit\b|\bapt\b|suite/.test(x), (x) => /email/.test(x)),
+    city: pick((x) => /city|town/.test(x)),
+    state: pick((x) => /^st$|state|province|^region$/.test(x), (x) => /statement|status|street/.test(x)),
+    zip: pick((x) => /zip|postal|post code|postcode/.test(x)),
+  };
+}
+
+// No usable header: work out the columns from what's in them.
+function guessColumns(rows) {
+  const n = Math.max(...rows.map((r) => r.length));
+  const share = (i, test) => rows.filter((r) => r[i] && test(r[i])).length / rows.length;
+  const best = (test, skip = []) => {
+    let at = -1; let top = 0.5;
+    for (let i = 0; i < n; i += 1) { if (skip.includes(i)) continue; const v = share(i, test); if (v > top) { top = v; at = i; } }
+    return at;
+  };
+  const zip = best((v) => ZIP_RE.test(v));
+  const state = best(isState, [zip]);
+  const line1 = best((v) => /^\d+[A-Za-z]?\s+\S/.test(v), [zip, state]);
+  const city = state > 0 && ![zip, line1].includes(state - 1) ? state - 1 : -1;
+  const name = best((v) => /^[A-Za-z][A-Za-z .,'&-]+$/.test(v) && !isState(v), [zip, state, line1, city]);
+  return { name, first: -1, last: -1, line1, line2: -1, city, state, zip };
+}
+
+export function parseAddressCsv(text) {
+  if (/^PK\u0003\u0004/.test(String(text || '')) || /\u0000/.test(String(text || '').slice(0, 2000))) {
+    return { recipients: [], problems: [{ row: 1, error: 'That looks like an Excel or Numbers file. Open it and choose File > Export (or Save As) > CSV, then upload the .csv.' }] };
+  }
+  const data = csvRows(text);
+  if (!data.length) return { recipients: [], problems: [] };
+  let col = headerColumns(data[0]);
+  let body = data.slice(1); let first = 2;
+  const headerLooksLikeData = data[0].some((c) => ZIP_RE.test(c)) && data[0].some((c) => /^\d+\s+\S/.test(c));
+  if (headerLooksLikeData || (col.line1 < 0 && col.zip < 0)) {
+    const g = guessColumns(headerLooksLikeData ? data : data.slice(1));
+    if (g.line1 >= 0 && g.zip >= 0) { col = g; if (headerLooksLikeData) { body = data; first = 1; } }
+  }
+  // One "full address" column ("17 Debra Ln, North Haven, CT 06473") is fine too.
+  const oneColumn = col.line1 >= 0 && (col.city < 0 || col.state < 0 || col.zip < 0);
+  if (col.line1 < 0 || (oneColumn && !body.slice(0, 20).some((r) => splitAddress(r[col.line1])))) {
+    const names = data[0].filter(Boolean).slice(0, 12).join(', ');
+    return { recipients: [], problems: [{ row: 1, error: `Couldn't tell which columns hold the address. Your columns are: ${names || '(none)'}. Rename them to address, city, state and zip (name is optional), or use one column with the full address.` }] };
   }
   const recipients = []; const problems = []; const seen = new Set();
-  data.slice(1).forEach((r, i) => {
-    const g = (k) => (col[k] >= 0 ? r[col[k]] : '');
-    const { address, error } = cleanAddress({ name: g('name') || [g('first'), g('last')].filter(Boolean).join(' '), address_line1: g('line1'), address_line2: g('line2'), city: g('city'), state: g('state'), zip: g('zip') });
-    if (error) { problems.push({ row: i + 2, error }); return; }
+  body.forEach((r, i) => {
+    const g = (k) => (col[k] >= 0 ? r[col[k]] || '' : '');
+    let parts = { address_line1: g('line1'), address_line2: g('line2'), city: g('city'), state: g('state'), zip: g('zip') };
+    if (oneColumn) {
+      const sp = splitAddress(g('line1'));
+      if (sp) parts = { ...sp, address_line2: sp.address_line2 || g('line2') };
+    }
+    const fullName = g('name') || [g('first'), g('last')].filter(Boolean).join(' ');
+    const { address, error } = cleanAddress({ name: fullName, ...parts });
+    if (error) { problems.push({ row: i + first, error }); return; }
     const key = `${address.address_line1}|${address.address_line2}|${address.zip}`.toLowerCase();
     if (seen.has(key)) return;
     seen.add(key); recipients.push(address);
@@ -146,11 +207,16 @@ export function parseAddressCsv(text) {
 
 /** "17 Debra Ln, North Haven, CT 06473, USA" -> { address_line1, city, state, zip } (or null). */
 export function splitAddress(text) {
-  const parts = String(text || '').split(',').map((s) => s.trim()).filter(Boolean).filter((s) => !/^(usa|us|united states)$/i.test(s));
+  let parts = String(text || '').split(',').map((s) => s.trim()).filter(Boolean).filter((s) => !/^(usa|us|united states( of america)?)$/i.test(s));
+  // "..., CT, 06412" -> "..., CT 06412"
+  if (parts.length >= 4 && /^\d{3,5}(-\d{4})?$/.test(parts[parts.length - 1])) parts = [...parts.slice(0, -2), `${parts[parts.length - 2]} ${parts[parts.length - 1]}`];
   if (parts.length < 3) return null;
-  const m = parts[parts.length - 1].match(/^([A-Za-z]{2})\s+(\d{5}(?:-\d{4})?)$/);
+  const m = parts[parts.length - 1].match(/^([A-Za-z][A-Za-z. ]*?)\s+(\d{3,5}(?:-\d{4})?)$/);
   if (!m) return null;
+  const st = m[1].replace(/\./g, '').trim();
+  const state = STATE_NAMES[st.toLowerCase()] || (st.length === 2 ? st.toUpperCase() : null);
+  if (!state) return null;
   const city = parts[parts.length - 2];
   const street = parts.slice(0, parts.length - 2);
-  return { address_line1: street[0], address_line2: street.slice(1).join(', '), city, state: m[1].toUpperCase(), zip: m[2] };
+  return { address_line1: street[0], address_line2: street.slice(1).join(', '), city, state, zip: m[2] };
 }
