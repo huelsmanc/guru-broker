@@ -20,6 +20,7 @@ import {
   signSession, readSession, randomToken, hashCode, maskEmail, isClientContact, ensureClientChat,
   brandFor, portalLink, clientEmail, esc,
 } from '../lib/clientPortal.js';
+import { dealAppend } from '../../shared/dealAppend.js';
 
 const lc = (e) => String(e || '').toLowerCase().trim();
 const MAX_FILE = 25 * 1024 * 1024;
@@ -171,7 +172,8 @@ async function clientAction(E, action, body) {
     const reqId = body.request_id ? String(body.request_id) : null;
     const requests = (fresh.client_requests || []).map((r) => (r.id === reqId && r.status !== 'cancelled' ? { ...r, status: 'received', file_name: name, received_at: new Date().toISOString(), received_from: c.name || c.email } : r));
     const doc = { name, url: fileUrl(path), uploaded_at: new Date().toISOString(), uploaded_by: c.name || c.email, source: 'client', client_email: lc(c.email), request_id: reqId };
-    await E.Transaction.update(tx.id, { documents: [...(fresh.documents || []), doc], client_requests: requests });
+    await E.Transaction.update(tx.id, { client_requests: requests });
+    await dealAppend(adminClient(), tx.id, 'documents', doc);
     const req = requests.find((r) => r.id === reqId);
     const team = [...new Set([fresh.agent_email, fresh.tc_email].map(lc).filter(Boolean))].map((email) => ({ email }));
     await notifyPeople(E, {

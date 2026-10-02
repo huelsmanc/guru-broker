@@ -1,5 +1,7 @@
 import { base44 } from '@/api/base44Client';
 import { DEADLINES } from '../../shared/dealTimeline.js';
+import { supabase } from '@/api/base44Client';
+import { dealAppend } from '../../shared/dealAppend.js';
 
 // Small, safe changes to a deal, used by the dashboard, the AI copilot and document intake.
 // Each one is the person's own action (their access rules apply) and is noted on the deal.
@@ -15,8 +17,8 @@ const fmt = (field, v) => {
 /** Adds a line to the deal's update feed. */
 export async function postUpdate(tx, user, message, extra = {}) {
   const update = { id: Date.now().toString(), message: String(message).slice(0, 2000), posted_by: user?.full_name || user?.email, posted_at: new Date().toISOString(), ...extra };
-  const fresh = await base44.entities.Transaction.get(tx.id);
-  return base44.entities.Transaction.update(tx.id, { updates: [...(fresh.updates || []), update] });
+  await dealAppend(supabase, tx.id, 'updates', update);
+  return base44.entities.Transaction.get(tx.id);
 }
 
 /** Changes a date (or the price) and notes what changed and why. */

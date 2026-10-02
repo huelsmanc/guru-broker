@@ -3,6 +3,8 @@ import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Upload, Loader2, Sparkles, FolderOpen, CalendarClock, AlertTriangle, CheckCircle2, X, FileText } from 'lucide-react';
 import { fileDocument, changeField } from '@/lib/dealActions';
+import { supabase } from '@/api/base44Client';
+import { dealAppend } from '../../../shared/dealAppend.js';
 
 const fmt = (field, v) => {
   if (v == null || v === '') return 'blank';
@@ -35,8 +37,7 @@ export default function DocIntake({ tx, user, refresh, canEdit }) {
       setCards((l) => [{ id, name: file.name, state: 'uploading' }, ...l]);
       try {
         const { file_url } = await base44.integrations.Core.UploadFile({ file, scope: { kind: 'tx', id: tx.id } });
-        const fresh = await base44.entities.Transaction.get(tx.id);
-        await base44.entities.Transaction.update(tx.id, { documents: [...(fresh.documents || []), { name: file.name, url: file_url, uploaded_at: new Date().toISOString(), uploaded_by: user?.full_name || user?.email }] });
+        await dealAppend(supabase, tx.id, 'documents', { name: file.name, url: file_url, uploaded_at: new Date().toISOString(), uploaded_by: user?.full_name || user?.email });
         refresh();
         const card = { id, name: file.name, url: file_url, state: 'reading' };
         update(id, card);

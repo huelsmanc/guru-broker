@@ -160,6 +160,21 @@ const task = cl.items.find((i) => !i.requires_document);
 r = await as('ann')('checklistAction', { action: 'complete', checklist_id: cl.id, item_id: task.id });
 assert.equal(r.body.checklist.items.find((i) => i.id === task.id).status, 'done');
 
+// Two people changing the same checklist at the same moment: both changes are kept.
+{
+  const row = globalThis.__db.checklist.find((x) => x.id === cl.id);
+  row.updated_date ||= '2026-10-01T00:00:00.000Z';
+  const [x, y] = await Promise.all([
+    as('ann')('checklistAction', { action: 'comment', checklist_id: cl.id, item_id: b2b.id, text: 'first at the same time' }),
+    as('boss')('checklistAction', { action: 'comment', checklist_id: cl.id, item_id: task.id, text: 'second at the same time' }),
+  ]);
+  assert.equal(x.status, 200, JSON.stringify(x.body)); assert.equal(y.status, 200, JSON.stringify(y.body));
+  const now = globalThis.__db.checklist.find((z) => z.id === cl.id).items;
+  assert.ok(now.find((i) => i.id === b2b.id).comments.some((c) => c.text === 'first at the same time'), 'first kept');
+  assert.ok(now.find((i) => i.id === task.id).comments.some((c) => c.text === 'second at the same time'), 'second kept');
+  assert.equal(now.find((i) => i.id === b2b.id).status, 'approved', 'earlier approval kept');
+}
+
 // @mentions: only people who can see the deal are offered and notified
 r = await as('ann')('checklistAction', { action: 'mentionable', checklist_id: cl.id });
 assert.deepEqual(r.body.people.map((p) => p.email).sort(), ['boss@x.com'], JSON.stringify(r.body));

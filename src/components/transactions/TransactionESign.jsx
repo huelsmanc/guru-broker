@@ -7,6 +7,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Badge } from '@/components/ui/badge';
 import UnifiedESignCreator from '@/components/esign/UnifiedESignCreator';
 import { Send, RefreshCw, FileSignature, Plus, Trash2, ExternalLink, CheckCircle, Clock, AlertCircle, X } from 'lucide-react';
+import { supabase } from '@/api/base44Client';
+import { dealAppend } from '../../../shared/dealAppend.js';
 
 const STATUS_CONFIG = {
   completed: { label: 'Completed', icon: CheckCircle, color: 'bg-green-100 text-green-700 border-green-200' },
@@ -79,7 +81,7 @@ export default function TransactionESign({ tx, isAdmin, user, onUpdate }) {
       sent_by: user?.full_name || user?.email,
       sent_at: new Date().toISOString(),
     };
-    await base44.entities.Transaction.update(tx.id, { esign_docs: [...esignDocs, entry] });
+    await dealAppend(supabase, tx.id, 'esign_docs', entry);
     setShowCreator(false);
     onUpdate();
   };

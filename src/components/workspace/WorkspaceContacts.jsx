@@ -10,6 +10,8 @@ import { can } from '../../../shared/permissions.generated.js';
 import { Section, Empty } from './ui';
 import ContactPicker from '@/components/contacts/ContactPicker';
 import { saveToContactBook, roleFor } from '@/lib/contacts';
+import { supabase } from '@/api/base44Client';
+import { dealAppend } from '../../../shared/dealAppend.js';
 
 const ROLES = ['buyer', 'seller', 'tenant', 'landlord', "buyer's agent", "listing agent", 'lender', 'title / closing attorney', 'inspector', 'appraiser', 'attorney', 'other'];
 
@@ -143,7 +145,8 @@ function ShareAgent({ tx, onClose, onDone }) {
   const taken = new Set([tx.agent_email, ...(tx.co_agents || []).map((a) => a.email)].map((e) => String(e).toLowerCase()));
   const add = async () => {
     const u = users.find((x) => x.email === email);
-    await base44.entities.Transaction.update(tx.id, { co_agents: [...(tx.co_agents || []), { email: email.toLowerCase(), name: u?.display_name || u?.full_name || email, split_pct: Number(split) || 0 }] });
+    if ((await base44.entities.Transaction.get(tx.id)).co_agents?.some((a) => String(a.email).toLowerCase() === email.toLowerCase())) { onDone(); return; }
+    await dealAppend(supabase, tx.id, 'co_agents', { email: email.toLowerCase(), name: u?.display_name || u?.full_name || email, split_pct: Number(split) || 0 });
     onDone();
   };
   return (

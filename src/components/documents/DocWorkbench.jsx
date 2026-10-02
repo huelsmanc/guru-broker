@@ -6,6 +6,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Loader2, RotateCcw, RefreshCw, Trash2, ArrowLeft, ArrowRight, Sparkles, Plus, Check, Save, X, FileText } from 'lucide-react';
 import { openPdf, pageThumb, pageText } from '@/lib/pdfText';
 import { isPdfUrl } from '@/components/esign/PDFPageRenderer';
+import { supabase } from '@/api/base44Client';
+import { dealAppend } from '../../../shared/dealAppend.js';
 
 const GROUP_COLORS = ['#2563eb', '#16a34a', '#9333ea', '#ea580c', '#db2777', '#0891b2', '#ca8a04', '#4f46e5'];
 const isImage = (s) => /\.(png|jpe?g)$/i.test(String(s.name || '')) || /image\//.test(String(s.type || ''));
@@ -79,8 +81,7 @@ export default function DocWorkbench({ sources, tx, transactionId, items = [], r
     if (it) {
       await base44.functions.invoke('checklistAction', { action: 'attach', checklist_id: it.checklist_id, item_id: it.item_id, url: built.file_url, name: built.name });
     } else if (tx) {
-      const fresh = await base44.entities.Transaction.get(tx.id);
-      await base44.entities.Transaction.update(tx.id, { documents: [...(fresh.documents || []), { name: built.name, url: built.file_url, uploaded_at: new Date().toISOString(), uploaded_by: 'Page tools' }] });
+      await dealAppend(supabase, tx.id, 'documents', { name: built.name, url: built.file_url, uploaded_at: new Date().toISOString(), uploaded_by: 'Page tools' });
     }
   };
 

@@ -14,6 +14,7 @@ import { resolveForUser, storePrivate, scopeFolder, readFileBytes } from '../lib
 import { createDoc, money } from '../lib/pdfdoc.js';
 import { esc } from '../lib/esign.js';
 import { adminClient } from '../lib/base44.js';
+import { dealAppend } from '../../shared/dealAppend.js';
 
 const SEVERITY = ['major', 'moderate', 'minor'];
 const ASKS = ['repair', 'replace', 'credit', 'evaluate', 'none'];
@@ -203,11 +204,8 @@ export default async (req) => {
       });
 
       const next = list.map((x) => (x.id === request.id ? { ...x, status: 'ready', pdf_url, fields, selected: picked.map(({ id, ask, note }) => ({ id, ask, note })), credit: Number(body.credit) || null, response_by: body.response_by || null, notes: body.notes || null, built_at: new Date().toISOString() } : x));
-      const fresh = await base44.entities.Transaction.get(tx.id);
-      await base44.entities.Transaction.update(tx.id, {
-        inspection_requests: next,
-        documents: [...(fresh.documents || []), { name: `Inspection request - ${tx.property_address || ''}.pdf`, url: pdf_url, uploaded_at: new Date().toISOString(), uploaded_by: me.full_name || me.email }],
-      });
+      await base44.entities.Transaction.update(tx.id, { inspection_requests: next });
+      await dealAppend(adminClient(), tx.id, 'documents', { name: `Inspection request - ${tx.property_address || ''}.pdf`, url: pdf_url, uploaded_at: new Date().toISOString(), uploaded_by: me.full_name || me.email });
       return Response.json({ pdf_url, fields });
     }
 

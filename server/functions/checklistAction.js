@@ -15,7 +15,7 @@
 //   remove_item { checklist_id, item_id } | remove { checklist_id }
 import { applyTemplate } from '../lib/checklists.js';
 import { esc } from '../lib/esign.js';
-import { createClientFromRequest } from '../lib/base44.js';
+import { createClientFromRequest, adminClient } from '../lib/base44.js';
 import { isAdminRole, can, notifyPeople, mentionablePeople } from '../lib/team.js';
 import { approvesDealItems, oversees, reviewsAllDeals } from '../../shared/access.js';
 import { isPrivateUrl, canAccess, parsePath, pathFromUrl } from '../lib/files.js';
@@ -121,104 +121,120 @@ export default async (req) => {
       return Response.json({ checklist: cl });
     }
 
-    const [cl] = await E.Checklist.filter({ id: body.checklist_id }, '-created_date', 1);
-    if (!cl || cl.brokerage_id !== me.brokerage_id) return Response.json({ error: 'Checklist not found' }, { status: 404 });
-    const acc = await access(cl.subject_type, cl.subject_id, cl.subject_email);
-    const items = [...(cl.items || [])];
-    const idx = items.findIndex((i) => i.id === body.item_id);
-    const item = idx >= 0 ? { ...items[idx], comments: [...(items[idx].comments || [])], history: [...(items[idx].history || [])] } : null;
-    const log = (what) => item && item.history.push({ at: now, by: myEmail, what });
-    // Deal checklists: also TCs / compliance and state brokers (who only reach deals they oversee).
-    const approver = admin || can(me, 'docs.approve') || (cl.subject_type === 'transaction' && approvesDealItems(me));
-    const fail = (msg, status = 403) => Response.json({ error: msg }, { status });
-    let mentioned = [];
-    if (body.action === 'mentionable') {
-      return Response.json({ people: [...(await mentionablePeople(E, cl.brokerage_id || acc.tx?.brokerage_id || me.brokerage_id, { tx: acc.tx, subjectEmail: cl.subject_email })).values()].filter((p) => p.email !== myEmail) });
-    }
-
-    switch (body.action) {
-      case 'remove':
-        if (!(acc.manage || can(me, 'tx.checklist_remove'))) return fail('Not allowed');
-        await E.Checklist.delete(cl.id);
-        return Response.json({ status: 'removed' });
-      case 'add_item':
-        if (!acc.manage) return fail('Not allowed');
-        items.push({ id: newId(), title: String(body.title || 'Task').slice(0, 200), requires_document: !!body.requires_document, required: body.required !== false, due_date: body.due_date || null, assignee_email: body.assignee_email || cl.subject_email, status: 'open', comments: [], history: [{ at: now, by: myEmail, what: 'created' }] });
-        break;
-      case 'remove_item':
-        if (!acc.manage) return fail('Not allowed');
-        if (idx < 0) return fail('Item not found', 404);
-        items.splice(idx, 1);
-        break;
-      case 'update_item': {
-        if (!item) return fail('Item not found', 404);
-        if (!acc.manage) return fail('Not allowed');
-        const allowed = ['title', 'due_date', 'assignee_email', 'requires_document', 'required'];
-        for (const k of allowed) if (k in (body.patch || {})) item[k] = body.patch[k];
-        log('edited');
-        items[idx] = item;
-        break;
+    let out;
+    for (let attempt = 0; ; attempt += 1) {
+      const [cl] = await E.Checklist.filter({ id: body.checklist_id }, '-created_date', 1);
+      if (!cl || cl.brokerage_id !== me.brokerage_id) return Response.json({ error: 'Checklist not found' }, { status: 404 });
+      const acc = await access(cl.subject_type, cl.subject_id, cl.subject_email);
+      const items = [...(cl.items || [])];
+      const idx = items.findIndex((i) => i.id === body.item_id);
+      const item = idx >= 0 ? { ...items[idx], comments: [...(items[idx].comments || [])], history: [...(items[idx].history || [])] } : null;
+      const log = (what) => item && item.history.push({ at: now, by: myEmail, what });
+      // Deal checklists: also TCs / compliance and state brokers (who only reach deals they oversee).
+      const approver = admin || can(me, 'docs.approve') || (cl.subject_type === 'transaction' && approvesDealItems(me));
+      const fail = (msg, status = 403) => Response.json({ error: msg }, { status });
+      let mentioned = [];
+      if (body.action === 'mentionable') {
+        return Response.json({ people: [...(await mentionablePeople(E, cl.brokerage_id || acc.tx?.brokerage_id || me.brokerage_id, { tx: acc.tx, subjectEmail: cl.subject_email })).values()].filter((p) => p.email !== myEmail) });
       }
-      case 'attach':
-        if (!item) return fail('Item not found', 404);
-        if (isPrivateUrl(body.url)) {
-          if (!(await canAccess(me, parsePath(pathFromUrl(body.url)), base44.entities))) return fail('Not allowed to use that file');
-        } else if (!/^https:\/\//.test(String(body.url || ''))) return fail('Missing document', 400);
-        item.document_url = body.url; item.document_name = String(body.name || 'Document').slice(0, 200);
-        item.uploaded_by = myEmail; item.uploaded_at = now;
-        if (!['approved'].includes(item.status)) item.status = 'uploaded';
-        log(`uploaded ${item.document_name}`);
-        items[idx] = item;
-        break;
-      case 'submit':
-        if (!item) return fail('Item not found', 404);
-        if (item.requires_document && !item.document_url) return fail('Upload the document first', 400);
-        item.status = 'review_requested'; item.submitted_at = now; log('submitted for review');
-        items[idx] = item;
-        break;
-      case 'approve':
-      case 'reject':
-        if (!item) return fail('Item not found', 404);
-        if (!approver) return fail('You need the "approve documents" permission');
-        item.status = body.action === 'approve' ? 'approved' : 'rejected';
-        item.reviewed_by = myEmail; item.reviewed_at = now;
-        if (body.note) item.comments.push({ at: now, by: myEmail, text: String(body.note).slice(0, 2000) });
-        log(body.action === 'approve' ? 'approved' : 'rejected');
-        items[idx] = item;
-        break;
-      case 'exempt':
-        if (!item) return fail('Item not found', 404);
-        if (!admin) return fail('Admins only');
-        item.status = 'exempt'; log('marked exempt');
-        if (body.note) item.comments.push({ at: now, by: myEmail, text: String(body.note).slice(0, 2000) });
-        items[idx] = item;
-        break;
-      case 'complete':
-        if (!item) return fail('Item not found', 404);
-        if (item.requires_document) return fail('This item needs a document; upload and submit it', 400);
-        item.status = body.done === false ? 'open' : 'done'; item.completed_by = myEmail; item.completed_at = now;
-        log(item.status === 'done' ? 'completed' : 'reopened');
-        items[idx] = item;
-        break;
-      case 'comment': {
-        if (!item) return fail('Item not found', 404);
-        const text = String(body.text || '').slice(0, 2000);
-        if (!text.trim()) return fail('Write a comment', 400);
-        const wanted = new Set([...(Array.isArray(body.mentions) ? body.mentions : []), ...[...text.matchAll(/@([\w.+-]+@[\w.-]+\.\w+)/g)].map((m) => m[1])]
-          .map((e) => String(e).toLowerCase()).filter((e) => e && e !== myEmail));
-        const allowed = wanted.size ? await mentionablePeople(E, cl.brokerage_id || acc.tx?.brokerage_id || me.brokerage_id, { tx: acc.tx, subjectEmail: cl.subject_email }) : new Map();
-        mentioned = [...wanted].filter((e) => allowed.has(e)).map((e) => allowed.get(e));
-        item.comments.push({ at: now, by: myEmail, by_name: me.full_name || null, text, mentions: mentioned.map((p) => ({ email: p.email, name: p.name })) });
-        log(mentioned.length ? `commented and mentioned ${mentioned.map((p) => p.name).join(', ')}` : 'commented');
-        items[idx] = item;
-        break;
-      }
-      default:
-        return fail('Unknown action', 400);
-    }
 
-    const status = checklistStatus(items);
-    const saved = await E.Checklist.update(cl.id, { items, status });
+      switch (body.action) {
+        case 'remove':
+          if (!(acc.manage || can(me, 'tx.checklist_remove'))) return fail('Not allowed');
+          await E.Checklist.delete(cl.id);
+          return Response.json({ status: 'removed' });
+        case 'add_item':
+          if (!acc.manage) return fail('Not allowed');
+          items.push({ id: newId(), title: String(body.title || 'Task').slice(0, 200), requires_document: !!body.requires_document, required: body.required !== false, due_date: body.due_date || null, assignee_email: body.assignee_email || cl.subject_email, status: 'open', comments: [], history: [{ at: now, by: myEmail, what: 'created' }] });
+          break;
+        case 'remove_item':
+          if (!acc.manage) return fail('Not allowed');
+          if (idx < 0) return fail('Item not found', 404);
+          items.splice(idx, 1);
+          break;
+        case 'update_item': {
+          if (!item) return fail('Item not found', 404);
+          if (!acc.manage) return fail('Not allowed');
+          const allowed = ['title', 'due_date', 'assignee_email', 'requires_document', 'required'];
+          for (const k of allowed) if (k in (body.patch || {})) item[k] = body.patch[k];
+          log('edited');
+          items[idx] = item;
+          break;
+        }
+        case 'attach':
+          if (!item) return fail('Item not found', 404);
+          if (isPrivateUrl(body.url)) {
+            if (!(await canAccess(me, parsePath(pathFromUrl(body.url)), base44.entities))) return fail('Not allowed to use that file');
+          } else if (!/^https:\/\//.test(String(body.url || ''))) return fail('Missing document', 400);
+          item.document_url = body.url; item.document_name = String(body.name || 'Document').slice(0, 200);
+          item.uploaded_by = myEmail; item.uploaded_at = now;
+          if (!['approved'].includes(item.status)) item.status = 'uploaded';
+          log(`uploaded ${item.document_name}`);
+          items[idx] = item;
+          break;
+        case 'submit':
+          if (!item) return fail('Item not found', 404);
+          if (item.requires_document && !item.document_url) return fail('Upload the document first', 400);
+          item.status = 'review_requested'; item.submitted_at = now; log('submitted for review');
+          items[idx] = item;
+          break;
+        case 'approve':
+        case 'reject':
+          if (!item) return fail('Item not found', 404);
+          if (!approver) return fail('You need the "approve documents" permission');
+          item.status = body.action === 'approve' ? 'approved' : 'rejected';
+          item.reviewed_by = myEmail; item.reviewed_at = now;
+          if (body.note) item.comments.push({ at: now, by: myEmail, text: String(body.note).slice(0, 2000) });
+          log(body.action === 'approve' ? 'approved' : 'rejected');
+          items[idx] = item;
+          break;
+        case 'exempt':
+          if (!item) return fail('Item not found', 404);
+          if (!admin) return fail('Admins only');
+          item.status = 'exempt'; log('marked exempt');
+          if (body.note) item.comments.push({ at: now, by: myEmail, text: String(body.note).slice(0, 2000) });
+          items[idx] = item;
+          break;
+        case 'complete':
+          if (!item) return fail('Item not found', 404);
+          if (item.requires_document) return fail('This item needs a document; upload and submit it', 400);
+          item.status = body.done === false ? 'open' : 'done'; item.completed_by = myEmail; item.completed_at = now;
+          log(item.status === 'done' ? 'completed' : 'reopened');
+          items[idx] = item;
+          break;
+        case 'comment': {
+          if (!item) return fail('Item not found', 404);
+          const text = String(body.text || '').slice(0, 2000);
+          if (!text.trim()) return fail('Write a comment', 400);
+          const wanted = new Set([...(Array.isArray(body.mentions) ? body.mentions : []), ...[...text.matchAll(/@([\w.+-]+@[\w.-]+\.\w+)/g)].map((m) => m[1])]
+            .map((e) => String(e).toLowerCase()).filter((e) => e && e !== myEmail));
+          const allowed = wanted.size ? await mentionablePeople(E, cl.brokerage_id || acc.tx?.brokerage_id || me.brokerage_id, { tx: acc.tx, subjectEmail: cl.subject_email }) : new Map();
+          mentioned = [...wanted].filter((e) => allowed.has(e)).map((e) => allowed.get(e));
+          item.comments.push({ at: now, by: myEmail, by_name: me.full_name || null, text, mentions: mentioned.map((p) => ({ email: p.email, name: p.name })) });
+          log(mentioned.length ? `commented and mentioned ${mentioned.map((p) => p.name).join(', ')}` : 'commented');
+          items[idx] = item;
+          break;
+        }
+        default:
+          return fail('Unknown action', 400);
+      }
+
+      const status = checklistStatus(items);
+      // Save only if nobody changed this checklist since we read it (two people approving different
+      // items at the same moment); otherwise read it again and redo the change on the fresh copy.
+      let q = adminClient().from('checklist').update({ items, status }).eq('id', cl.id);
+      if (cl.updated_date) q = q.eq('updated_date', cl.updated_date);
+      const { data: rows, error: saveErr } = await q.select('id');
+      if (saveErr) throw new Error(saveErr.message);
+      if (!rows?.length) {
+        if (attempt < 5) { await new Promise((r) => setTimeout(r, 40 + Math.random() * 120)); continue; }
+        return fail('Someone else changed this checklist at the same moment. Refresh and try again.', 409);
+      }
+      const saved = await E.Checklist.get(cl.id);
+      out = { cl, acc, items, item, mentioned, saved, fail };
+      break;
+    }
+    const { cl, acc, items, item, mentioned, saved, fail } = out;
 
     // Notifications
     const label = acc.tx?.property_address || cl.subject_email;

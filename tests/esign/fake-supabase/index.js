@@ -56,7 +56,7 @@ export function createClient(url, key, clientOpts) {
       let hit = rows.filter((r) => matches(r, ops));
       const rule = viewer && globalThis.__rls?.[table];
       if (rule) hit = hit.filter((r) => rule(r, viewer));
-      if (action === 'update') { hit.forEach((r) => Object.assign(r, payload)); }
+      if (action === 'update') { hit.forEach((r) => { Object.assign(r, payload); if (r.updated_date && !payload.updated_date) r.updated_date = new Date(Date.parse(r.updated_date) + 1 + Math.floor(Math.random() * 1000)).toISOString(); }); } // like the touch trigger
       if (action === 'delete') { db[table] = rows.filter((r) => !hit.includes(r)); }
       const order = ops.find((o) => o[0] === 'order');
       if (order) { const [, c, o] = order; hit = [...hit].sort((a, b) => (a[c] > b[c] ? 1 : -1) * (o?.ascending === false ? -1 : 1)); }
@@ -78,7 +78,12 @@ export function createClient(url, key, clientOpts) {
   };
   return {
     from,
-    rpc: async (name, args) => (globalThis.__rpc?.[name] ? { data: await globalThis.__rpc[name](args), error: null } : { data: null, error: { message: `no function ${name}` } }),
+    rpc: async (name, args) => (name === 'deal_append' && !globalThis.__rpc?.[name] ? (() => {
+      const t = (globalThis.__db.transaction || []).find((r) => r.id === args.p_id);
+      if (!t) return { data: null, error: { message: 'Deal not found or not allowed' } };
+      t[args.p_col] = [...(Array.isArray(t[args.p_col]) ? t[args.p_col] : []), args.p_item];
+      return { data: null, error: null };
+    })() : globalThis.__rpc?.[name] ? { data: await globalThis.__rpc[name](args), error: null } : { data: null, error: { message: `no function ${name}` } }),
     auth: { getUser: async (t) => (globalThis.__users?.[t] ? { data: { user: globalThis.__users[t] } } : { data: {}, error: { message: 'bad' } }), admin: {
       // Logins. Like the real database, creating one also creates the profile row (handle_new_user).
       createUser: async ({ email, user_metadata }) => newLogin(email, user_metadata),

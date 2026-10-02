@@ -5,6 +5,7 @@ import { createClientFromRequest, adminClient } from '../lib/base44.js';
 import { isAdminRole, can } from '../lib/team.js';
 import { createDoc, money } from '../lib/pdfdoc.js';
 import { storePrivate, scopeFolder } from '../lib/files.js';
+import { dealAppend } from '../../shared/dealAppend.js';
 
 export default async (req) => {
   try {
@@ -51,8 +52,7 @@ export default async (req) => {
     const bytes = await doc.save();
     // Private to the deal: only people who can see this transaction can open it.
     const url = await storePrivate(scopeFolder(tx.brokerage_id, { kind: 'tx', id: tx.id }), `CDA-${String(tx.property_address || tx.id).split(',')[0]}.pdf`, bytes, 'application/pdf');
-    const docs = Array.isArray(tx.documents) ? tx.documents : [];
-    await entities.Transaction.update(tx.id, { documents: [...docs, { name: 'CDA (commission disbursement authorization)', url, uploaded_at: new Date().toISOString(), uploaded_by: me.full_name || me.email }] });
+    await dealAppend(adminClient(), tx.id, 'documents', { name: 'CDA (commission disbursement authorization)', url, uploaded_at: new Date().toISOString(), uploaded_by: me.full_name || me.email });
     return Response.json({ status: 'success', url });
   } catch (error) {
     console.error('cdaGenerate:', error);
