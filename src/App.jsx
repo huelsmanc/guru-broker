@@ -22,7 +22,6 @@ const Settings = page(() => import('@/pages/Settings'));
 const SuperAdmin = page(() => import('@/pages/SuperAdmin'));
 const Privacy = page(() => import('@/pages/Privacy'));
 const Support = page(() => import('@/pages/Support'));
-const BrokerageUsers = page(() => import('@/pages/BrokerageUsers'));
 const Profile = page(() => import('@/pages/Profile'));
 const JoinBrokerage = page(() => import('@/pages/JoinBrokerage'));
 const DirectMessages = page(() => import('@/pages/DirectMessages'));
@@ -149,7 +148,7 @@ const AuthenticatedApp = () => {
             <Route path="/AdminChat" element={<Navigate to="/DirectMessages" replace />} />
             <Route path="/SuperAdmin" element={<SuperAdmin />} />
             <Route path="/Analytics" element={<Navigate to="/Reports?report=support_chats" replace />} />
-            <Route path="/BrokerageUsers" element={<BrokerageUsers />} />
+            <Route path="/BrokerageUsers" element={<KeepQuery to="/Settings" add="tab=users" />} />
             <Route path="/Profile" element={<Profile />} />
             <Route path="/DirectMessages" element={<DirectMessages />} />
             <Route path="/AgentLeaderboard" element={<AgentLeaderboard />} />

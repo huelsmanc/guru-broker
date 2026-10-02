@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import React, { useState, useEffect } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,12 +11,15 @@ import { Settings as SettingsIcon, Save, CheckCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 import NotificationSettings from '@/components/NotificationSettings';
 import TechLinksTab from '@/components/settings/TechLinksTab';
+import BrokerageUsers from '@/pages/BrokerageUsers';
 import { isAdminRole, normalizeRole, can } from '../../shared/permissions.generated.js';
 
 export default function Settings() {
   const { user, brokerageId } = useOutletContext();
   const isAdmin = isAdminRole(user?.role);
   const queryClient = useQueryClient();
+  const [params, setParams] = useSearchParams();
+  const tab = params.get('tab') || (isAdmin ? 'brokerage' : 'notifications');
   const [form, setForm] = useState({
     brokerage_name: '',
     broker_name: '',
@@ -102,7 +105,7 @@ export default function Settings() {
   }
 
   return (
-    <div className="p-6 lg:p-10 max-w-2xl mx-auto">
+    <div className="p-6 lg:p-10 max-w-6xl mx-auto">
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
         <div className="flex items-center gap-3 mb-1">
           <SettingsIcon className="w-7 h-7 text-primary" />
@@ -111,16 +114,17 @@ export default function Settings() {
         <p className="text-muted-foreground ml-10">Manage your preferences and brokerage configuration.</p>
       </motion.div>
 
-      <Tabs defaultValue={isAdmin ? "brokerage" : "notifications"} className="space-y-6">
-        <TabsList className="w-full">
+      <Tabs value={tab} onValueChange={(v) => setParams((p) => { p.set('tab', v); return p; }, { replace: true })} className="space-y-6">
+        <TabsList className="w-full justify-start overflow-x-auto overflow-y-hidden [&>button]:shrink-0">
             {isAdmin && <TabsTrigger value="brokerage">Brokerage Settings</TabsTrigger>}
+            {isAdmin && <TabsTrigger value="users">Users</TabsTrigger>}
             {isAdmin && <TabsTrigger value="colors">Brand Colors</TabsTrigger>}
             {isAdmin && <TabsTrigger value="tech_links">Tech Links</TabsTrigger>}
             <TabsTrigger value="notifications">Notifications</TabsTrigger>
           </TabsList>
 
         {isAdmin && (
-          <TabsContent value="brokerage">
+          <TabsContent value="brokerage" className="max-w-2xl">
             <div className="bg-card rounded-2xl border border-border p-6 space-y-5">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           <div>
@@ -234,7 +238,7 @@ export default function Settings() {
         )}
 
         {isAdmin && (
-          <TabsContent value="colors">
+          <TabsContent value="colors" className="max-w-2xl">
             <div className="bg-card rounded-2xl border border-border p-6 space-y-6">
               <div className="space-y-4">
                 <div>
@@ -305,7 +309,7 @@ export default function Settings() {
         )}
 
         {isAdmin && (
-          <TabsContent value="tech_links">
+          <TabsContent value="tech_links" className="max-w-2xl">
             <div className="bg-card rounded-2xl border border-border p-6">
               <TechLinksTab
                 links={form.tech_links || []}
@@ -324,7 +328,9 @@ export default function Settings() {
           </TabsContent>
         )}
 
-        <TabsContent value="notifications">
+        {isAdmin && <TabsContent value="users"><BrokerageUsers embedded /></TabsContent>}
+
+        <TabsContent value="notifications" className="max-w-2xl">
           <div className="bg-card rounded-2xl border border-border p-6">
             <NotificationSettings />
           </div>

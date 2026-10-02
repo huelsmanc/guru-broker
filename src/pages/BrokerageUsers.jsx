@@ -11,10 +11,11 @@ import { Users, Trash2, ToggleLeft, ToggleRight, Plus, ShieldCheck, Crown, Brief
 import { motion } from 'framer-motion';
 import OnboardingChecklist from '@/components/onboarding/OnboardingChecklist';
 import UserAdminDialog from '@/components/users/UserAdminDialog';
-import RoleOptions from '@/components/users/RoleOptions';
+import RoleOptions, { roleLabel } from '@/components/users/RoleOptions';
 import { isAdminRole, normalizeRole, can } from '../../shared/permissions.generated.js';
 
-export default function BrokerageUsers() {
+// Shown as the Users tab in Settings (embedded); /BrokerageUsers redirects there.
+export default function BrokerageUsers({ embedded = false }) {
   const { user, brokerageId } = useOutletContext();
   const queryClient = useQueryClient();
   const isAdmin = isAdminRole(user?.role);
@@ -151,7 +152,13 @@ export default function BrokerageUsers() {
   }
 
   return (
-    <div className="p-6 lg:p-10 max-w-6xl mx-auto">
+    <div className={embedded ? '' : 'p-6 lg:p-10 max-w-6xl mx-auto'}>
+      {embedded ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+          <p className="text-muted-foreground text-sm">Add and manage agents and admins in your brokerage.</p>
+          <Button onClick={() => setShowInvite(true)} className="gap-2 rounded-xl h-11"><Plus className="w-4 h-4" /> Invite User</Button>
+        </div>
+      ) : (
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
           <Users className="w-7 h-7 text-primary" />
@@ -164,6 +171,7 @@ export default function BrokerageUsers() {
           <Plus className="w-4 h-4" /> Invite User
         </Button>
       </motion.div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
@@ -243,7 +251,7 @@ export default function BrokerageUsers() {
               {!isAccountOwner && (
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <Badge variant={isAdminRole(u.role) ? 'default' : 'secondary'} className="text-xs capitalize">
-                    {isAdminRole(u.role) ? 'Admin' : 'Agent'}
+                    {roleLabel(u.role)}
                   </Badge>
                   <Button
                     variant="ghost"
