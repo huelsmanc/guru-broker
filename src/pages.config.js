@@ -47,7 +47,6 @@
  *
  * The mainPage value must match a key in the PAGES object exactly.
  */
-import AdminChat from './pages/AdminChat';
 import AgentLeaderboard from './pages/AgentLeaderboard';
 import Analytics from './pages/Analytics';
 import BrokerMonitor from './pages/BrokerMonitor';
@@ -90,7 +89,6 @@ import CustomSign from './pages/CustomSign';
 
 
 export const PAGES = {
-    "AdminChat": AdminChat,
     "AgentLeaderboard": AgentLeaderboard,
     "Analytics": Analytics,
     "BrokerMonitor": BrokerMonitor,

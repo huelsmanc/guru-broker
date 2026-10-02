@@ -18,7 +18,6 @@ const ScheduleCalls = lazy(() => import('@/pages/ScheduleCalls'));
 const BrokerMonitor = lazy(() => import('@/pages/BrokerMonitor'));
 const SocialChat = lazy(() => import('@/pages/SocialChat'));
 const Settings = lazy(() => import('@/pages/Settings'));
-const AdminChat = lazy(() => import('@/pages/AdminChat'));
 const SuperAdmin = lazy(() => import('@/pages/SuperAdmin'));
 const BrokerageUsers = lazy(() => import('@/pages/BrokerageUsers'));
 const Profile = lazy(() => import('@/pages/Profile'));
@@ -141,7 +140,8 @@ const AuthenticatedApp = () => {
             <Route path="/BrokerMonitor" element={<BrokerMonitor />} />
             <Route path="/SocialChat" element={<SocialChat />} />
             <Route path="/Settings" element={<Settings />} />
-            <Route path="/AdminChat" element={<AdminChat />} />
+            {/* Broker Chat was retired: brokers and admins use a private channel instead. */}
+            <Route path="/AdminChat" element={<Navigate to="/DirectMessages" replace />} />
             <Route path="/SuperAdmin" element={<SuperAdmin />} />
             <Route path="/Analytics" element={<Navigate to="/Reports?report=support_chats" replace />} />
             <Route path="/BrokerageUsers" element={<BrokerageUsers />} />
