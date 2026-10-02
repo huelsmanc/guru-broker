@@ -81,3 +81,16 @@ export function chunkPages(pages, maxChars = 14000) {
   if (cur.length) chunks.push(cur);
   return chunks;
 }
+
+/** One page drawn exactly `width` pixels wide (for print), as a JPEG data URL. */
+export async function pageImage(pdf, n, width) {
+  const page = await pdf.getPage(n);
+  const vp1 = page.getViewport({ scale: 1 });
+  const vp = page.getViewport({ scale: width / vp1.width });
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(vp.width); canvas.height = Math.round(vp.height);
+  const g = canvas.getContext('2d');
+  g.fillStyle = '#fff'; g.fillRect(0, 0, canvas.width, canvas.height);
+  await page.render({ canvasContext: g, viewport: vp }).promise;
+  return canvas.toDataURL('image/jpeg', 0.95);
+}

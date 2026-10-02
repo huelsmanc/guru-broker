@@ -109,3 +109,24 @@ export function BusinessCard({ side = 'front', style = 'classic', agent = {}, br
     </div>
   );
 }
+
+/**
+ * The agent's own artwork, filling the piece edge to edge. On a postcard back the address and
+ * postage box is painted white so the mail house can print there.
+ */
+export function UploadedArt({ product, src, keepAddressClear, showGuides }) {
+  const p = PRODUCTS[product];
+  const [tw, th] = p.trim;
+  const W = tw * PX; const H = th * PX;
+  const ink = p.inkFree;
+  return (
+    <div style={{ width: W, height: H, position: 'relative', overflow: 'hidden', background: '#fff' }}>
+      <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+      {keepAddressClear && ink && (
+        <div style={{ position: 'absolute', right: ink.right * PX, bottom: ink.bottom * PX, width: ink.w * PX, height: ink.h * PX, background: '#fff', outline: showGuides ? '1px dashed #f59e0b' : 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {showGuides && <span style={{ fontSize: 9, color: '#b45309', fontFamily: font, textAlign: 'center' }}>Address and postage<br />(printed by the mail house)</span>}
+        </div>
+      )}
+    </div>
+  );
+}

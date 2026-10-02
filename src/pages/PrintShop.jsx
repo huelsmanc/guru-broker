@@ -10,7 +10,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { isAdminRole } from '../../shared/permissions.generated.js';
 import Design from '@/components/marketing/Design';
-import { PostcardBack, BusinessCard, CARD_STYLES } from '@/components/print/PrintPieces';
+import { PostcardBack, BusinessCard, CARD_STYLES, UploadedArt } from '@/components/print/PrintPieces';
+import { openPdf, pageImage } from '@/lib/pdfText';
 import { useBrand } from '@/pages/Marketing';
 import { drawTrim, addBleed, toBlob, makePdf, uploadPrintFile } from '@/lib/printFiles';
 import { PRODUCTS, priceFor, money, parseAddressCsv, splitAddress, cleanAddress } from '../../shared/print.js';
@@ -84,6 +85,10 @@ function OrderFlow({ user, brokerageId, catalog, preselect, preselectProduct, on
   const { agent: baseAgent, brand } = useBrand(user, brokerageId);
   const [product, setProduct] = useState(null);
   const [designId, setDesignId] = useState(preselect || null);
+  const [source, setSource] = useState('design'); // 'design' (made here) or 'upload' (their own artwork)
+  const [upFront, setUpFront] = useState(null);
+  const [upBack, setUpBack] = useState(null);
+  const [backMode, setBackMode] = useState('ours'); // postcards: our back with their message, or their own art
   const [backHeadline, setBackHeadline] = useState('');
   const [backMessage, setBackMessage] = useState('');
   const [cardStyle, setCardStyle] = useState('classic');
@@ -121,7 +126,9 @@ function OrderFlow({ user, brokerageId, catalog, preselect, preselectProduct, on
   const price = p ? priceFor(product, { quantity, recipients: recips.recipients.length }, catalog.settings || { prices: Object.fromEntries(catalog.products.map((x) => [x.key, x.prices])) }) : null;
   const returnAddress = (() => { const a = cleanAddress({ name: agent.name, address_line1: user?.address, city: user?.city, state: user?.state, zip: user?.zip }); return a.address || null; })();
   const needsDesign = p && p.vendor === 'lob' || product === 'flyer_letter';
-  const ready = p && (!needsDesign || design) && (p.mailed ? recips.recipients.length > 0 : !!quantity && !!cleanAddress(ship || {}).address) && price != null;
+  const uploading = source === 'upload';
+  const haveFront = uploading ? !!upFront : product === 'business_cards' || !!design;
+  const ready = p && haveFront && (!uploading || product !== 'business_cards' || !!upBack) && (!p.mailed || backMode === 'ours' || !!upBack) && (p.mailed ? recips.recipients.length > 0 : !!quantity && !!cleanAddress(ship || {}).address) && price != null;
 
   const place = async () => {
     setBusy('Making your print files…'); setError('');
@@ -141,7 +148,7 @@ function OrderFlow({ user, brokerageId, catalog, preselect, preselectProduct, on
       }
       setBusy(catalog.test_mode ? 'Placing your test order…' : 'Opening secure checkout…');
       const r = await shop('order', {
-        product, quantity, files, design_id: design?.id, transaction_id: design?.transaction_id || design?.data?.listing?.transaction_id || undefined,
+        product, quantity, files, design_id: uploading ? undefined : design?.id, transaction_id: uploading ? undefined : design?.transaction_id || design?.data?.listing?.transaction_id || undefined,
         ...(p.mailed ? (recips.list_id ? { list_id: recips.list_id } : { recipients: recips.recipients }) : {}),
         ship_to: p.mailed ? (returnAddr ? returnAddress : null) : ship,
       });
@@ -170,11 +177,22 @@ function OrderFlow({ user, brokerageId, catalog, preselect, preselectProduct, on
     );
   }
 
-  const frontEl = product === 'business_cards' ? <BusinessCard side="front" style={cardStyle} agent={agent} brand={brand} color={color} />
+  const frontEl = uploading ? (upFront ? <UploadedArt product={product} src={upFront} /> : null)
+    : product === 'business_cards' ? <BusinessCard side="front" style={cardStyle} agent={agent} brand={brand} color={color} />
     : design ? <Design format={p.mailed ? product : 'flyer'} content={design.data?.content} listing={design.data?.listing} photos={design.data?.photos} agent={agent} brand={brand} bgImage={design.data?.bgImage} scale={1} /> : null;
-  const backEl = product === 'business_cards' ? <BusinessCard side="back" style={cardStyle} agent={agent} brand={brand} color={color} />
+  const ownBack = (uploading && product === 'business_cards') || (p.mailed && backMode === 'upload');
+  const backEl = ownBack ? (upBack ? <UploadedArt product={product} src={upBack} keepAddressClear={p.mailed} /> : null)
+    : product === 'business_cards' ? <BusinessCard side="back" style={cardStyle} agent={agent} brand={brand} color={color} />
     : p.mailed ? <PostcardBack product={product} headline={backHeadline} message={backMessage} agent={agent} brand={brand} color={color} /> : null;
-  const guideBack = p.mailed ? <PostcardBack product={product} headline={backHeadline} message={backMessage} agent={agent} brand={brand} color={color} showGuides /> : backEl;
+  const guideBack = ownBack ? (upBack ? <UploadedArt product={product} src={upBack} keepAddressClear={p.mailed} showGuides /> : null)
+    : p.mailed ? <PostcardBack product={product} headline={backHeadline} message={backMessage} agent={agent} brand={brand} color={color} showGuides /> : backEl;
+  const [tw, th] = p.trim;
+  const sizeHint = `${tw}×${th} in (${Math.round(tw * 300)}×${Math.round(th * 300)} px at 300 dpi). A file with a 1/8" bleed works too.`;
+  const sourceSwitch = (
+    <div className="flex gap-1 rounded-lg bg-muted p-1 text-sm mb-3">
+      {[['design', product === 'business_cards' ? 'Build it here' : 'One of my designs'], ['upload', 'Upload my own']].map(([k, l]) => <button key={k} onClick={() => setSource(k)} className={cn('flex-1 rounded-md py-1.5', source === k ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground')}>{l}</button>)}
+    </div>
+  );
 
   return (
     <div className="grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-6">
@@ -183,8 +201,11 @@ function OrderFlow({ user, brokerageId, catalog, preselect, preselectProduct, on
         <h2 className="text-lg font-semibold">{p.label}</h2>
 
         {needsDesign && (
-          <Step n={1} title="Pick a design">
-            {!designs.length ? <p className="text-sm text-muted-foreground">You don't have saved designs yet. Make one in <b>Designs</b>, save it, then come back.</p> : (
+          <Step n={1} title="Front">
+            {sourceSwitch}
+            {uploading ? (
+              <ArtUpload label="Front artwork" hint={sizeHint} width={tw * 300} value={upFront} onChange={setUpFront} onSecondPage={(u) => { if (p.sides === 2 && !upBack) { setUpBack(u); setBackMode('upload'); } }} />
+            ) : !designs.length ? <p className="text-sm text-muted-foreground">You don't have saved designs yet. Make one in <b>Designs</b>, save it, then come back.</p> : (
               <div className="flex gap-3 overflow-x-auto pb-2">
                 {designs.map((d) => (
                   <button key={d.id} onClick={() => setDesignId(d.id)} className={cn('flex-shrink-0 w-28 rounded-xl border-2 overflow-hidden text-left', designId === d.id ? 'border-primary' : 'border-transparent')}>
@@ -199,14 +220,28 @@ function OrderFlow({ user, brokerageId, catalog, preselect, preselectProduct, on
 
         {p.mailed && (
           <Step n={2} title="Back of the postcard">
+            <div className="flex gap-1 rounded-lg bg-muted p-1 text-sm mb-3">
+              {[['ours', 'Message + my info'], ['upload', 'Upload my own back']].map(([k, l]) => <button key={k} onClick={() => setBackMode(k)} className={cn('flex-1 rounded-md py-1.5', backMode === k ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground')}>{l}</button>)}
+            </div>
+            {backMode === 'upload' ? (
+              <ArtUpload label="Back artwork" hint={`${sizeHint} The address and postage box on the right is covered in white automatically, so keep that area empty.`} width={tw * 300} value={upBack} onChange={setUpBack} />
+            ) : (<>
             <Input value={backHeadline} onChange={(e) => setBackHeadline(e.target.value)} placeholder="Headline (e.g. Just listed in your neighborhood)" maxLength={60} />
             <Textarea value={backMessage} onChange={(e) => setBackMessage(e.target.value.slice(0, 320))} placeholder="A short note to the neighbors" className="mt-2 min-h-[90px]" />
             <p className="text-xs text-muted-foreground mt-1">{backMessage.length}/320. Your photo, contact info, logo and Equal Housing notice are added for you. The right side is kept clear for the address and postage.</p>
+            </>)}
           </Step>
         )}
 
         {product === 'business_cards' && (
           <Step n={1} title="Your card">
+            {sourceSwitch}
+            {uploading ? (
+              <div className="space-y-3">
+                <ArtUpload label="Front" hint={sizeHint} width={tw * 300} value={upFront} onChange={setUpFront} onSecondPage={(u) => { if (!upBack) setUpBack(u); }} />
+                <ArtUpload label="Back" hint="A 2-page PDF fills both sides at once." width={tw * 300} value={upBack} onChange={setUpBack} />
+              </div>
+            ) : (<>
             <div className="flex flex-wrap gap-2 mb-3">{Object.entries(CARD_STYLES).map(([k, l]) => <button key={k} onClick={() => setCardStyle(k)} className={cn('rounded-full border px-3 py-1 text-sm', cardStyle === k ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-muted')}>{l}</button>)}</div>
             <div className="grid grid-cols-2 gap-2">
               <Input value={agent.title || ''} onChange={(e) => setExtra((x) => ({ ...x, title: e.target.value }))} placeholder="Title" />
@@ -215,6 +250,7 @@ function OrderFlow({ user, brokerageId, catalog, preselect, preselectProduct, on
               <Input value={agent.license || ''} onChange={(e) => setExtra((x) => ({ ...x, license: e.target.value }))} placeholder="License #" />
             </div>
             <p className="text-xs text-muted-foreground mt-1">Name, email, headshot and logo come from your Brand kit.</p>
+            </>)}
           </Step>
         )}
 
@@ -258,6 +294,36 @@ function OrderFlow({ user, brokerageId, catalog, preselect, preselectProduct, on
         <div ref={frontRef} style={{ display: 'inline-block' }}>{frontEl}</div>
         <div ref={backRef} style={{ display: 'inline-block' }}>{backEl}</div>
       </div>
+    </div>
+  );
+}
+
+/** The agent's own artwork: a picture or a PDF (page 1; page 2 can fill the back). */
+function ArtUpload({ label, hint, width, value, onChange, onSecondPage }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const read = async (file) => {
+    if (!file) return;
+    setBusy(true); setErr('');
+    try {
+      if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) {
+        const pdf = await openPdf(file);
+        onChange(await pageImage(pdf, 1, Math.round(width)));
+        if (pdf.numPages > 1 && onSecondPage) onSecondPage(await pageImage(pdf, 2, Math.round(width)));
+      } else if (/^image\//.test(file.type)) {
+        onChange(await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file); }));
+      } else throw new Error('Use a PDF, PNG or JPG.');
+    } catch (e) { setErr(e.message || 'Could not read that file.'); } finally { setBusy(false); }
+  };
+  return (
+    <div>
+      <p className="text-sm font-medium mb-1">{label}</p>
+      <label className="flex items-center gap-3 rounded-xl border-2 border-dashed p-3 text-sm cursor-pointer hover:bg-muted/40">
+        {value ? <img src={value} alt="" className="h-16 w-24 object-cover rounded border" /> : <span className="h-16 w-24 rounded border bg-muted flex items-center justify-center">{busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4 text-muted-foreground" />}</span>}
+        <span className="flex-1"><span className="font-medium">{value ? 'Replace file' : 'Choose a PDF, PNG or JPG'}</span><span className="block text-xs text-muted-foreground">{hint}</span></span>
+        <input type="file" accept="application/pdf,image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => { read(e.target.files?.[0]); e.target.value = ''; }} />
+      </label>
+      {err && <p className="text-xs text-red-600 mt-1">{err}</p>}
     </div>
   );
 }
