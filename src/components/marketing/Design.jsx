@@ -32,6 +32,9 @@ export const FORMATS = {
   post: { label: 'Instagram / Facebook post', w: 1080, h: 1080 },
   story: { label: 'Instagram / Facebook story', w: 1080, h: 1920 },
   wide: { label: 'Facebook / LinkedIn link image', w: 1200, h: 630 },
+  // Postcard fronts at trim size (96 px per inch); the print file adds the bleed.
+  postcard_4x6: { label: 'Postcard front (6×4)', w: 576, h: 384, print: true },
+  postcard_6x9: { label: 'Postcard front (9×6)', w: 864, h: 576, print: true },
 };
 export const TEMPLATES = { hero: 'Hero photo', grid: 'Photo grid', luxury: 'Luxury', bold: 'Bold', minimal: 'Minimal' };
 export const KINDS = {
@@ -113,7 +116,7 @@ export default function Design({ format = 'flyer', content, listing = {}, photos
   const F = FORMATS[format] || FORMATS.flyer;
   const { w, h } = F;
   const u = Math.min(w, h * 0.85) / 100;
-  const shape = h / w > 1.3 ? 'tall' : w / h > 1.5 ? 'wide' : 'square';
+  const shape = h / w > 1.3 ? 'tall' : w / h >= 1.45 ? 'wide' : 'square';
   const c = content || {};
   const p = c.palette || {};
   const primary = p.primary || '#0f172a';

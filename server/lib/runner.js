@@ -9,7 +9,7 @@ import { setInvoker, SERVICE_HEADER, isServiceRequest } from './base44.js';
 export const SERVICE_ONLY = new Set([
   // scheduled
   'closingDateReminder', 'sendSigningReminders', 'sendCultureEventReminders', 'mlsSync',
-  'licenseAlerts', 'payoutSync', 'chatDigest',
+  'licenseAlerts', 'payoutSync', 'chatDigest', 'printQueue',
   // database automations
   'notifyAgentsNewTraining', 'notifyDocumentActivity', 'applyDefaultChecklists', 'dealChatSync', 'pushOnMessage', 'notifyNewSocialMessage', 'notifySignatureUpdate',
   // unused by the app

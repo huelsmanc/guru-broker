@@ -73,6 +73,8 @@ ENTITIES = {
     "PushSubscription": "brokerage_id user_email endpoint p256dh auth user_agent",
     "ChatReadState": "brokerage_id user_email kind conv_key last_read_at",
     "RoleplaySession": "brokerage_id agent_email agent_name scenario scenario_title difficulty status started_at ended_at duration_seconds transcript score scorecard",
+    "PrintOrder": "brokerage_id owner_email owner_name product product_label vendor status quantity recipient_count sent_count failed_count amount_cents currency files ship_to recipients list_id design_id transaction_id stripe_session_id test_mode paid_at fulfilled_at vendor_ids tracking problems",
+    "MailingList": "brokerage_id owner_email name recipients recipient_count source",
 }
 
 # User lives in `profiles`, linked 1:1 to Supabase auth.users.
@@ -80,14 +82,14 @@ USER_FIELDS = "email full_name display_name role brokerage_id suspended headshot
 
 JSON_FIELDS = set("""co_agents referral deductions commission_calc config calc items changed mls_ids answers buyers checklist completed_dates details documents encryption_metadata esign_docs fields items
 data members invitees mentions messages options reactions read_by sellers signatories signature_fields signers tags tech_links updates
-versions cma_report roles states transcript scorecard""".split())
-BOOL_FIELDS = set("auto_name is_private is_client is_default active appraisal_contingency read pinned encrypted suspended submitted checked_in is_active is_anonymous is_featured signed passed require_sequential_signing".split())
-INT_FIELDS = set("level inspection_days financing_days bathrooms bedrooms downloads_count downvotes upvotes guests_count order passing_score rating signer_index version file_size score duration_seconds".split())
+versions cma_report roles states transcript scorecard files ship_to recipients vendor_ids tracking problems""".split())
+BOOL_FIELDS = set("test_mode auto_name is_private is_client is_default active appraisal_contingency read pinned encrypted suspended submitted checked_in is_active is_anonymous is_featured signed passed require_sequential_signing".split())
+INT_FIELDS = set("quantity recipient_count sent_count failed_count amount_cents level inspection_days financing_days bathrooms bedrooms downloads_count downvotes upvotes guests_count order passing_score rating signer_index version file_size score duration_seconds".split())
 NUM_FIELDS = set("""lead_pct gross_share company_dollar agent_net fees team_lead revshare_total amount list_price offer_price earnest_money down_payment_percent loan_amount seller_concessions agent_net agent_split_percentage brokerage_fee brokerage_fee_flat brokerage_fee_percentage commission_amount
 commission_flat commission_percentage commission_sale_price sale_price sales_amount transaction_fee transaction_fee_flat
 transaction_fee_percentage purchase_price""".split())
 DATE_FIELDS = set("cap_year_start closed_date license_expiration eo_expiration start_date cap_start_date acceptance_date date closing_date inspection_date appraisal_date financing_contingency_date inspection_contingency_date loan_approval_date title_deadline_date".split())
-TS_FIELDS = set("edited_at started_at ended_at last_read_at approved_at sent_at paid_at bank_linked_at thank_you_sent_at offer_expiration accepted_at completed_at submitted_at signed_at response_date scheduled_at".split())
+TS_FIELDS = set("fulfilled_at edited_at started_at ended_at last_read_at approved_at sent_at paid_at bank_linked_at thank_you_sent_at offer_expiration accepted_at completed_at submitted_at signed_at response_date scheduled_at".split())
 
 # Tables not scoped by brokerage (owned by a user or reached via a parent)
 PERSONAL = {"IdeaPadNote": "user_email", "ChatReadState": "user_email", "PushSubscription": "user_email"}
@@ -300,7 +302,11 @@ for ent, fields in sorted(ENTITIES.items()):
         pw(f"create policy {t}_insert on public.{t} for insert with check (lower(sender_email) = public.auth_email() and brokerage_id = public.auth_brokerage_id());")
         pw(f"create policy {t}_update on public.{t} for update using (lower(sender_email) = public.auth_email()) with check (lower(sender_email) = public.auth_email());")
         pw(f"create policy {t}_delete on public.{t} for delete using (lower(sender_email) = public.auth_email());")
-    elif ent == "MarketingDesign":
+    elif ent == "PrintOrder":
+        # The agent who ordered it and the brokerage's admins can see it; only the server writes (payment and printing).
+        pw(f"create policy {t}_access on public.{t} for select using (lower(owner_email) = public.auth_email() or (brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin());")
+        pw(f"-- {t}: written only by server routes.")
+    elif ent in ("MarketingDesign", "MailingList"):
         pw(f"create policy {t}_access on public.{t} for all using (lower(owner_email) = public.auth_email() or (brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin()) with check (brokerage_id = public.auth_brokerage_id() and (lower(owner_email) = public.auth_email() or public.is_brokerage_admin()));")
     elif ent == "Conversation":
         # Support chat: the agent who opened it and the brokerage's admins.

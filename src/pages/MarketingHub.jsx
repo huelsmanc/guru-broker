@@ -1,16 +1,18 @@
 import React, { Suspense, lazy } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Megaphone, TrendingUp, Calculator, Wand2, Gift, Loader2 } from 'lucide-react';
+import { Megaphone, TrendingUp, Calculator, Wand2, Gift, Loader2, Printer } from 'lucide-react';
 
 const Designs = lazy(() => import('@/pages/Marketing'));
 const CMABuilder = lazy(() => import('@/pages/CMABuilder'));
 const NetSheet = lazy(() => import('@/pages/NetSheetCalculator'));
 const ListingGenerator = lazy(() => import('@/pages/ListingGenerator'));
 const ClientAppreciation = lazy(() => import('@/pages/ClientAppreciation'));
+const PrintShop = lazy(() => import('@/pages/PrintShop'));
 
 // ?tool= picks the tool (each tool keeps its own ?tab= for its inner tabs).
 const TOOLS = [
   ['design', 'Designs', Megaphone, Designs],
+  ['print', 'Print & mail', Printer, PrintShop],
   ['cma', 'CMA', TrendingUp, CMABuilder],
   ['netsheet', 'Net sheet', Calculator, NetSheet],
   ['listing', 'Listing description', Wand2, ListingGenerator],

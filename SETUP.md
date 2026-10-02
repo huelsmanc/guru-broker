@@ -181,3 +181,22 @@ deal's **client chat** (separate from the team's deal chat), see key dates and p
 documents you request. Uploads land in the deal's Documents under **Client uploads**.
 The session signing key is created automatically (app_secret `client_portal`); set
 CLIENT_PORTAL_SECRET in Vercel to override.
+
+## Print & mail (Marketing > Print & mail)
+
+Agents order postcards mailed to a list (Lob) or flyers and business cards shipped to them
+(Gelato), paying by card (Stripe Checkout). It starts in **test mode** (nothing is charged,
+printed or mailed); the platform owner turns it off in **Print settings** when ready.
+
+1. Run `supabase/migrations/0013_print_shop.sql` in the Supabase SQL editor.
+2. Vercel environment variables:
+   - `STRIPE_SECRET_KEY` (Stripe > Developers > API keys; use the test key first)
+   - `STRIPE_WEBHOOK_SECRET`: in Stripe add a webhook endpoint
+     `https://YOUR-DOMAIN/api/fn/stripeWebhook` for `checkout.session.completed`, then copy its signing secret
+   - `LOB_API_KEY` (Lob dashboard > Settings > API keys; `test_...` never mails)
+   - `GELATO_API_KEY` (Gelato dashboard > Developer > API keys)
+3. In **Print settings**: set the prices agents pay, check the Gelato product codes, then turn off
+   test mode.
+
+Listing kits (postcard + flyer + post + story) are made automatically when a listing-side deal is
+added, when any deal closes, and hourly for agents' own new Active MLS listings.

@@ -961,6 +961,25 @@ export const SCHEMA = {
       "messages"
     ]
   },
+  "MailingList": {
+    "table": "mailing_list",
+    "columns": [
+      "brokerage_id",
+      "name",
+      "owner_email",
+      "recipient_count",
+      "recipients",
+      "source",
+      "id",
+      "created_date",
+      "updated_date",
+      "created_by"
+    ],
+    "typed": [
+      "recipient_count",
+      "recipients"
+    ]
+  },
   "MarketingDesign": {
     "table": "marketing_design",
     "columns": [
@@ -1134,6 +1153,57 @@ export const SCHEMA = {
       "level",
       "paid_at",
       "sent_at"
+    ]
+  },
+  "PrintOrder": {
+    "table": "print_order",
+    "columns": [
+      "amount_cents",
+      "brokerage_id",
+      "currency",
+      "design_id",
+      "failed_count",
+      "files",
+      "fulfilled_at",
+      "list_id",
+      "owner_email",
+      "owner_name",
+      "paid_at",
+      "problems",
+      "product",
+      "product_label",
+      "quantity",
+      "recipient_count",
+      "recipients",
+      "sent_count",
+      "ship_to",
+      "status",
+      "stripe_session_id",
+      "test_mode",
+      "tracking",
+      "transaction_id",
+      "vendor",
+      "vendor_ids",
+      "id",
+      "created_date",
+      "updated_date",
+      "created_by"
+    ],
+    "typed": [
+      "amount_cents",
+      "failed_count",
+      "files",
+      "fulfilled_at",
+      "paid_at",
+      "problems",
+      "quantity",
+      "recipient_count",
+      "recipients",
+      "sent_count",
+      "ship_to",
+      "test_mode",
+      "tracking",
+      "vendor_ids"
     ]
   },
   "PushSubscription": {

@@ -17,7 +17,7 @@ echo '{"name":"pdfjs-dist","type":"module"}' > .build/node_modules/pdfjs-dist/pa
 npx esbuild "../../api/fn/[name].js" --bundle --packages=external --platform=node --format=esm --outfile=.build/fn.mjs --log-level=error
 npx esbuild ../../api/file.js --bundle --packages=external --platform=node --format=esm --outfile=.build/file.mjs --log-level=error
 npx esbuild ../../server/lib/importers.js --bundle --packages=external --platform=node --format=esm --outfile=.build/importers.mjs --log-level=error
-cp flow.test.mjs esign2.test.mjs ai.test.mjs mls.test.mjs backoffice.test.mjs chat.test.mjs marketing.test.mjs files.test.mjs import.test.mjs twostep.test.mjs streetview.test.mjs leaderboardfn.test.mjs roleplay.test.mjs intake.test.mjs gearstore.test.mjs dealdelete.test.mjs payoutvoid.test.mjs clientportal.test.mjs sample.pdf sig.png .build/
+cp flow.test.mjs esign2.test.mjs ai.test.mjs mls.test.mjs backoffice.test.mjs chat.test.mjs marketing.test.mjs files.test.mjs import.test.mjs twostep.test.mjs streetview.test.mjs leaderboardfn.test.mjs roleplay.test.mjs intake.test.mjs gearstore.test.mjs dealdelete.test.mjs payoutvoid.test.mjs clientportal.test.mjs printshop.test.mjs listingkit.test.mjs sample.pdf sig.png .build/
 node .build/flow.test.mjs
 node .build/esign2.test.mjs
 node .build/ai.test.mjs
@@ -36,6 +36,8 @@ node .build/gearstore.test.mjs
 node .build/dealdelete.test.mjs
 node .build/payoutvoid.test.mjs
 node .build/clientportal.test.mjs
+node .build/printshop.test.mjs
+node .build/listingkit.test.mjs
 node ../entities.test.mjs
 node ../commission.test.mjs
 node ../dealTimeline.test.mjs

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useOutletContext, useSearchParams } from 'react-router-dom';
+import { useOutletContext, useSearchParams, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Sparkles, Loader2, Search, Upload, Download, Printer, Copy, Save, Mail, Wand2, ImagePlus, X, Star, Trash2, Palette, Check, Send } from 'lucide-react';
 import { format as fmtDate } from 'date-fns';
@@ -16,7 +16,7 @@ import Design, { FORMATS, TEMPLATES, KINDS, emailHtml } from '@/components/marke
 const STYLES = ['Modern', 'Luxury', 'Classic', 'Bold', 'Minimal', 'Coastal', 'Farmhouse', 'Playful'];
 const loadHtmlToImage = () => import(/* @vite-ignore */ 'https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/+esm');
 
-function useBrand(user, brokerageId) {
+export function useBrand(user, brokerageId) {
   const { data: settings } = useQuery({
     queryKey: ['brokerage-settings', brokerageId],
     queryFn: async () => (await base44.entities.BrokerageSettings.filter({ brokerage_id: brokerageId }))[0] || null,
@@ -66,12 +66,13 @@ export default function Marketing() {
           <p className="text-sm text-muted-foreground">Describe what you want. AI writes it and picks the look; your photos, prices, logo and contact info are placed exactly.</p>
         </div>
         <div className="flex rounded-full border p-1 text-sm">
-          {[['create', 'Create'], ['designs', 'My designs'], ['brand', 'Brand kit']].map(([k, l]) => (
+          {[['create', 'Create'], ['kits', 'Listing kits'], ['designs', 'My designs'], ['brand', 'Brand kit']].map(([k, l]) => (
             <button key={k} onClick={() => setParams({ tab: k })} className={cn('px-4 py-1.5 rounded-full', tab === k ? 'bg-primary text-primary-foreground' : 'hover:bg-muted')}>{l}</button>
           ))}
         </div>
       </div>
       {tab === 'create' && <Studio key={loaded ? JSON.stringify(loaded).length + (loaded.id || '') : 'new'} user={me} brokerageId={brokerageId} agent={agent} brand={brand} initial={loaded} onNeedBrand={() => setParams({ tab: 'brand' })} />}
+      {tab === 'kits' && <Kits user={me} brokerageId={brokerageId} agent={agent} brand={brand} onOpen={(d) => { setLoaded(d); setParams({ tab: 'create' }); }} />}
       {tab === 'designs' && <Gallery user={me} brokerageId={brokerageId} agent={agent} brand={brand} onOpen={(d) => { setLoaded(d); setParams({ tab: 'create' }); }} />}
       {tab === 'brand' && <BrandKit user={me} onSaved={setMe} agent={agent} brand={brand} />}
     </div>
@@ -93,6 +94,9 @@ function Studio({ user, brokerageId, agent, brand, initial, onNeedBrand }) {
   const [tweak, setTweak] = useState('');
   const [msg, setMsg] = useState('');
   const exportRef = useRef(null);
+  const savedId = useRef(initial?.id || null);
+  const navigate = useNavigate();
+  const orderPrints = async () => { await save(); if (savedId.current) navigate(`/Marketing?tool=print&design=${savedId.current}`); };
   const previewBox = useRef(null);
   const [boxW, setBoxW] = useState(600);
 
@@ -148,7 +152,7 @@ function Studio({ user, brokerageId, agent, brand, initial, onNeedBrand }) {
     const rec = { brokerage_id: brokerageId, owner_email: String(user.email).toLowerCase(), title: content?.headline || KINDS[kind], kind, format, template: content?.template, thumbnail_url: thumb || undefined,
       listing_id: listing.id || null, data: { listing, photos, prompt, style, content, bgImage } };
     const saved = designId ? await base44.entities.MarketingDesign.update(designId, rec) : await base44.entities.MarketingDesign.create(rec);
-    setDesignId(saved.id); setMsg('Saved to My designs');
+    setDesignId(saved.id); savedId.current = saved.id; setMsg('Saved to My designs');
     queryClient.invalidateQueries({ queryKey: ['designs'] });
   });
 
@@ -218,6 +222,7 @@ function Studio({ user, brokerageId, agent, brand, initial, onNeedBrand }) {
               <Button variant="outline" onClick={copyCaption} className="gap-1.5"><Copy className="w-4 h-4" /> Copy caption</Button>
               <Button variant="outline" onClick={copyEmail} className="gap-1.5"><Mail className="w-4 h-4" /> Copy as email</Button>
               <Button variant="outline" onClick={save} disabled={!!busy} className="gap-1.5">{busy === 'save' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save</Button>
+              <Button variant="outline" onClick={orderPrints} disabled={!!busy} className="gap-1.5 border-primary/40 text-primary"><Mail className="w-4 h-4" /> Mail or print it</Button>
               {msg && <span className="text-sm text-emerald-700 flex items-center gap-1"><Check className="w-4 h-4" />{msg}</span>}
             </div>
             <div className="mt-4 rounded-xl border p-4 text-sm">
@@ -338,6 +343,83 @@ function PropertyPicker({ user, listing, setListing, photos, setPhotos }) {
         )}
       </div>
     </section>
+  );
+}
+
+const KIT_KINDS = { just_listed: 'Just listed', under_contract: 'Under contract', just_sold: 'Just sold', open_house: 'Open house', price_reduced: 'Price improved', coming_soon: 'Coming soon' };
+const KIT_FORMAT_LABEL = { postcard_4x6: 'Postcard', flyer: 'Flyer', post: 'Post', story: 'Story' };
+
+// Ready-made sets (postcard, flyer, post, story) made when a deal goes under contract or closes,
+// when the agent's own listing hits the MLS, or on request.
+function Kits({ user, brokerageId, agent, brand, onOpen }) {
+  const navigate = useNavigate();
+  const [busy, setBusy] = useState(false);
+  const [kind, setKind] = useState('just_sold');
+  const [dealId, setDealId] = useState('');
+  const [tick, setTick] = useState(0);
+  const { data: designs = [], isLoading } = useQuery({
+    queryKey: ['kit-designs', brokerageId, user?.email, tick],
+    queryFn: () => base44.entities.MarketingDesign.filter({ brokerage_id: brokerageId, owner_email: String(user.email).toLowerCase() }, '-created_date', 300),
+    enabled: !!brokerageId && !!user,
+  });
+  const { data: deals = [] } = useQuery({
+    queryKey: ['kit-deals', brokerageId, user?.email],
+    queryFn: () => base44.entities.Transaction.filter({ brokerage_id: brokerageId, agent_email: String(user.email).toLowerCase() }, '-created_date', 100),
+    enabled: !!brokerageId && !!user,
+  });
+  const kits = useMemo(() => {
+    const m = new Map();
+    for (const d of designs) { if (!d.kit_id) continue; if (!m.has(d.kit_id)) m.set(d.kit_id, { id: d.kit_id, title: d.kit_title || d.title, kind: d.kind, at: d.created_date, designs: [] }); m.get(d.kit_id).designs.push(d); }
+    return [...m.values()];
+  }, [designs]);
+  const make = async () => {
+    if (!dealId) return;
+    setBusy(true);
+    try { await base44.functions.invoke('listingKit', { action: 'make', kind, transaction_id: dealId, again: true }); setTick((t) => t + 1); }
+    catch (err) { window.alert(err.message); } finally { setBusy(false); }
+  };
+  const copy = (d) => { const c = d.data?.content || {}; navigator.clipboard?.writeText(`${c.social_caption || ''}\n\n${(c.hashtags || []).map((h) => `#${h}`).join(' ')}`); };
+  return (
+    <div className="space-y-6">
+      <div className="rounded-2xl border bg-card p-4 flex flex-wrap items-end gap-3">
+        <div className="flex-1 min-w-[240px]">
+          <p className="font-semibold">Make a kit</p>
+          <p className="text-sm text-muted-foreground">A postcard, flyer, social post and story, written for the moment and filled with the property's facts and MLS photos.</p>
+        </div>
+        <select value={kind} onChange={(e) => setKind(e.target.value)} className="rounded-lg border bg-background px-3 py-2 text-sm">{Object.entries(KIT_KINDS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
+        <select value={dealId} onChange={(e) => setDealId(e.target.value)} className="rounded-lg border bg-background px-3 py-2 text-sm max-w-[260px]"><option value="">Pick one of your deals…</option>{deals.map((t) => <option key={t.id} value={t.id}>{t.property_address}</option>)}</select>
+        <Button onClick={make} disabled={!dealId || busy} className="gap-1.5">{busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />} Make kit</Button>
+      </div>
+      <p className="text-xs text-muted-foreground -mt-3">Kits are also made for you automatically when a listing goes under contract, when any deal closes, and when your own new listing shows up in the MLS.</p>
+      {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : !kits.length ? <p className="text-sm text-muted-foreground">No kits yet.</p> : kits.map((k) => {
+        const postcard = k.designs.find((d) => d.format === 'postcard_4x6');
+        const flyer = k.designs.find((d) => d.format === 'flyer');
+        const post = k.designs.find((d) => d.format === 'post');
+        return (
+          <section key={k.id} className="rounded-2xl border bg-card p-4">
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              <div className="flex-1 min-w-[200px]"><p className="font-semibold">{k.title}</p><p className="text-xs text-muted-foreground">{KIT_KINDS[k.kind] || k.kind} · {fmtDate(new Date(k.at), 'MMM d')}</p></div>
+              {postcard && <Button size="sm" className="gap-1" onClick={() => navigate(`/Marketing?tool=print&design=${postcard.id}&product=postcard_4x6`)}><Mail className="w-4 h-4" /> Mail postcards</Button>}
+              {flyer && <Button size="sm" variant="outline" className="gap-1" onClick={() => navigate(`/Marketing?tool=print&design=${flyer.id}&product=flyer_letter`)}><Printer className="w-4 h-4" /> Order flyers</Button>}
+              {post && <Button size="sm" variant="outline" className="gap-1" onClick={() => copy(post)}><Copy className="w-4 h-4" /> Copy caption</Button>}
+            </div>
+            <div className="flex gap-3 overflow-x-auto pb-1">
+              {['postcard_4x6', 'flyer', 'post', 'story'].map((f) => k.designs.find((d) => d.format === f)).filter(Boolean).map((d) => {
+                const F = FORMATS[d.format] || FORMATS.flyer; const h = 170; const sc = h / F.h;
+                return (
+                  <button key={d.id} onClick={() => onOpen(d)} className="flex-shrink-0 text-left group" title="Open to edit">
+                    <div className="rounded-lg overflow-hidden ring-1 ring-black/10 group-hover:ring-primary" style={{ width: F.w * sc, height: h }}>
+                      <div style={{ transform: `scale(${sc})`, transformOrigin: 'top left' }}><Design format={d.format} content={d.data?.content} listing={d.data?.listing} photos={d.data?.photos} agent={agent} brand={brand} bgImage={d.data?.bgImage} /></div>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">{KIT_FORMAT_LABEL[d.format] || d.format}</p>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        );
+      })}
+    </div>
   );
 }
 
