@@ -99,6 +99,7 @@ export function createClient(url, key, clientOpts) {
       remove: async (ps) => { for (const p of ps) delete storage[`${b}/${p}`]; return { data: [], error: null }; },
       download: async (p) => ({ data: new Blob([storage[`${b}/${p}`] || '']) }),
       list: async (prefix) => ({ data: Object.keys(storage).filter((k) => k.startsWith(`${b}/${prefix}/`)).map((k) => ({ name: k.split('/').pop() })) }),
+      createSignedUrls: async (ps) => ({ data: ps.map((p) => ({ path: p, signedUrl: storage[`${b}/${p}`] !== undefined ? `https://storage.test/${b}/${p}?sig=1` : null, error: storage[`${b}/${p}`] !== undefined ? null : 'Object not found' })), error: null }),
       createSignedUrl: async (p, secs, o) => (storage[`${b}/${p}`] !== undefined || b === 'private-files' && globalThis.__lenientSign ? { data: { signedUrl: `https://storage.test/${b}/${p}?sig=1${o?.download ? '&download=1' : ''}` }, error: null } : { data: null, error: { message: 'Object not found' } }),
       createSignedUploadUrl: async (p) => ({ data: { signedUrl: `https://storage.test/upload/${b}/${p}?token=t`, token: 't', path: p }, error: null }),
       getPublicUrl: (p) => ({ data: { publicUrl: `https://storage.test/${b}/${p}` } }),

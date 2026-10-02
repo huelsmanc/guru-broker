@@ -68,12 +68,22 @@ export const dealLine = (tx) => [street(tx.property_address), tx.property_addres
 export async function clearExpired() {
   const db = adminClient();
   const cutoff = new Date(Date.now() - DAY).toISOString();
-  const { data: old } = await db.from('story').select('id, media_url').lt('expires_at', cutoff).limit(500);
+  const { data: old } = await db.from('story').select('id, media_url, image_url').lt('expires_at', cutoff).limit(500);
   if (!old?.length) return 0;
   const ids = old.map((s) => s.id);
-  const paths = old.map((s) => pathFromUrl(s.media_url)).filter(Boolean);
+  const paths = old.flatMap((s) => [pathFromUrl(s.media_url), pathFromUrl(s.image_url)]).filter(Boolean);
   if (paths.length) await db.storage.from(PRIVATE_BUCKET).remove(paths).catch(() => {});
   await db.from('story_view').delete().in('story_id', ids);
   await db.from('story').delete().in('id', ids);
   return ids.length;
+}
+
+/** Stories with their private photos and videos signed for direct loading (no redirect per view). */
+export async function signStories(stories, seconds = 7200) {
+  const paths = [...new Set(stories.flatMap((s) => [pathFromUrl(s.media_url), pathFromUrl(s.image_url)]).filter(Boolean))];
+  if (!paths.length) return stories;
+  const { data } = await adminClient().storage.from(PRIVATE_BUCKET).createSignedUrls(paths, seconds);
+  const signed = new Map((data || []).filter((d) => d.signedUrl).map((d) => [d.path, d.signedUrl]));
+  const sign = (u) => signed.get(pathFromUrl(u)) || u;
+  return stories.map((s) => ({ ...s, media_url: s.media_url ? sign(s.media_url) : s.media_url, image_url: s.image_url ? sign(s.image_url) : s.image_url }));
 }

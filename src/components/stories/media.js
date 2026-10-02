@@ -106,3 +106,18 @@ export async function rerecord(file, onProgress = () => {}) {
   if (blob.size < 10000 || blob.size >= file.size) throw new Error('not smaller');
   return new File([blob], 'story.mp4', { type: 'video/mp4' });
 }
+
+/** The first frame of a video as a small JPEG, shown while the video loads. */
+export async function posterFrame(file) {
+  try {
+    const v = await loadVideo(file);
+    await new Promise((res, rej) => { v.onseeked = res; v.onerror = rej; v.currentTime = Math.min(0.1, (v.duration || 1) / 2); setTimeout(res, 3000); });
+    const k = Math.min(1, 720 / Math.max(v.videoWidth, v.videoHeight));
+    const c = document.createElement('canvas');
+    c.width = Math.max(2, Math.round(v.videoWidth * k)); c.height = Math.max(2, Math.round(v.videoHeight * k));
+    c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+    URL.revokeObjectURL(v.src);
+    const blob = await new Promise((res) => c.toBlob(res, 'image/jpeg', 0.7));
+    return blob && blob.size > 1000 ? new File([blob], 'poster.jpg', { type: 'image/jpeg' }) : null;
+  } catch { return null; }
+}

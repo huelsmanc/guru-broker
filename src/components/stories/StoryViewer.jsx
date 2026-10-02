@@ -34,14 +34,17 @@ export default function StoryViewer({ groups, startGroup, me, admin, onClose, on
   const [toast, setToast] = useState('');
   const [viewers, setViewers] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [readyId, setReadyId] = useState(null); // the story whose photo or video has started showing
   const videoRef = useRef(null);
   const startY = useRef(null);
   const held = useRef(false);
   const holdTimer = useRef(null);
   const elapsed = useRef(0); // share of the current story already shown (0-1)
   const mine = story && lc(story.author_email) === lc(me.email);
+  const upcoming = group && (si < group.stories.length - 1 ? group.stories[si + 1] : groups[gi + 1]?.stories[firstUnseen(groups[gi + 1])]);
   const canManage = mine || admin;
   const typing = reply.length > 0;
+  const loading = !!story && (story.kind === 'photo' || story.kind === 'video') && readyId !== story.id;
   const stopped = paused || typing || !!viewers;
 
   const next = useCallback(() => {
@@ -65,7 +68,7 @@ export default function StoryViewer({ groups, startGroup, me, admin, onClose, on
 
   // Timer for photos and text (6 s); videos follow their own playback.
   useEffect(() => {
-    if (!story || story.kind === 'video' || stopped) return undefined;
+    if (!story || story.kind === 'video' || stopped || loading) return undefined;
     const total = 6000; const t0 = Date.now() - elapsed.current * total;
     const id = setInterval(() => {
       const p = (Date.now() - t0) / total;
@@ -73,7 +76,7 @@ export default function StoryViewer({ groups, startGroup, me, admin, onClose, on
       if (p >= 1) { clearInterval(id); next(); } else setProgress(p);
     }, 50);
     return () => clearInterval(id);
-  }, [story?.id, stopped]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [story?.id, stopped, loading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const v = videoRef.current; if (!v) return;
@@ -128,9 +131,10 @@ export default function StoryViewer({ groups, startGroup, me, admin, onClose, on
       onTouchEnd={(e) => { if (startY.current != null && e.changedTouches[0].clientY - startY.current > 90) onClose(); startY.current = null; }}>
       <div className="relative w-full h-full sm:h-[92dvh] sm:max-w-[420px] sm:rounded-2xl overflow-hidden bg-neutral-900">
         {/* Media */}
-        {story.kind === 'photo' && <img src={story.media_url} alt="" className="absolute inset-0 w-full h-full object-contain" />}
+        {story.kind === 'photo' && <img src={story.media_url} alt="" className="absolute inset-0 w-full h-full object-contain" onLoad={() => setReadyId(story.id)} onError={() => setReadyId(story.id)} />}
         {story.kind === 'video' && (
-          <video key={story.id} ref={videoRef} src={story.media_url} playsInline autoPlay muted={muted} className="absolute inset-0 w-full h-full object-contain"
+          <video key={story.id} ref={videoRef} src={story.media_url} poster={story.image_url || undefined} preload="auto" playsInline autoPlay muted={muted} className="absolute inset-0 w-full h-full object-contain"
+            onPlaying={() => setReadyId(story.id)}
             onTimeUpdate={(e) => setProgress(e.currentTarget.currentTime / (e.currentTarget.duration || story.duration_seconds || 30))}
             onEnded={next} onError={() => flash("This video couldn't play")} />
         )}
@@ -185,6 +189,10 @@ export default function StoryViewer({ groups, startGroup, me, admin, onClose, on
           )}
         </div>
 
+        {loading && <div className="absolute inset-0 flex items-center justify-center pointer-events-none"><Loader2 className="w-9 h-9 text-white/80 animate-spin" /></div>}
+        {/* Load the next story while this one plays. */}
+        {upcoming?.kind === 'video' && <video key={`pre-${upcoming.id}`} src={upcoming.media_url} preload="auto" muted playsInline className="hidden" />}
+        {upcoming?.kind === 'photo' && <img key={`pre-${upcoming.id}`} src={upcoming.media_url} alt="" className="hidden" />}
         {toast && <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-black/75 px-4 py-2 text-sm text-white">{toast}</div>}
 
         {/* Who watched */}

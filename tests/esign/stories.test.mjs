@@ -39,8 +39,15 @@ r = await call('ann', { action: 'post', kind: 'photo', media_url: f('a-photo.jpg
 assert.equal(r.status, 400, 'not another brokerage');
 r = await call('ann', { action: 'post', kind: 'video', media_url: f('b-clip.mp4'), media_type: 'video/mp4', duration_seconds: 45 });
 assert.equal(r.status, 400); assert.match(r.body.error, /30 seconds/);
-r = await call('ann', { action: 'post', kind: 'video', media_url: f('b-clip.mp4'), media_type: 'video/mp4', duration_seconds: 29.6 });
-assert.equal(r.status, 200); assert.equal(r.body.story.duration_seconds, 30);
+globalThis.__storage['private-files/scoped/B1/misc/b-poster.jpg'] = new Uint8Array([1]);
+r = await call('ann', { action: 'post', kind: 'video', media_url: f('b-clip.mp4'), media_type: 'video/mp4', duration_seconds: 29.6, poster_url: f('b-poster.jpg') });
+assert.equal(r.status, 200); assert.equal(r.body.story.duration_seconds, 30); assert.equal(r.body.story.image_url, f('b-poster.jpg'));
+// The feed hands back direct links for photos, videos and posters (no redirect per view).
+r = await call('bob', { action: 'feed' });
+const vid = r.body.stories.find((x) => x.kind === 'video');
+assert.match(vid.media_url, /^https:\/\/storage\.test\/private-files\/scoped\/B1\/misc\/b-clip\.mp4\?sig=1$/);
+assert.match(vid.image_url, /b-poster\.jpg\?sig=1$/);
+assert.ok(r.body.stories.some((x) => x.kind === 'text'));
 r = await call('owner', { action: 'post', kind: 'text', caption: 'Team meeting moved to 10am', pin_days: 3 });
 assert.equal(r.body.story.pinned, true);
 assert.ok(Date.parse(r.body.story.expires_at) - Date.now() > 2.9 * 864e5, 'pinned for 3 days');
@@ -89,6 +96,7 @@ r = await svc({ daily: true });
 assert.equal(r.body.anniversaries, 1); assert.equal(r.body.cleared, 1);
 assert.ok(__db.story.some((s) => s.title === 'Happy 3-year anniversary, Ann!'));
 assert.equal(globalThis.__storage['private-files/scoped/B1/misc/b-clip.mp4'], undefined);
+assert.equal(globalThis.__storage['private-files/scoped/B1/misc/b-poster.jpg'], undefined, 'poster cleared too');
 assert.equal(__db.story_view.length, 0);
 
 // Brokerage turned celebrations off: none made.

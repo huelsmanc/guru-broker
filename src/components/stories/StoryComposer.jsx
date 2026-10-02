@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { base44 } from '@/api/base44Client';
 import { X, Image as ImageIcon, Type, Loader2, Pin } from 'lucide-react';
 import { BACKGROUNDS } from './storyLook';
-import { shrinkPhoto, prepareVideo, videoLength, MAX_SECONDS } from './media';
+import { shrinkPhoto, prepareVideo, videoLength, posterFrame, MAX_SECONDS } from './media';
 
 export default function StoryComposer({ admin, onClose, onPosted }) {
   const [mode, setMode] = useState(null); // null | 'media' | 'text'
@@ -54,8 +54,12 @@ export default function StoryComposer({ admin, onClose, onPosted }) {
           upload = await shrinkPhoto(file);
         }
         setStatus('Uploading…');
-        const { file_url } = await base44.integrations.Core.UploadFile({ file: upload, scope: { kind: 'misc' } });
-        payload = { ...payload, kind: isVideo ? 'video' : 'photo', media_url: file_url, media_type: upload.type, duration_seconds: seconds };
+        const poster = isVideo ? await posterFrame(file) : null;
+        const [{ file_url }, posterUp] = await Promise.all([
+          base44.integrations.Core.UploadFile({ file: upload, scope: { kind: 'misc' } }),
+          poster ? base44.integrations.Core.UploadFile({ file: poster, scope: { kind: 'misc' } }).catch(() => null) : null,
+        ]);
+        payload = { ...payload, kind: isVideo ? 'video' : 'photo', media_url: file_url, media_type: upload.type, duration_seconds: seconds, poster_url: posterUp?.file_url };
       }
       setStatus('Posting…');
       await base44.functions.invoke('stories', payload);

@@ -24,7 +24,8 @@ export default function StoriesBar({ user }) {
     queryKey: ['stories', user?.brokerage_id],
     enabled: !!user?.brokerage_id,
     refetchInterval: 60_000,
-    queryFn: () => base44.entities.Story.filter({ brokerage_id: user.brokerage_id }, '-created_date', 300),
+    // Photos and videos come back ready to load directly, so stories start without a wait.
+    queryFn: async () => (await base44.functions.invoke('stories', { action: 'feed' })).data.stories || [],
   });
   const { data: seenList = [] } = useQuery({
     queryKey: ['story-seen', me],
@@ -89,6 +90,12 @@ export default function StoriesBar({ user }) {
                 className="absolute top-[46px] right-[4px] w-6 h-6 rounded-full bg-primary text-primary-foreground border-2 border-background flex items-center justify-center"><Plus className="w-3.5 h-3.5" /></button>
             )}
           </div>
+        ))}
+      </div>
+      {/* Start loading the first couple of unwatched videos and posters, so they open quickly. */}
+      <div className="hidden" aria-hidden="true">
+        {groups.flatMap((g) => g.stories.filter((x) => !seen.has(x.id))).filter((x) => x.kind === 'video').slice(0, 2).map((x) => (
+          <React.Fragment key={x.id}><video src={x.media_url} preload="auto" muted playsInline />{x.image_url && <img src={x.image_url} alt="" />}</React.Fragment>
         ))}
       </div>
       {open && (
