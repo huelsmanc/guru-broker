@@ -26,7 +26,7 @@ export async function ensureLogin(db, email, { name, invite } = {}) {
   const existing = await profileByEmail(db, email);
   if (existing) return { id: existing.id, created: false, profile: existing };
   const res = invite
-    ? await db.auth.admin.inviteUserByEmail(lc(email), { data: { full_name: name || '' }, redirectTo: `${appUrl()}/reset-password?next=%2FDashboard` })
+    ? await db.auth.admin.inviteUserByEmail(lc(email), { data: { full_name: name || '' }, redirectTo: `${appUrl()}/reset-password?welcome=1&next=%2FDashboard` })
     : await db.auth.admin.createUser({ email: lc(email), email_confirm: true, user_metadata: { full_name: name || '' } });
   if (res.error) {
     // Already has a login but no profile row yet (rare): find it.

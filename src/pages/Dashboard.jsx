@@ -13,6 +13,7 @@ import SocialFeedWidget from '@/components/dashboard/SocialFeedWidget';
 import NotificationsDropdown from '@/components/dashboard/NotificationsDropdown';
 import MobileSafeScroll from '@/components/layout/MobileSafeScroll';
 import MyDay from '@/components/dashboard/MyDay';
+import GetStarted from '@/components/dashboard/GetStarted';
 
 import { motion } from 'framer-motion';
 import { isAdminRole, normalizeRole, can } from '../../shared/permissions.generated.js';
@@ -33,6 +34,12 @@ export default function Dashboard() {
     enabled: !!brokerageId,
   });
 
+  const { data: brokerage } = useQuery({
+    queryKey: ['brokerage', brokerageId],
+    queryFn: () => base44.entities.Brokerage.get(brokerageId).catch(() => null),
+    enabled: !!brokerageId,
+    staleTime: 10 * 60 * 1000,
+  });
   const handleRefresh = async () => {
     await queryClient.invalidateQueries();
   };
@@ -107,7 +114,7 @@ export default function Dashboard() {
         <div className="flex-1">
           <div className="flex items-center gap-3">
             <h1 className="text-2xl lg:text-3xl font-bold text-foreground tracking-tight">
-              {`${new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 17 ? 'Good afternoon' : 'Good evening'}, ${user?.full_name?.split(' ')[0] || ''}`}
+              {(() => { const first = String(user?.display_name || user?.full_name || '').trim().split(/\s+/)[0]; const hi = new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 17 ? 'Good afternoon' : 'Good evening'; return first ? `${hi}, ${first}` : hi; })()}
             </h1>
             <NotificationsDropdown user={user} brokerageId={brokerageId} />
           </div>
@@ -128,6 +135,8 @@ export default function Dashboard() {
           )}
         </div>
       </motion.div>
+
+      <GetStarted user={user} brokerageName={brokerageSettings?.brokerage_name || brokerage?.name} />
 
       {/* Announcements first: what the brokerage wants everyone to see. */}
       <div className="mb-6 space-y-4">

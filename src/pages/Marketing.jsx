@@ -529,6 +529,7 @@ function BrandKit({ user, onSaved, agent, brand }) {
   const [f, setF] = useState({ headshot: user?.headshot || '', marketing_logo_url: user?.marketing_logo_url || '', brand_color: user?.brand_color || '#0f172a', marketing_title: user?.marketing_title ?? 'Real Estate Agent', phone: user?.phone || '', license_number: user?.license_number || '' });
   const [busy, setBusy] = useState(null);
   const [crop, setCrop] = useState(null); // { src, revoke }
+  const [note, setNote] = useState('');
   const up = (k) => async (e) => {
     const file = e.target.files?.[0]; if (!file) return;
     e.target.value = '';
@@ -539,8 +540,9 @@ function BrandKit({ user, onSaved, agent, brand }) {
   };
   const save = async () => {
     setBusy('save');
-    try { const saved = await base44.entities.User.update(user.id, f); onSaved({ ...user, ...saved, ...f }); window.alert('Brand kit saved.'); }
-    catch (err) { window.alert(err.message); } finally { setBusy(null); }
+    setNote('');
+    try { const saved = await base44.entities.User.update(user.id, f); onSaved({ ...user, ...saved, ...f }); setNote('Saved. Every new design uses this now.'); }
+    catch (err) { setNote(`Couldn't save: ${err.message}`); } finally { setBusy(null); }
   };
   const sample = useMemo(() => ({ template: 'hero', palette: { primary: f.brand_color, accent: '#c9a227', background: '#ffffff', text: '#111827' }, ribbon: 'JUST LISTED', headline: 'Your next design', body: '', bullets: [] }), [f.brand_color]);
   return (
@@ -585,10 +587,16 @@ function BrandKit({ user, onSaved, agent, brand }) {
           <div><Label>Brand color</Label><div className="flex gap-2 mt-1"><input type="color" value={f.brand_color} onChange={(e) => setF({ ...f, brand_color: e.target.value })} className="w-10 h-10 rounded border" /><Input value={f.brand_color} onChange={(e) => setF({ ...f, brand_color: e.target.value })} /></div></div>
         </div>
         <p className="text-xs text-muted-foreground">Your brokerage name ({brand.brokerage || 'set in Settings'}) and the Equal Housing Opportunity notice are added to every design automatically.</p>
-        <Button onClick={save} disabled={!!busy} className="gap-1.5">{busy === 'save' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save brand kit</Button>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button onClick={save} disabled={!!busy} className="gap-1.5">{busy === 'save' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save brand kit</Button>
+          {note && <p className={cn('text-sm', note.startsWith('Saved') ? 'text-emerald-700' : 'text-red-600')}>{note}</p>}
+        </div>
       </div>
-      <div className="hidden lg:block">
-        <Design format="post" content={sample} agent={{ ...agent, headshot: f.headshot, phone: f.phone, license: f.license_number, title: f.marketing_title }} brand={{ ...brand, logo: f.marketing_logo_url || brand.logo }} scale={0.33} />
+      <div>
+        <p className="text-xs font-semibold uppercase text-muted-foreground mb-2">How it looks</p>
+        <div className="rounded-lg overflow-hidden shadow-sm ring-1 ring-black/5 w-fit">
+          <Design format="post" content={sample} agent={{ ...agent, headshot: f.headshot, phone: f.phone, license: f.license_number, title: f.marketing_title }} brand={{ ...brand, logo: f.marketing_logo_url || brand.logo }} scale={typeof window !== 'undefined' && window.innerWidth < 640 ? 0.28 : 0.33} />
+        </div>
       </div>
     </div>
   );

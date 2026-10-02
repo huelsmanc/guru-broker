@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { MessageSquare, Phone, LayoutDashboard, Monitor, LogOut, Users, Settings as SettingsIcon, Building2, UserCircle, TrendingUp, UserPlus, Mail, Trophy, BookOpen, FileText, Heart, Lightbulb, Calendar, FolderOpen, Link2, Wand2, Target, ScrollText, Calculator, File, Gift, Star, ClipboardList, Handshake, Wallet, Banknote, Percent, BarChart3, Activity as ActivityIcon, FileCheck2, ListChecks, Megaphone, Database, ShoppingBag } from 'lucide-react';
+import { MessageSquare, Phone, LayoutDashboard, Monitor, LogOut, Users, Settings as SettingsIcon, Building2, UserCircle, TrendingUp, UserPlus, Mail, Trophy, BookOpen, FileText, Heart, Lightbulb, Calendar, FolderOpen, Link2, Wand2, Target, Calculator, File, Gift, Star, ClipboardList, Handshake, Wallet, Banknote, Percent, BarChart3, Activity as ActivityIcon, FileCheck2, ListChecks, Megaphone, Database, ShoppingBag } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import NotificationBell from './NotificationBell';
 import ChatChannelsDropdown from './ChatChannelsDropdown';
@@ -79,7 +79,6 @@ export default function Sidebar({ user, brokerageId, onChannelClick, mobile }) {
 
   const superAdminLinks = [
     { to: '/SuperAdmin', icon: Building2, label: 'Brokerages' },
-    { to: '/SuperAdmin?tab=forms', icon: ScrollText, label: 'State Contract Forms' },
     { to: '/Import', icon: Database, label: 'Import Data' },
   ];
 
@@ -183,7 +182,7 @@ export default function Sidebar({ user, brokerageId, onChannelClick, mobile }) {
         )}
         {links.map(({ to, icon: Icon, label }) => {
           const [path, query] = to.split('?');
-          const active = location.pathname === path && (query ? location.search.includes(query) : !location.search.includes('tab=forms'));
+          const active = location.pathname === path && (query ? location.search.includes(query) : true);
           return (
             <Link
               key={to}

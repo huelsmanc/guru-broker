@@ -220,7 +220,8 @@ export default async (req) => {
 
     // Notifications
     const label = acc.tx?.property_address || cl.subject_email;
-    const link = cl.subject_type === 'transaction' ? `/Transactions/${cl.subject_id}?tab=checklists&checklist=${cl.id}` : `/Onboarding?user=${encodeURIComponent(cl.subject_email)}`;
+    // Onboarding: reviewers go to the approvals list; the agent goes to their own checklist on My Profile.
+    const link = cl.subject_type === 'transaction' ? `/Transactions/${cl.subject_id}?tab=checklists&checklist=${cl.id}` : body.action === 'submit' ? '/ApproveDocs' : '/Profile#onboarding';
     if (body.action === 'submit') {
       const people = (await E.User.filter({ brokerage_id: me.brokerage_id }, 'full_name', 2000))
         .filter((u) => !u.suspended && can(u, 'docs.approve') && u.email.toLowerCase() !== myEmail);

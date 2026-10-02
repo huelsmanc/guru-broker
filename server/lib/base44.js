@@ -118,8 +118,8 @@ function buildClient({ token, asService }) {
       const isSuper = asService || me?.role === 'super_admin';
       if (role === 'super_admin' && !isSuper) throw Object.assign(new Error('Only a super admin can grant that role'), { status: 403 });
       const brokerageId = isSuper ? (opts.brokerage_id ?? me?.brokerage_id ?? null) : me?.brokerage_id ?? null;
-      const next = opts.nextUrl ? `?next=${encodeURIComponent(opts.nextUrl)}` : '';
-      const redirectTo = `${appUrl()}/reset-password${next}`;
+      // welcome=1: the set-password page greets them as a new member instead of "reset your password".
+      const redirectTo = `${appUrl()}/reset-password?welcome=1${opts.nextUrl ? `&next=${encodeURIComponent(opts.nextUrl)}` : ''}`;
       const addr = email.toLowerCase().trim();
       const fullName = String(opts.full_name || '').trim().slice(0, 120) || null;
       const { data, error } = await admin.auth.admin.inviteUserByEmail(addr, { redirectTo, data: fullName ? { full_name: fullName } : undefined });

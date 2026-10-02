@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { localDay } from '@/lib/dates';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, useLocation } from 'react-router-dom';
+import { roleLabel as nameOfRole } from '@/components/users/RoleOptions';
 import MobilePageHeader from '@/components/layout/MobilePageHeader';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
@@ -30,6 +31,8 @@ export default function Profile() {
   const [cropSrc, setCropSrc] = useState(null);
   const [fullName, setFullName] = useState(user?.full_name || '');
   const [phone, setPhone] = useState(user?.phone || '');
+  const [licenseNumber, setLicenseNumber] = useState(user?.license_number || '');
+  const [saveError, setSaveError] = useState('');
   const [title, setTitle] = useState(user?.title || '');
   const [birthday, setBirthday] = useState(user?.birthday || '');
   const [workAnniversary, setWorkAnniversary] = useState(user?.work_anniversary || '');
@@ -55,6 +58,7 @@ export default function Profile() {
       setHeadshot(u?.headshot || '');
       setFullName(u?.full_name || u?.display_name || '');
       setPhone(u?.phone || '');
+      setLicenseNumber(u?.license_number || '');
       setTitle(u?.title || '');
       setBirthday(u?.birthday || '');
       setWorkAnniversary(u?.work_anniversary || '');
@@ -83,24 +87,27 @@ export default function Profile() {
   };
 
   const handleSave = async () => {
-    setSaving(true);
-    const updateData = { headshot, phone, title, birthday: birthday || null, work_anniversary: workAnniversary || null, timezone, google_review_url: googleReviewUrl };
-    if (fullName.trim()) { updateData.full_name = fullName.trim(); updateData.display_name = fullName.trim(); }
-    if (isAgent) updateData.agent_status = agentStatus;
-    await base44.auth.updateMe(updateData);
-    window.dispatchEvent(new Event('profile-updated')); // sidebar and chat pick up the new name
-
-    // Sync dates to culture calendar
-    if (birthday || workAnniversary) {
-      await base44.functions.invoke('syncUserDatesToCultureCalendar', { birthday, work_anniversary: workAnniversary });
+    setSaving(true); setSaveError('');
+    try {
+      const updateData = { headshot, phone, license_number: licenseNumber.trim(), title, birthday: birthday || null, work_anniversary: workAnniversary || null, timezone, google_review_url: googleReviewUrl };
+      if (fullName.trim()) { updateData.full_name = fullName.trim(); updateData.display_name = fullName.trim(); }
+      if (isAgent) updateData.agent_status = agentStatus;
+      await base44.auth.updateMe(updateData);
+      window.dispatchEvent(new Event('profile-updated')); // sidebar and chat pick up the new name
+      // Sync dates to culture calendar
+      if (birthday || workAnniversary) {
+        await base44.functions.invoke('syncUserDatesToCultureCalendar', { birthday, work_anniversary: workAnniversary }).catch(() => {});
+      }
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (err) {
+      setSaveError(err?.message || "Couldn't save. Check your connection and try again.");
+    } finally {
+      setSaving(false);
     }
-
-    setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
   };
 
-  const roleLabel = isAdminRole(user?.role) ? 'Broker / Admin' : user?.role === 'super_admin' ? 'Super Admin' : 'Agent';
+  const roleLabel = nameOfRole(user?.role);
 
   // Filter upcoming events and attendance history
   const now = new Date();
@@ -209,6 +216,10 @@ export default function Profile() {
              />
            </div>
            <div>
+             <Label>License #</Label>
+             <Input value={licenseNumber} onChange={(e) => setLicenseNumber(e.target.value)} placeholder="Your real estate license number" className="mt-1.5" />
+           </div>
+           <div>
              <Label>Timezone</Label>
              <select
                value={timezone}
@@ -298,11 +309,12 @@ export default function Profile() {
 
         <div className="rounded-2xl border p-5"><SecuritySettings user={user} /></div>
 
+        {saveError && <p className="text-sm text-red-600">{saveError}</p>}
         <div className="flex items-center justify-between gap-3">
           <Button
             onClick={() => setShowDeleteDialog(true)}
-            variant="destructive"
-            className="gap-2 rounded-xl h-11"
+            variant="ghost"
+            className="gap-2 rounded-xl h-11 text-destructive hover:text-destructive"
           >
             <Trash2 className="w-4 h-4" /> Delete Account
           </Button>
@@ -444,6 +456,11 @@ function MyOnboarding({ user }) {
     queryFn: async () => (await base44.entities.Checklist.filter({ subject_type: 'onboarding', subject_email: String(user.email).toLowerCase() }, 'created_date', 5)).length,
     enabled: !!user?.email,
   });
+  const { hash } = useLocation();
+  // Opened from a link to #onboarding (Dashboard "Get set up", checklist emails): scroll here.
+  useEffect(() => {
+    if (count && hash === '#onboarding') setTimeout(() => document.getElementById('onboarding')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
+  }, [count, hash]);
   if (!count) return null;
   return (
     <div id="onboarding" className="rounded-2xl border p-5 scroll-mt-20">

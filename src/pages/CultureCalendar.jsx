@@ -20,6 +20,10 @@ const EVENT_TYPE_CONFIG = {
   team_activity: { emoji: '🤝', label: 'Team Activity', color: 'bg-green-100 text-green-700 border-green-200' },
 };
 
+// Dot colors for the phone month view.
+const DOT = { birthday: 'bg-pink-500', work_anniversary: 'bg-blue-500', company_event: 'bg-purple-500', team_activity: 'bg-green-500' };
+const cfgOf = (t) => EVENT_TYPE_CONFIG[t] || { emoji: '📅', label: 'Event', color: 'bg-slate-100 text-slate-700 border-slate-200' };
+
 export default function CultureCalendar() {
   const { user, brokerageId } = useOutletContext();
   const queryClient = useQueryClient();
@@ -29,6 +33,7 @@ export default function CultureCalendar() {
   const [editingEvent, setEditingEvent] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedEvent, setSelectedEvent] = useState(null);
+  const [pickedDay, setPickedDay] = useState(() => new Date()); // phones: the day whose events show under the month
 
   const { data: entries = [] } = useQuery({
     queryKey: ['culture-calendar', brokerageId],
@@ -117,25 +122,25 @@ export default function CultureCalendar() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background via-background to-background/50 p-6 lg:p-10">
+    <div className="min-h-screen bg-gradient-to-b from-background via-background to-background/50 p-4 sm:p-6 lg:p-10">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="flex items-center justify-between mb-12"
+          className="flex flex-wrap items-center justify-between gap-3 mb-6 sm:mb-12"
         >
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 sm:gap-4 min-w-0">
             <motion.div
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ delay: 0.1, type: 'spring' }}
-              className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg"
+              className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg flex-shrink-0"
             >
               <Calendar className="w-6 h-6 text-white" />
             </motion.div>
             <div>
-              <h1 className="text-3xl lg:text-4xl font-bold text-foreground tracking-tight">Culture Calendar</h1>
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-foreground tracking-tight">Culture Calendar</h1>
               <p className="text-muted-foreground text-sm mt-1">Celebrate birthdays, anniversaries, and team moments</p>
             </div>
           </div>
@@ -155,14 +160,14 @@ export default function CultureCalendar() {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="bg-gradient-to-r from-primary/10 to-accent/10 border border-primary/20 rounded-2xl p-6 mb-10 backdrop-blur-sm"
+            className="bg-gradient-to-r from-primary/10 to-accent/10 border border-primary/20 rounded-2xl p-4 sm:p-6 mb-6 sm:mb-10 backdrop-blur-sm"
           >
             <h2 className="font-bold text-foreground mb-5 flex items-center gap-2">
               <span className="text-lg">🎊</span> Coming Up This Week
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               {upcomingEvents.map((event, i) => {
-                const config = EVENT_TYPE_CONFIG[event.event_type];
+                const config = cfgOf(event.event_type);
                 return (
                   <motion.div
                     key={event.id}
@@ -189,10 +194,10 @@ export default function CultureCalendar() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="bg-card rounded-2xl border border-border/50 p-6 shadow-sm hover:shadow-md transition-shadow"
+            className="bg-card rounded-2xl border border-border/50 p-3 sm:p-6 shadow-sm hover:shadow-md transition-shadow"
           >
             {/* Month Navigation */}
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center justify-between mb-3 sm:mb-6">
               <Button
                 variant="outline"
                 size="icon"
@@ -215,8 +220,8 @@ export default function CultureCalendar() {
             {/* Day Headers */}
             <div className="grid grid-cols-7 gap-1 mb-2">
               {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                <div key={day} className="text-center font-semibold text-xs text-muted-foreground py-2">
-                  {day}
+                <div key={day} className="text-center font-semibold text-xs text-muted-foreground py-1 sm:py-2">
+                  <span className="sm:hidden">{day[0]}</span><span className="hidden sm:inline">{day}</span>
                 </div>
               ))}
             </div>
@@ -230,25 +235,33 @@ export default function CultureCalendar() {
                   const isCurrentMonth = day && isSameMonth(day, currentMonth);
                   const isToday = day && isSameDay(day, new Date());
 
+                  const picked = day && isSameDay(day, pickedDay);
                   return (
                     <div
                       key={`${weekIdx}-${dayIdx}`}
-                      className={`min-h-24 rounded-lg border p-1 text-xs ${
+                      onClick={() => day && setPickedDay(day)}
+                      className={`min-h-11 sm:min-h-24 rounded-lg border p-1 text-xs cursor-pointer sm:cursor-default ${
                         isCurrentMonth
                           ? isToday
                             ? 'bg-primary/10 border-primary/30'
                             : 'bg-background border-border'
                           : 'bg-muted/30 border-border/50'
-                      }`}
+                      } ${picked ? 'ring-2 ring-primary sm:ring-0' : ''} ${day ? '' : 'border-transparent sm:border-border/50 bg-transparent sm:bg-muted/30'}`}
                     >
                       {day && (
                         <>
-                          <div className={`font-semibold mb-1 ${isToday ? 'text-primary' : 'text-foreground'}`}>
+                          <div className={`font-semibold sm:mb-1 text-center sm:text-left ${isToday ? 'text-primary' : 'text-foreground'}`}>
                             {format(day, 'd')}
                           </div>
-                          <div className="space-y-0.5">
+                          {/* Phones: a dot per event (up to 3). */}
+                          {dayEntries.length > 0 && (
+                            <div className="flex sm:hidden justify-center gap-0.5 mt-0.5">
+                              {dayEntries.slice(0, 3).map((entry) => <span key={entry.id} className={`w-1.5 h-1.5 rounded-full ${DOT[entry.event_type] || 'bg-primary'}`} />)}
+                            </div>
+                          )}
+                          <div className="hidden sm:block space-y-0.5">
                             {dayEntries.slice(0, 2).map((entry, idx) => {
-                              const config = EVENT_TYPE_CONFIG[entry.event_type];
+                              const config = cfgOf(entry.event_type);
                               return (
                                 <button
                                   key={entry.id}
@@ -271,6 +284,22 @@ export default function CultureCalendar() {
                   );
                 })
               )}
+            </div>
+
+            {/* Phones: what's on the tapped day. */}
+            <div className="sm:hidden mt-4 border-t pt-3">
+              <p className="text-sm font-semibold mb-2">{isSameDay(pickedDay, new Date()) ? 'Today' : format(pickedDay, 'EEEE, MMM d')}</p>
+              {(entriesByDate[format(pickedDay, 'yyyy-MM-dd')] || []).length === 0
+                ? <p className="text-sm text-muted-foreground">Nothing on this day.</p>
+                : (entriesByDate[format(pickedDay, 'yyyy-MM-dd')] || []).map((entry) => {
+                  const config = cfgOf(entry.event_type);
+                  return (
+                    <button key={entry.id} onClick={() => setSelectedEvent(entry)} className={`w-full text-left rounded-lg border px-3 py-2.5 mb-2 text-sm ${config.color}`}>
+                      <span className="font-medium">{config.emoji} {entry.title}</span>
+                      {entry.person_name && <span className="block text-xs opacity-80">{entry.person_name}</span>}
+                    </button>
+                  );
+                })}
             </div>
           </motion.div>
         </div>
@@ -296,7 +325,7 @@ export default function CultureCalendar() {
               </div>
             ) : (
               filteredEntries.map((entry, i) => {
-                const config = EVENT_TYPE_CONFIG[entry.event_type];
+                const config = cfgOf(entry.event_type);
                 const isEditable = entry.event_type !== 'birthday' && entry.event_type !== 'work_anniversary';
                 return (
                   <motion.div
@@ -318,7 +347,7 @@ export default function CultureCalendar() {
                         )}
                       </div>
                       {isAdmin && (
-                        <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex items-center gap-1 flex-shrink-0 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                           {isEditable && (
                             <Button
                               variant="ghost"
@@ -339,7 +368,7 @@ export default function CultureCalendar() {
                             className="rounded h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
                             onClick={(e) => {
                               e.stopPropagation();
-                              deleteEntry.mutate(entry.id);
+                              if (window.confirm(`Delete "${entry.title}"?`)) deleteEntry.mutate(entry.id);
                             }}
                             title="Delete event"
                           >
