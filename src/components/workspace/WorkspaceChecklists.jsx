@@ -13,6 +13,9 @@ import UnifiedESignCreator from '@/components/esign/UnifiedESignCreator';
 import { useLiveTable } from '@/hooks/useLiveTable';
 import MentionInput, { CommentText } from './MentionInput';
 
+// Plain words for item statuses.
+const WORD = { open: 'To do', uploaded: 'Uploaded', review_requested: 'In review', approved: 'Approved', rejected: 'Needs changes', exempt: 'Not needed', done: 'Done' };
+
 async function act(body) {
   return (await base44.functions.invoke('checklistAction', body)).data;
 }
@@ -74,7 +77,7 @@ export default function WorkspaceChecklists({ tx, user, subjectType = 'transacti
                         : done ? <CheckSquare className="w-4 h-4 text-green-600 flex-shrink-0" /> : <Square className="w-4 h-4 text-muted-foreground flex-shrink-0" />}
                       <span className={`flex-1 text-sm ${done ? 'text-muted-foreground' : ''}`}>{it.title}{it.required === false ? <span className="text-xs text-muted-foreground"> (optional)</span> : ''}</span>
                       {it.due_date && <span className="text-xs text-muted-foreground hidden sm:inline">{new Date(`${it.due_date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>}
-                      {it.status !== 'open' ? <Pill status={it.status} /> : it.requires_document ? (it.form_url
+                      {it.status !== 'open' ? <Pill status={it.status}>{WORD[it.status]}</Pill> : it.requires_document ? (it.form_url
                         ? <span className="text-xs text-emerald-700 flex items-center gap-1"><Library className="w-3 h-3" /> Use form</span>
                         : <span className="text-xs text-emerald-700 flex items-center gap-1"><Upload className="w-3 h-3" /> Upload</span>) : null}
                     </button>
@@ -133,6 +136,15 @@ function ItemPanel({ checklistId, fileScope, item, tx, user, approver, admin, ma
     staleTime: 5 * 60 * 1000,
   });
   const go = async (name, body) => { setBusy(name); await run(body); setBusy(null); };
+  // Names, not email addresses (people from the deal's team, plus you).
+  const myEmail = String(user?.email || '').toLowerCase();
+  const everyone = [{ email: myEmail, name: user?.display_name || user?.full_name || myEmail }, ...people.filter((p) => p.email !== myEmail)];
+  const nameOf = (email) => {
+    const e = String(email || '').toLowerCase();
+    if (!e) return 'Nobody yet';
+    const p = everyone.find((x) => x.email === e);
+    return e === myEmail ? `${p?.name || 'You'} (you)` : p?.name || e;
+  };
 
   const upload = async (file) => {
     if (!file) return;
@@ -144,19 +156,21 @@ function ItemPanel({ checklistId, fileScope, item, tx, user, approver, admin, ma
   };
 
   return (
-    <div className="rounded-xl border bg-card p-4 space-y-4 lg:sticky lg:top-4">
+    <div className="rounded-xl border bg-card p-3 sm:p-4 space-y-4 lg:sticky lg:top-4">
       <div>
-        <p className="font-semibold flex items-center gap-2"><FileText className="w-4 h-4" /> {item.title}</p>
+        <div className="flex items-start gap-2">
+          <p className="font-semibold flex items-center gap-2 flex-1 min-w-0"><FileText className="w-4 h-4 flex-shrink-0" /> <span className="break-words">{item.title}</span></p>
+          <Pill status={item.status}>{WORD[item.status]}</Pill>
+        </div>
         <p className="text-xs text-muted-foreground mt-1">
-          Assigned to {item.assignee_email || '-'}{item.due_date ? ` · Due ${new Date(`${item.due_date}T12:00:00`).toLocaleDateString()}` : ''}
+          Assigned to {nameOf(item.assignee_email)}{item.due_date ? ` · Due ${new Date(`${item.due_date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''}
         </p>
-        <div className="mt-2"><Pill status={item.status} /></div>
       </div>
-      <div className="flex flex-wrap gap-2">
+      <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 [&>*]:justify-center sm:[&>*]:justify-start">
         {item.requires_document && (
           <>
             {/* A label wrapping the file picker opens it reliably on iPhone (no scripted click). */}
-            <label className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-md border bg-background text-sm font-medium cursor-pointer hover:bg-muted ${busy ? 'opacity-50 pointer-events-none' : ''}`}>
+            <label className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-md border bg-background text-sm font-medium cursor-pointer hover:bg-muted active:bg-muted ${busy ? 'opacity-50 pointer-events-none' : ''}`}>
               {busy === 'upload' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />} Upload
               <input ref={fileRef} type="file" className="sr-only" onChange={(e) => upload(e.target.files?.[0])} />
             </label>
@@ -181,10 +195,10 @@ function ItemPanel({ checklistId, fileScope, item, tx, user, approver, admin, ma
             <Button size="sm" variant="outline" className="gap-1.5 text-red-600" onClick={() => { const note = window.prompt('What needs to change?'); if (note !== null) go('reject', { action: 'reject', item_id: item.id, note }); }}><X className="w-3.5 h-3.5" /> Reject</Button>
           </>
         )}
-        {admin && !['exempt', 'approved'].includes(item.status) && (
-          <Button size="sm" variant="ghost" onClick={() => { const note = window.prompt('Reason for exemption (optional)', ''); if (note !== null) go('exempt', { action: 'exempt', item_id: item.id, note }); }}>Exempt?</Button>
-        )}
       </div>
+      {admin && !['exempt', 'approved'].includes(item.status) && (
+        <button className="text-xs text-muted-foreground underline -mt-2" onClick={() => { const note = window.prompt('Reason for marking this not needed (optional)', ''); if (note !== null) go('exempt', { action: 'exempt', item_id: item.id, note }); }}>Not needed for this deal? Mark exempt</button>
+      )}
       {item.form_url && !item.document_url && (
         <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 dark:bg-emerald-950/20 p-3">
           <p className="text-xs text-muted-foreground">Form for this item</p>
@@ -202,16 +216,22 @@ function ItemPanel({ checklistId, fileScope, item, tx, user, approver, admin, ma
           {/\.(png|jpe?g|webp|gif)(\?|$)/i.test(item.document_url)
             ? <img src={item.document_url} alt="" className="w-full" />
             : <iframe title={item.document_name} src={item.document_url} className="w-full h-72" />}
-          <p className="text-xs px-3 py-2 text-muted-foreground truncate">{item.document_name} · uploaded by {item.uploaded_by}</p>
+          <p className="text-xs px-3 py-2 text-muted-foreground truncate">{item.document_name} · uploaded by {nameOf(item.uploaded_by)}</p>
         </div>
       )}
       {manage && (
-        <div className="grid grid-cols-2 gap-2">
-          <label className="text-xs text-muted-foreground">Due
-            <Input type="date" className="h-8 mt-1" defaultValue={item.due_date || ''} onBlur={(e) => e.target.value !== (item.due_date || '') && run({ action: 'update_item', item_id: item.id, patch: { due_date: e.target.value || null } })} />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <label className="text-xs text-muted-foreground min-w-0 block">Due date
+            <input type="date" className="mt-1 block w-full min-w-0 h-10 rounded-md border bg-background px-3 text-base sm:text-sm text-foreground appearance-none" defaultValue={item.due_date || ''}
+              onChange={(e) => e.target.value !== (item.due_date || '') && run({ action: 'update_item', item_id: item.id, patch: { due_date: e.target.value || null } })} />
           </label>
-          <label className="text-xs text-muted-foreground">Assigned to
-            <Input className="h-8 mt-1" defaultValue={item.assignee_email || ''} onBlur={(e) => e.target.value !== (item.assignee_email || '') && run({ action: 'update_item', item_id: item.id, patch: { assignee_email: e.target.value.trim().toLowerCase() || null } })} />
+          <label className="text-xs text-muted-foreground min-w-0 block">Assigned to
+            <select className="mt-1 block w-full min-w-0 h-10 rounded-md border bg-background px-2 text-base sm:text-sm text-foreground" value={String(item.assignee_email || '').toLowerCase()}
+              onChange={(e) => run({ action: 'update_item', item_id: item.id, patch: { assignee_email: e.target.value || null } })}>
+              <option value="">Nobody yet</option>
+              {everyone.map((p) => <option key={p.email} value={p.email}>{p.email === myEmail ? `${p.name} (you)` : p.name}</option>)}
+              {item.assignee_email && !everyone.some((p) => p.email === String(item.assignee_email).toLowerCase()) && <option value={String(item.assignee_email).toLowerCase()}>{item.assignee_email}</option>}
+            </select>
           </label>
         </div>
       )}
