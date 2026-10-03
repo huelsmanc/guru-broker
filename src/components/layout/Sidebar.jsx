@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { MessageSquare, Phone, LayoutDashboard, Monitor, LogOut, Users, Settings as SettingsIcon, Building2, UserCircle, TrendingUp, UserPlus, Mail, Trophy, BookOpen, FileText, Heart, Lightbulb, Calendar, FolderOpen, Link2, Wand2, Target, Calculator, File, Gift, Star, ClipboardList, Handshake, Wallet, Banknote, Percent, BarChart3, Activity as ActivityIcon, FileCheck2, ListChecks, Megaphone, Database, ShoppingBag } from 'lucide-react';
+import { UserSearch, SquareArrowOutUpRight, MessageSquare, Phone, LayoutDashboard, Monitor, LogOut, Users, Settings as SettingsIcon, Building2, UserCircle, TrendingUp, UserPlus, Mail, Trophy, BookOpen, FileText, Heart, Lightbulb, Calendar, FolderOpen, Link2, Wand2, Target, Calculator, File, Gift, Star, ClipboardList, Handshake, Wallet, Banknote, Percent, BarChart3, Activity as ActivityIcon, FileCheck2, ListChecks, Megaphone, Database, ShoppingBag } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import NotificationBell from './NotificationBell';
 import ChatChannelsDropdown from './ChatChannelsDropdown';
@@ -16,6 +16,14 @@ export default function Sidebar({ user, brokerageId, onChannelClick, mobile }) {
   const isAdmin = isAdminRole(user?.role);
   // Name, logo and colors: shown instantly from this device, refreshed in the background.
   const brand = useBranding(user?.brokerage_id);
+  // Follow Up Boss: My Leads and a link to it, once the brokerage has connected it.
+  const { data: fubMe } = useQuery({
+    queryKey: ['fub-me', user?.brokerage_id],
+    enabled: !!user?.brokerage_id,
+    staleTime: 10 * 60 * 1000,
+    retry: false,
+    queryFn: async () => (await base44.functions.invoke('fub', { action: 'me' })).data,
+  });
 
   // Unread DMs and group messages (live)
   const chat = useChat();
@@ -83,8 +91,9 @@ export default function Sidebar({ user, brokerageId, onChannelClick, mobile }) {
 
   // If super admin has a brokerage_id, they're viewing inside a brokerage - show broker links
   const baseLinks = isSuperAdmin && !brokerageId ? superAdminLinks : isAdmin || (isSuperAdmin && brokerageId) ? brokerLinks : agentLinks;
-  const at = baseLinks.findIndex((l) => l.to === '/Transactions');
-  const links = at < 0 ? [...baseLinks, ...backOffice] : [...baseLinks.slice(0, at + 1), ...backOffice, ...baseLinks.slice(at + 1)];
+  const withLeads = fubMe?.connected ? baseLinks.flatMap((l) => (l.to === '/Contacts' ? [l, { to: '/MyLeads', icon: UserSearch, label: 'My Leads' }] : [l])) : baseLinks;
+  const at = withLeads.findIndex((l) => l.to === '/Transactions');
+  const links = at < 0 ? [...withLeads, ...backOffice] : [...withLeads.slice(0, at + 1), ...backOffice, ...withLeads.slice(at + 1)];
 
   return (
     <aside className={mobile ? 'h-full w-full bg-sidebar text-sidebar-foreground flex flex-col shadow-2xl' : 'fixed left-0 top-0 h-screen w-64 bg-sidebar text-sidebar-foreground flex flex-col z-40'}>
@@ -151,6 +160,13 @@ export default function Sidebar({ user, brokerageId, onChannelClick, mobile }) {
             </Link>
           );
         })}
+        {fubMe?.connected && (
+          <a href="https://app.followupboss.com" target="_blank" rel="noreferrer" onClick={() => onChannelClick?.()}
+            className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
+            <SquareArrowOutUpRight className="w-5 h-5" />
+            <span className="flex-1">Follow Up Boss</span>
+          </a>
+        )}
       </nav>
 
       <ChatChannelsDropdown brokerageId={brokerageId} isAdmin={isAdmin} isSuperAdmin={isSuperAdmin} onChannelClick={onChannelClick} />

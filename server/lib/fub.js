@@ -100,7 +100,8 @@ export const personUrl = (id) => `https://app.followupboss.com/2/people/view/${i
 const first = (list, key = 'value') => (Array.isArray(list) ? (list.find((x) => x?.isPrimary) || list[0])?.[key] : '') || '';
 export const personSummary = (p) => ({
   id: p.id, name: p.name || [p.firstName, p.lastName].filter(Boolean).join(' ') || 'Unnamed', stage: p.stage || '', source: p.source || '',
-  email: first(p.emails), phone: first(p.phones), assigned_to: p.assignedTo || '', url: personUrl(p.id),
+  email: first(p.emails), phone: first(p.phones), assigned_to: p.assignedTo || '', assigned_user_id: p.assignedUserId != null ? String(p.assignedUserId) : '', url: personUrl(p.id),
+  last_activity: p.lastActivity || p.updated || null, created: p.created || null, price: Number(p.price) || null, tags: Array.isArray(p.tags) ? p.tags.slice(0, 6) : [],
 });
 
 export function isFlex(p, cfg) {
@@ -195,3 +196,22 @@ export const notifier = (E, brokerageId) => async (agent, tx, s, flex, hasAddres
   }).catch(() => {});
 };
 
+
+const clipTo = (v, n) => String(v ?? '').slice(0, n);
+export const PERSON_FIELDS = 'id,name,firstName,lastName,emails,phones,stage,source,tags,type,price,addresses,assignedUserId,assignedTo,lastActivity,created';
+/** A person and their latest notes, calls and texts, newest first. */
+export async function personWithActivity(call, id, limit = 15) {
+  const pid = encodeURIComponent(id);
+  const [p, notes, calls, texts] = await Promise.all([
+    call(`/people/${pid}?fields=${PERSON_FIELDS}`).catch(() => null),
+    call(`/notes?personId=${pid}&limit=10&sort=-created`).catch(() => ({})),
+    call(`/calls?personId=${pid}&limit=10&sort=-created`).catch(() => ({})),
+    call(`/textMessages?personId=${pid}&limit=10&sort=-created`).catch(() => ({})),
+  ]);
+  const activity = [
+    ...(notes?.notes || []).map((n) => ({ kind: 'note', at: n.created, by: n.createdBy || '', text: clipTo(n.subject ? `${n.subject}: ${n.body || ''}` : n.body, 400) })),
+    ...(calls?.calls || []).map((c) => ({ kind: 'call', at: c.created, by: c.userName || '', text: clipTo(`${c.isIncoming ? 'Incoming' : 'Outgoing'} call${c.duration ? `, ${Math.round(c.duration / 60)} min` : ''}${c.note ? `: ${c.note}` : ''}`, 400) })),
+    ...(texts?.textmessages || texts?.textMessages || []).map((x) => ({ kind: 'text', at: x.created, by: x.isIncoming ? (p?.name || 'Client') : (x.userName || 'Agent'), text: clipTo(x.message, 400) })),
+  ].filter((a) => a.at).sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, limit);
+  return { p, activity };
+}

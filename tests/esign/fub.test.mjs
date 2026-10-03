@@ -21,6 +21,8 @@ globalThis.fetch = async (url, init = {}) => {
   if (path.startsWith('/users')) return Response.json({ users: [{ id: 11, name: 'Ann Agent', email: 'ANN@x.com', role: 'Agent' }, { id: 12, name: 'Zed', email: 'zed@elsewhere.com', role: 'Agent' }] });
   if (path.startsWith('/stages')) return Response.json({ stages: [{ name: 'Lead' }, { name: 'Under Contract' }, { name: 'Closed' }] });
   if (path === '/webhooks' && method === 'POST') return Response.json({ id: 99, ...body });
+  if (path.startsWith('/people?limit=')) return Response.json({ people: path.includes('assignedUserId=11') ? [P1] : [P1, P2], _metadata: { total: 2 } });
+  if (path.startsWith('/people/502')) return Response.json(P2);
   if (path.startsWith('/people?stage=Under%20Contract')) return Response.json({ people: [P1, P2] });
   if (path.startsWith('/people?stage=')) return Response.json({ people: [] });
   if (path.startsWith('/people?id=')) return Response.json({ people: [P1, P2].filter((p) => path.includes(String(p.id))) });
@@ -108,6 +110,28 @@ assert.equal(r.body.ok, true, JSON.stringify(r.body));
 const put = calls.find((c) => c.method === 'PUT');
 assert.deepEqual(put.body, { stage: 'Closed', price: 455000 });
 assert.match(calls.filter((c) => c.method === 'POST' && c.url.endsWith('/notes')).at(-1).body.body, /Closed on 2026-10-20 at \$455,000/);
+
+// My Leads: agents get only their own leads; admins can see anyone's.
+r = await call('fub', 'ann', { action: 'me' });
+assert.deepEqual([r.body.connected, r.body.matched], [true, true]);
+r = await call('fub', 'ann', { action: 'leads' });
+assert.equal(r.status, 200, JSON.stringify(r.body)); assert.equal(r.body.people.length, 1); assert.equal(r.body.admin, false);
+const leadsUrl = calls.filter((c) => c.url.includes('/people?limit=')).at(-1).url;
+assert.match(leadsUrl, /assignedUserId=11/); assert.match(leadsUrl, /sort=-lastActivity/);
+r = await call('fub', 'ann', { action: 'leads', agent_id: '12' });
+assert.match(calls.filter((c) => c.url.includes('/people?limit=')).at(-1).url, /assignedUserId=11/, 'agents cannot look at someone else\'s leads');
+r = await call('fub', 'owner', { action: 'leads', agent_id: '12' });
+assert.match(calls.filter((c) => c.url.includes('/people?limit=')).at(-1).url, /assignedUserId=12/); assert.equal(r.body.admin, true);
+assert.equal((await call('fub', 'ann', { action: 'lead', person_id: 502 })).status, 404, 'not her lead');
+r = await call('fub', 'ann', { action: 'lead', person_id: 501 });
+assert.equal(r.body.person.name, 'Carla Client'); assert.equal(r.body.deals.length, 1);
+r = await call('fub', 'ann', { action: 'note', person_id: 501, text: 'Called, sending comps' });
+assert.equal(r.body.ok, true);
+assert.match(calls.filter((c) => c.method === 'POST' && c.url.endsWith('/notes')).at(-1).body.subject, /Note from Ann Agent/);
+assert.equal((await call('fub', 'ann', { action: 'stage', person_id: 501, stage: 'Made Up' })).status, 400);
+r = await call('fub', 'ann', { action: 'stage', person_id: 501, stage: 'Under Contract' });
+assert.equal(r.body.ok, true); assert.equal(r.body.deal.opened, false, 'deal already open: no second one');
+assert.equal(__db.transaction.length, 1);
 
 // Disconnect removes the key and the webhook.
 r = await call('fub', 'owner', { action: 'disconnect' });
