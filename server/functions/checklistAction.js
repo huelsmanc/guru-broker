@@ -160,6 +160,7 @@ export default async (req) => {
             if (!(await canAccess(me, parsePath(pathFromUrl(body.url)), base44.entities))) return fail('Not allowed to use that file');
           } else if (!/^https:\/\//.test(String(body.url || ''))) return fail('Missing document', 400);
           item.document_url = body.url; item.document_name = String(body.name || 'Document').slice(0, 200);
+          delete item.ai_review; // a new document gets a fresh AI check
           item.uploaded_by = myEmail; item.uploaded_at = now;
           if (!['approved'].includes(item.status)) item.status = 'uploaded';
           log(`uploaded ${item.document_name}`);

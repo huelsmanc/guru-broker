@@ -4,11 +4,12 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Loader2, Check, X, ExternalLink, FileText } from 'lucide-react';
+import { Loader2, Check, X, ExternalLink, FileText, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { useLiveTable } from '@/hooks/useLiveTable';
 import { can, isAdminRole } from '../../shared/permissions.generated.js';
 import { Empty } from '@/components/workspace/ui';
 import { approvesDealItems } from '../../shared/access.js';
+import AiReview, { currentReview } from '@/components/workspace/AiReview';
 
 export default function ApproveDocs() {
   const { user, brokerageId } = useOutletContext();
@@ -57,7 +58,10 @@ export default function ApproveDocs() {
               const id = `${q.cl.id}:${q.item.id}`;
               return (
                 <li key={id}><button onClick={() => { setActive(id); setNote(''); }} className={`w-full text-left px-4 py-3 text-sm ${cur === q ? 'bg-primary/10' : 'hover:bg-muted/50'}`}>
-                  <p className="font-medium">{q.item.title}</p>
+                  <p className="font-medium flex items-center gap-1.5">{q.item.title}
+                    {currentReview(q.item)?.verdict === 'needs_attention' && <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" aria-label="AI flagged" />}
+                    {currentReview(q.item)?.verdict === 'looks_complete' && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" aria-label="AI: looks complete" />}
+                  </p>
                   <p className="text-xs text-muted-foreground truncate">{label(q)}</p>
                   <p className="text-xs text-muted-foreground">{q.item.uploaded_by || q.cl.subject_email}{q.item.submitted_at ? ` · ${new Date(q.item.submitted_at).toLocaleString()}` : ''}</p>
                 </button></li>
@@ -73,6 +77,12 @@ export default function ApproveDocs() {
                 </div>
                 {cur.tx && <Link to={`/Transactions/${cur.tx.id}?tab=checklists`}><Button variant="outline" size="sm" className="gap-1.5"><ExternalLink className="w-4 h-4" /> Open deal</Button></Link>}
               </div>
+              {cur.item.document_url && (
+                <div className="mb-4">
+                  <AiReview key={`${cur.cl.id}:${cur.item.id}`} item={cur.item} checklistId={cur.cl.id} canRun autoRun onUseNote={(t) => setNote(t)}
+                    refresh={() => queryClient.invalidateQueries({ queryKey: key })} />
+                </div>
+              )}
               {cur.item.document_url ? (
                 <>
                   <a href={cur.item.document_url} target="_blank" rel="noreferrer" className="text-sm text-primary flex items-center gap-1 mb-2"><FileText className="w-4 h-4" />{cur.item.document_name || 'Document'}</a>

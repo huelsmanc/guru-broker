@@ -6,13 +6,14 @@ import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Plus, Upload, Loader2, FileText, CheckSquare, Square, Send, Check, X, MessageSquare, Library, PenTool, Trash2, Download, PenLine, Clock, BellRing } from 'lucide-react';
+import { Plus, Upload, Loader2, FileText, CheckSquare, Square, Send, Check, X, MessageSquare, Library, PenTool, Trash2, Download, PenLine, Clock, BellRing, AlertTriangle } from 'lucide-react';
 import { can, isAdminRole } from '../../../shared/permissions.generated.js';
 import { Section, Empty, Pill } from './ui';
 import UnifiedESignCreator from '@/components/esign/UnifiedESignCreator';
 import { useLiveTable } from '@/hooks/useLiveTable';
 import MentionInput, { CommentText } from './MentionInput';
 import { approvesDealItems, reviewsAllDeals } from '../../../shared/access.js';
+import AiReview, { runAiCheck, currentReview } from './AiReview';
 
 // Plain words for item statuses.
 const WORD = { open: 'To do', uploaded: 'Uploaded', review_requested: 'In review', approved: 'Approved', rejected: 'Needs changes', exempt: 'Not needed', done: 'Done' };
@@ -102,6 +103,7 @@ export default function WorkspaceChecklists({ tx, user, subjectType = 'transacti
                       <span className={`flex-1 text-sm ${done ? 'text-muted-foreground' : ''}`}>{it.title}{it.required === false ? <span className="text-xs text-muted-foreground"> (optional)</span> : ''}</span>
                       {it.due_date && <span className="text-xs text-muted-foreground hidden sm:inline">{new Date(`${it.due_date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>}
                       {['sent', 'partly_signed'].includes(it.esign?.status) && !done ? <SignChip esign={it.esign} me={me} />
+                        : it.status === 'review_requested' && currentReview(it)?.verdict === 'needs_attention' ? <span className="text-xs flex items-center gap-1 rounded-full px-2 py-0.5 font-medium bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-300"><AlertTriangle className="w-3 h-3" /> In review · AI flagged</span>
                         : it.status !== 'open' ? <Pill status={it.status}>{WORD[it.status]}</Pill> : forms[it.id] ? <span className="text-xs text-violet-700 flex items-center gap-1"><PenLine className="w-3 h-3" /> Ready to send</span> : it.requires_document ? (it.form_url
                         ? <span className="text-xs text-emerald-700 flex items-center gap-1"><Library className="w-3 h-3" /> Use form</span>
                         : <span className="text-xs text-emerald-700 flex items-center gap-1"><Upload className="w-3 h-3" /> Upload</span>) : null}
@@ -193,6 +195,10 @@ function ItemPanel({ checklistId, fileScope, item, tx, user, approver, admin, ma
       </div>
       <EsignCard item={item} checklistId={checklistId} user={user} manage={manage} form={form} refresh={refresh}
         onCustom={() => setSigning(item.document_url && !item.esign ? item.document_url : item.form_url || '')} subjectType={subjectType} />
+      {item.document_url && (currentReview(item) || approver || manage) && (
+        <AiReview item={item} checklistId={checklistId} canRun={approver || manage} refresh={refresh} />
+      )}
+
       <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 [&>*]:justify-center sm:[&>*]:justify-start">
         {item.requires_document && (
           <>
@@ -207,7 +213,7 @@ function ItemPanel({ checklistId, fileScope, item, tx, user, approver, admin, ma
               ? <SignedDownload url={item.document_url} className="h-9 px-3 text-sm" />
               : <a href={item.document_url} target="_blank" rel="noreferrer"><Button size="sm" variant="outline" className="gap-1.5"><Download className="w-3.5 h-3.5" /> Download</Button></a>)}
             {['uploaded', 'rejected'].includes(item.status) && (
-              <Button size="sm" className="gap-1.5" disabled={!!busy} onClick={() => go('submit', { action: 'submit', item_id: item.id })}><Send className="w-3.5 h-3.5" /> Submit for review</Button>
+              <Button size="sm" className="gap-1.5" disabled={!!busy} onClick={async () => { await go('submit', { action: 'submit', item_id: item.id }); runAiCheck(checklistId, item.id, { auto: true }).catch(() => {}).finally(refresh); setTimeout(refresh, 1500); }}><Send className="w-3.5 h-3.5" /> Submit for review</Button>
             )}
           </>
         )}
@@ -370,7 +376,8 @@ function EsignCard({ item, checklistId, user, manage, form, refresh, onCustom, s
   if (e?.status === 'signed') {
     return <p className="text-xs flex items-center gap-1.5 text-green-700"><Check className="w-3.5 h-3.5" /> Signed by everyone {shortDate(e.completed_at)}{item.reviewed_by === 'e-sign' ? ' and approved automatically' : ''}.</p>;
   }
-  if (!manage || done || !item.requires_document || subjectType !== 'onboarding') {
+  // Something already uploaded for review (a license copy...): nothing to send.
+  if (!manage || done || !item.requires_document || subjectType !== 'onboarding' || (!form && item.document_url && item.status !== 'rejected')) {
     return e?.status === 'voided' ? <p className="text-xs text-muted-foreground">Signing request cancelled {shortDate(e.voided_at)}.</p> : null;
   }
   const roles = form?.roles || [];
