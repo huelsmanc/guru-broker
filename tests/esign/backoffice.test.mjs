@@ -245,4 +245,17 @@ assert.equal(r.body.waiting, undefined, 'agents have no admin queues');
 r = await as('boss')('myDay', {});
 assert.ok(r.body.waiting && typeof r.body.waiting.payouts === 'number' && typeof r.body.waiting.docs === 'number', JSON.stringify(r.body.waiting));
 
+// Deal activity emails: recipients come from the deal (not the browser), the sender isn't emailed,
+// text is escaped, and both the old ("actor") and new ("update") request shapes work.
+{
+  const sent = () => calls.filter((c) => c.url.includes('resend')).map((c) => JSON.parse(c.init.body));
+  const before = sent().length;
+  r = await as('boss')('notifyTransactionActivity', { type: 'update_posted', transaction: { id: 't1', agent_email: 'victim@evil.com', property_address: 'Fake' }, update: { message: '<script>x</script> Deal closed' } });
+  assert.equal(r.status, 200, JSON.stringify(r.body)); assert.equal(r.body.sent, 1);
+  const m = sent().slice(before);
+  assert.deepEqual(m.map((e) => e.to[0]), ['ann@x.com'], 'the deal\'s agent, not the address the browser sent');
+  assert.match(m[0].html, /12 Elm St/); assert.match(m[0].html, /&lt;script&gt;/); assert.ok(!m[0].html.includes('<script>'));
+  r = await as('ann')('notifyTransactionActivity', { type: 'file_uploaded', transaction: { id: 't1' }, actor: { email: 'ann@x.com', fileName: 'Inspection.pdf' } });
+  assert.equal(r.body.sent, 0, 'not emailed about your own upload');
+}
 console.log('Back office: all checks passed');

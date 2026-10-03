@@ -23,6 +23,8 @@ import ContactPicker from '@/components/contacts/ContactPicker';
 import { saveToContactBook } from '@/lib/contacts';
 import { isAdminRole, normalizeRole, can } from '../../shared/permissions.generated.js';
 import AddressAutocomplete from '@/components/AddressAutocomplete';
+import { supabase } from '@/api/base44Client';
+import { dealAppend } from '../../shared/dealAppend.js';
 
 
 const MILESTONES = [
@@ -237,8 +239,7 @@ export default function Transactions() {
     setUploadingFor(txId);
     const { file_url } = await base44.integrations.Core.UploadFile({ file, scope: { kind: 'tx', id: txId } });
     const tx = transactions.find(t => t.id === txId);
-    const docs = [...(tx.documents || []), { name: file.name, url: file_url, uploaded_at: new Date().toISOString(), uploaded_by: user.full_name }];
-    await base44.entities.Transaction.update(txId, { documents: docs });
+    await dealAppend(supabase, txId, 'documents', { name: file.name, url: file_url, uploaded_at: new Date().toISOString(), uploaded_by: user.full_name });
     base44.functions.invoke('notifyTransactionActivity', {
       type: 'file_uploaded',
       transaction: tx,
