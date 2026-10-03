@@ -849,7 +849,9 @@ export const SCHEMA = {
       "file_name",
       "file_size",
       "file_url",
+      "folder_id",
       "is_featured",
+      "pages",
       "tags",
       "uploaded_by_email",
       "uploaded_by_name",
@@ -862,6 +864,7 @@ export const SCHEMA = {
       "downloads_count",
       "file_size",
       "is_featured",
+      "pages",
       "tags"
     ]
   },
@@ -969,6 +972,27 @@ export const SCHEMA = {
     ],
     "typed": [
       "messages"
+    ]
+  },
+  "LibraryFolder": {
+    "table": "library_folder",
+    "columns": [
+      "brokerage_id",
+      "created_by_email",
+      "description",
+      "member_emails",
+      "name",
+      "private",
+      "sort",
+      "id",
+      "created_date",
+      "updated_date",
+      "created_by"
+    ],
+    "typed": [
+      "member_emails",
+      "private",
+      "sort"
     ]
   },
   "MailingList": {

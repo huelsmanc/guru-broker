@@ -7,7 +7,10 @@
 //   scoped/<brokerage>/dm/<a>.<b>/...              the two people in the DM
 //   scoped/<brokerage>/group/<group id>/...        the group chat's members
 //   scoped/<brokerage>/channel/<name>/...          whoever can see the channel
-//   scoped/<brokerage>/misc/...                    anyone in the brokerage
+//   scoped/<brokerage>/library/<folder id>/...     the company library: whoever can see the file's
+//                                                  folder now (private folders: admins and chosen people)
+//   scoped/<brokerage>/misc/...                    anyone in the brokerage (older library files follow
+//                                                  their library folder too)
 //
 // The app links to them as /api/file?p=<path>. Every time one is opened, the server checks
 // the person is signed in and allowed to see that record (using the same security rules as
@@ -35,7 +38,7 @@ export function scopeFolder(brokerageId, scope = {}) {
   if (!brokerageId || !ID.test(String(brokerageId))) throw bad('No brokerage');
   const base = `scoped/${brokerageId}`;
   switch (scope.kind) {
-    case 'tx': case 'offer': case 'user': case 'group':
+    case 'tx': case 'offer': case 'user': case 'group': case 'library':
       if (!ID.test(String(scope.id || ''))) throw bad('Bad file scope');
       return `${base}/${scope.kind}/${scope.id}`;
     case 'dm': {
@@ -63,10 +66,10 @@ export function parsePath(path) {
   const [, brokerageId, kind] = parts;
   if (!ID.test(brokerageId || '')) return null;
   const name = parts[parts.length - 1];
-  if (kind === 'misc' || kind === 'forms') return parts.length >= 4 ? { brokerageId, kind, name } : null;
+  if (kind === 'misc' || kind === 'forms') return parts.length >= 4 ? { brokerageId, kind, name, path: p } : null;
   if (parts.length < 5) return null;
   const key = parts[3];
-  if (['tx', 'offer', 'user', 'group'].includes(kind)) return ID.test(key) ? { brokerageId, kind, id: key, name } : null;
+  if (['tx', 'offer', 'user', 'group', 'library'].includes(kind)) return ID.test(key) ? { brokerageId, kind, id: key, name, path: p } : null;
   if (kind === 'dm') {
     const emails = key.split('.').map(dec).map(lc);
     return emails.length === 2 && emails.every((e) => e.includes('@')) ? { brokerageId, kind, emails, name } : null;
@@ -103,7 +106,7 @@ export async function canAccess(me, info, entities) {
   if (info.brokerageId !== me.brokerage_id) return false;
   const one = async (entity, query) => ((await entities[entity].filter(query, '-created_date', 1).catch(() => [])) || []).length > 0;
   switch (info.kind) {
-    case 'misc': return true;
+    case 'misc': case 'library': return libraryFileOk(me, info, entities);
     case 'forms': return true;
     case 'user': return info.id === me.id || isAdminRole(me.role) || can(me, 'users.manage');
     case 'dm': return info.emails.includes(lc(me.email));
@@ -113,6 +116,19 @@ export async function canAccess(me, info, entities) {
     case 'channel': return one('Channel', { brokerage_id: info.brokerageId, name: info.channel });
     default: return false;
   }
+}
+
+/**
+ * Library files go wherever their library entry is: if the file is in the library, the person must be
+ * able to see that entry (its folder decides). Other "misc" files stay open to the brokerage. A new
+ * library upload (no entry yet) is for library managers only.
+ */
+async function libraryFileOk(me, info, entities) {
+  const url = fileUrl(info.path || '');
+  const { data } = await adminClient().from('file_repository').select('id').eq('file_url', url).limit(1);
+  const row = (data || [])[0];
+  if (!row) return info.kind === 'misc' || isAdminRole(me.role) || can(me, 'library.manage');
+  return ((await entities.FileRepository.filter({ id: row.id }, '-created_date', 1).catch(() => [])) || []).length > 0;
 }
 
 /** A link to a private file that works for `seconds` (for e-mail signers, AI, downloads). */

@@ -40,7 +40,8 @@ ENTITIES = {
     "ESignTemplate": "brokerage_id created_by_email document_url fields title",
     "Event": "brokerage_id date organizer_email organizer_name status",
     "EventRSVP": "brokerage_id checked_in dietary_notes event_id guests_count status user_email user_name",
-    "FileRepository": "brokerage_id category description downloads_count file_name file_size file_url is_featured tags uploaded_by_email uploaded_by_name",
+    "FileRepository": "brokerage_id category description downloads_count file_name file_size file_url is_featured tags uploaded_by_email uploaded_by_name folder_id pages",
+    "LibraryFolder": "brokerage_id name description private member_emails sort created_by_email",
     "GeneratedContract": "brokerage_id buyer_name contract_text created_by_email created_by_name property_address purchase_price seller_name state",
     "GroupChat": "brokerage_id transaction_id auto_name created_by_email created_by_name members name",
     "GroupMessage": "brokerage_id edited_at mentions content group_id reactions sender_email sender_id sender_name sender_photo",
@@ -84,9 +85,9 @@ USER_FIELDS = "email full_name display_name role brokerage_id suspended headshot
 
 JSON_FIELDS = set("""co_agents referral deductions commission_calc config calc items changed mls_ids answers buyers checklist completed_dates details documents encryption_metadata esign_docs fields items
 data members invitees mentions messages options reactions read_by sellers signatories signature_fields signers tags tech_links updates
-versions cma_report roles states transcript scorecard lessons files ship_to recipients vendor_ids tracking problems""".split())
-BOOL_FIELDS = set("test_mode auto_name is_private is_client is_default active appraisal_contingency read pinned encrypted suspended submitted checked_in is_active is_anonymous is_featured signed passed require_sequential_signing".split())
-INT_FIELDS = set("minutes quantity recipient_count sent_count failed_count amount_cents level inspection_days financing_days bathrooms bedrooms downloads_count downvotes upvotes guests_count order passing_score rating signer_index version file_size score duration_seconds".split())
+versions cma_report roles states member_emails transcript scorecard lessons files ship_to recipients vendor_ids tracking problems""".split())
+BOOL_FIELDS = set("test_mode auto_name is_private is_client is_default active appraisal_contingency read pinned encrypted suspended submitted checked_in is_active is_anonymous is_featured signed passed require_sequential_signing private".split())
+INT_FIELDS = set("minutes quantity recipient_count sent_count failed_count amount_cents level inspection_days financing_days bathrooms bedrooms downloads_count downvotes upvotes guests_count order passing_score rating signer_index version file_size score duration_seconds pages sort".split())
 NUM_FIELDS = set("""lead_pct gross_share company_dollar agent_net fees team_lead revshare_total amount list_price offer_price earnest_money down_payment_percent loan_amount seller_concessions agent_net agent_split_percentage brokerage_fee brokerage_fee_flat brokerage_fee_percentage commission_amount
 commission_flat commission_percentage commission_sale_price sale_price sales_amount transaction_fee transaction_fee_flat
 transaction_fee_percentage purchase_price""".split())
@@ -408,6 +409,21 @@ for ent, fields in sorted(ENTITIES.items()):
         pw(f"create policy {t}_access on public.{t} for select using (brokerage_id = public.auth_brokerage_id() or public.is_super_admin());")
         pw(f"drop policy if exists {t}_admin on public.{t};")
         pw(f"create policy {t}_admin on public.{t} for all using ((brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin()) with check ((brokerage_id = public.auth_brokerage_id() and public.is_brokerage_admin()) or public.is_super_admin());")
+    elif ent in ("LibraryFolder", "FileRepository"):
+        # Company library: everyone with library access sees it, except private folders (admins, people
+        # allowed every private folder, and the folder's chosen people). Library managers change it.
+        if ent == "LibraryFolder":
+            see = ("(brokerage_id = public.auth_brokerage_id() and public.has_perm('library.access') and (not coalesce(private, false)"
+                   " or public.is_brokerage_admin() or public.has_perm('library.private_all') or coalesce(member_emails, '[]'::jsonb) ? public.auth_email()))")
+        else:
+            see = ("(brokerage_id = public.auth_brokerage_id() and public.has_perm('library.access') and (folder_id is null"
+                   " or exists (select 1 from public.library_folder f where f.id = file_repository.folder_id)))")
+        pw(f"create policy {t}_access on public.{t} for select using ({see} or public.is_super_admin());")
+        for op in ("insert", "update", "delete"): pw(f"drop policy if exists {t}_{op} on public.{t};")
+        cond = "((brokerage_id = public.auth_brokerage_id() and (public.is_brokerage_admin() or public.has_perm('library.manage'))) or public.is_super_admin())"
+        pw(f"create policy {t}_insert on public.{t} for insert with check {cond};")
+        pw(f"create policy {t}_update on public.{t} for update using {cond} with check {cond};")
+        pw(f"create policy {t}_delete on public.{t} for delete using {cond};")
     elif ent == "ContractForm":
         # Blank state forms. brokerage_id 'platform' = shared with every brokerage (super admin manages those).
         pw(f"create policy {t}_access on public.{t} for select using ((brokerage_id = 'platform' and public.brokerage_in_state({t}.state)) or brokerage_id = public.auth_brokerage_id() or public.is_super_admin());")

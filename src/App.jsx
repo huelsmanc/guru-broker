@@ -36,7 +36,7 @@ const PublicSigner = page(() => import('@/pages/PublicSigner.jsx'));
 const VerifyDocument = page(() => import('@/pages/VerifyDocument.jsx'));
 const BulkSign = page(() => import('@/pages/BulkSign'));
 const EventBoard = page(() => import('@/pages/EventBoard'));
-const FileRepository = page(() => import('@/pages/FileRepository'));
+const Library = page(() => import('@/pages/Library'));
 const Culture = page(() => import('@/pages/Culture'));
 const TechLinks = page(() => import('@/pages/TechLinks'));
 const SalesCoach = page(() => import('@/pages/SalesCoach'));
@@ -162,7 +162,8 @@ const AuthenticatedApp = () => {
             <Route path="/Recognition" element={<Navigate to="/Culture?tab=recognition" replace />} />
             <Route path="/IdeaHub" element={<Navigate to="/Culture?tab=ideas" replace />} />
             <Route path="/EventBoard" element={<EventBoard />} />
-            <Route path="/FileRepository" element={<FileRepository />} />
+            <Route path="/Library" element={<Library />} />
+            <Route path="/FileRepository" element={<Navigate to="/Library" replace />} />
             <Route path="/CultureCalendar" element={<Navigate to="/Culture?tab=calendar" replace />} />
             <Route path="/Culture" element={<Culture />} />
             <Route path="/TechLinks" element={<TechLinks />} />

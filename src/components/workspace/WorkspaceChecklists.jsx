@@ -6,7 +6,8 @@ import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Plus, Upload, Loader2, FileText, CheckSquare, Square, Send, Check, X, MessageSquare, Library, PenTool, Trash2, Download, PenLine, Clock, BellRing, AlertTriangle } from 'lucide-react';
+import { Plus, Upload, Loader2, FileText, CheckSquare, Square, Send, Check, X, MessageSquare, Library, PenTool, Trash2, Download, PenLine, Clock, BellRing, AlertTriangle, ChevronRight, Lock, FolderOpen } from 'lucide-react';
+import { useLibrary } from '@/components/library/libraryData';
 import { can, isAdminRole } from '../../../shared/permissions.generated.js';
 import { Section, Empty, Pill } from './ui';
 import UnifiedESignCreator from '@/components/esign/UnifiedESignCreator';
@@ -403,23 +404,48 @@ function EsignCard({ item, checklistId, user, manage, form, refresh, onCustom, s
 
 export function LibraryPicker({ brokerageId, onPick, onClose }) {
   const [q, setQ] = useState('');
-  const { data: files = [], isLoading } = useQuery({
-    queryKey: ['library', brokerageId],
-    queryFn: () => base44.entities.FileRepository.filter({ brokerage_id: brokerageId }, 'file_name', 500),
-  });
-  const shown = files.filter((f) => !q || `${f.file_name} ${f.category} ${(f.tags || []).join(' ')}`.toLowerCase().includes(q.toLowerCase()));
+  const [openId, setOpenId] = useState(null);
+  const { folders, files, formOf, loading } = useLibrary(brokerageId);
+  const needle = q.trim().toLowerCase();
+  const match = (f) => !needle || `${f.file_name} ${f.description || ''}`.toLowerCase().includes(needle);
+  const groups = [...folders.map((fo) => ({ folder: fo, list: files.filter((f) => f.folder_id === fo.id && match(f)) })),
+    { folder: { id: '_none', name: 'Not in a folder' }, list: files.filter((f) => !folders.some((fo) => fo.id === f.folder_id) && match(f)) }]
+    .filter((g) => g.list.length || (!needle && g.folder.id !== '_none'));
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-lg max-h-[80dvh] overflow-y-auto">
-        <DialogHeader><DialogTitle>Use a form from the library</DialogTitle></DialogHeader>
-        <Input placeholder="Search forms" value={q} onChange={(e) => setQ(e.target.value)} />
-        {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : (
-          <ul className="divide-y">
-            {shown.map((f) => (
-              <li key={f.id}><button className="w-full text-left px-2 py-2 text-sm hover:bg-muted rounded" onClick={() => onPick(f)}>{f.file_name}<span className="text-xs text-muted-foreground"> · {f.category}</span></button></li>
-            ))}
-            {!shown.length && <li className="text-sm text-muted-foreground p-2">No forms found. Upload forms in the File Repository.</li>}
-          </ul>
+        <DialogHeader><DialogTitle>Pick a form from the library</DialogTitle></DialogHeader>
+        <Input placeholder="Search the library" value={q} onChange={(e) => setQ(e.target.value)} />
+        {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (
+          <div className="rounded-xl border divide-y">
+            {groups.map(({ folder, list }) => {
+              const open = !!needle || openId === folder.id || groups.length === 1;
+              return (
+                <div key={folder.id}>
+                  <button type="button" onClick={() => setOpenId(open && !needle ? null : folder.id)} className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm font-medium hover:bg-muted/50">
+                    <ChevronRight className={`w-4 h-4 text-muted-foreground transition-transform ${open ? 'rotate-90' : ''}`} />
+                    {folder.private ? <Lock className="w-4 h-4 text-amber-500" /> : <FolderOpen className="w-4 h-4 text-amber-500" />}
+                    <span className="flex-1 truncate">{folder.name}</span><span className="text-xs text-muted-foreground">{list.length}</span>
+                  </button>
+                  {open && (
+                    <ul className="pb-1">
+                      {list.map((f) => {
+                        const ready = (formOf(f)?.fields || []).length > 0;
+                        return (
+                          <li key={f.id}><button className="w-full flex items-center gap-2 text-left pl-10 pr-3 py-2 text-sm hover:bg-muted" onClick={() => onPick(f)}>
+                            <span className="flex-1 min-w-0 truncate">{f.file_name}</span>
+                            <span className="shrink-0 text-[11px] text-muted-foreground">{[f.pages ? `${f.pages} p` : '', ready ? 'Form ready' : ''].filter(Boolean).join(' · ')}</span>
+                          </button></li>
+                        );
+                      })}
+                      {!list.length && <li className="pl-10 pr-3 py-2 text-xs text-muted-foreground">Empty folder.</li>}
+                    </ul>
+                  )}
+                </div>
+              );
+            })}
+            {!groups.length && <p className="text-sm text-muted-foreground p-3">{needle ? 'Nothing matches.' : 'No forms yet. Add them in the Library.'}</p>}
+          </div>
         )}
       </DialogContent>
     </Dialog>

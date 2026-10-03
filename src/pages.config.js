@@ -65,7 +65,7 @@ import DirectMessages from './pages/DirectMessages';
 import ESignAdmin from './pages/ESignAdmin';
 import ESignDocuments from './pages/ESignDocuments';
 import EventBoard from './pages/EventBoard';
-import FileRepository from './pages/FileRepository';
+import Library from './pages/Library';
 import IdeaHub from './pages/IdeaHub';
 import JoinBrokerage from './pages/JoinBrokerage';
 import ListingGenerator from './pages/ListingGenerator';
@@ -107,7 +107,7 @@ export const PAGES = {
     "ESignAdmin": ESignAdmin,
     "ESignDocuments": ESignDocuments,
     "EventBoard": EventBoard,
-    "FileRepository": FileRepository,
+    "Library": Library,
     "IdeaHub": IdeaHub,
     "JoinBrokerage": JoinBrokerage,
     "ListingGenerator": ListingGenerator,

@@ -126,6 +126,7 @@ const Core = {
    *   { kind: 'dm', emails }    a direct message (both emails)
    *   { kind: 'group', id }     a group or deal chat
    *   { kind: 'channel', name } a channel (and its threads)
+   *   { kind: 'library', id } a company library folder (whoever can see the folder)
    *   { kind: 'misc' }          anyone in the brokerage
    * Without a scope the file is public (headshots, logos, marketing images).
    */

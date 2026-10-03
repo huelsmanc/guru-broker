@@ -106,7 +106,7 @@ export default function ChecklistTemplates() {
                     </span>
                   ) : (
                     <span className="flex items-center gap-1">
-                      <Button size="sm" variant="ghost" className="h-8 gap-1 text-xs" title="Preload a form from the File Repository" onClick={() => setFormFor(i)}><Paperclip className="w-3.5 h-3.5" /> Form</Button>
+                      <Button size="sm" variant="ghost" className="h-8 gap-1 text-xs" title="Pick a form from the Library" onClick={() => setFormFor(i)}><Paperclip className="w-3.5 h-3.5" /> Form</Button>
                       <label className="inline-flex items-center h-8 px-2 rounded-md text-xs cursor-pointer hover:bg-muted" title="Upload a blank form">
                         {uploading === i ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
                         <input type="file" accept=".pdf,image/*" className="hidden" onChange={(e) => uploadForm(i, e.target.files?.[0])} />

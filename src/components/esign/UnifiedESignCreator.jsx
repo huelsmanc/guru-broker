@@ -161,6 +161,7 @@ export default function UnifiedESignCreator({
       if (!t) return;
       setParts((list) => list.map((x, j) => (j === i ? { kind: 'template', id: t.id, name: p.name || t.title, roles: t.roles || [], url: t.document_url, auto: true } : x)));
       if ((t.roles || []).length) setSigners((cur) => (cur.length ? cur : t.roles.map((r, k) => ({ id: `role-${k}-${Date.now()}`, role: r, role_index: k, name: '', email: '' }))));
+      if (t.role_order) setSequential(true); // the library form says its signers sign in order
     });
   }, [templates, parts]);
   const removePart = (i) => setParts((p) => p.filter((_, j) => j !== i));

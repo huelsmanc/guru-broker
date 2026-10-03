@@ -6,6 +6,7 @@ import PDFPageRenderer from '@/components/esign/PDFPageRenderer';
 import SignatureCaptureModal from '@/components/esign/SignatureCaptureModal';
 import { supabase } from '@/api/base44Client';
 import { fieldStyle, fieldSignerIndex, isPrefilled, textPx, isTickType, fieldVisible } from '../../shared/esignGeometry.js';
+import { moneyText } from '@/components/esign/dealKeys';
 import { fieldLook, textCss, strikePx, STYLED_TYPES } from '../../shared/esignStyle.js';
 
 // The page signers reach from their email link: /sign?token=...
@@ -390,6 +391,7 @@ export default function PublicSigner() {
       )}
       {active && active.type === 'text' && (
         <TextModal
+          money={active.format === 'money'}
           label={active.label}
           initial={values[active.id] || ''}
           onCancel={() => setActive(null)}
@@ -544,8 +546,9 @@ function ExplainModal({ token, proof, onClose }) {
   );
 }
 
-function TextModal({ label, initial, onAccept, onCancel }) {
+function TextModal({ label, initial, onAccept, onCancel, money }) {
   const [value, setValue] = useState(initial);
+  const done = () => onAccept(money ? moneyText(value) : value.trim());
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 sm:p-4">
       <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-sm p-5 space-y-4">
@@ -553,11 +556,20 @@ function TextModal({ label, initial, onAccept, onCancel }) {
           <h3 className="font-semibold text-gray-900">{label || 'Fill in this field'}</h3>
           <button onClick={onCancel} aria-label="Close"><X className="w-5 h-5 text-gray-400" /></button>
         </div>
-        <textarea autoFocus rows={3} value={value} onChange={(e) => setValue(e.target.value)} maxLength={500}
-          className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base resize-y focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        {money ? (
+          <div className="relative">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+            <input autoFocus inputMode="decimal" value={value.replace(/^\$/, '')} onChange={(e) => setValue(e.target.value.replace(/[^\d.,]/g, ''))}
+              onKeyDown={(e) => { if (e.key === 'Enter' && value.trim()) done(); }} placeholder="0.00"
+              className="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+        ) : (
+          <textarea autoFocus rows={3} value={value} onChange={(e) => setValue(e.target.value)} maxLength={500}
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base resize-y focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        )}
         <div className="flex gap-3">
           <Button variant="outline" onClick={onCancel} className="flex-1">Cancel</Button>
-          <Button onClick={() => onAccept(value.trim())} disabled={!value.trim()} className="flex-1 bg-blue-600 hover:bg-blue-700">Done</Button>
+          <Button onClick={done} disabled={!value.trim()} className="flex-1 bg-blue-600 hover:bg-blue-700">Done</Button>
         </div>
       </div>
     </div>

@@ -1,11 +1,13 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
-import { Loader2, AlertCircle, Trash2, PenTool, Calendar, Type, CaseSensitive, Sparkles, Strikethrough, CheckSquare, CircleDot, ListChecks, Paperclip, Copy, Home, Check } from 'lucide-react';
+import { Loader2, AlertCircle, Trash2, PenTool, Calendar, Type, CaseSensitive, Sparkles, Strikethrough, CheckSquare, CircleDot, ListChecks, Paperclip, Copy, Home, Check, DollarSign, MoreHorizontal, Lock, X, ChevronRight } from 'lucide-react';
+import { createPortal } from 'react-dom';
 import PDFPageRenderer from './PDFPageRenderer';
 import { fieldStyle, heightPct, fieldSignerIndex, textPx } from '../../../shared/esignGeometry.js';
 import { fieldLook, textCss, strikePx, STYLED_TYPES } from '../../../shared/esignStyle.js';
 import FieldStyleBar from './FieldStyleBar';
+import { Menu } from '@/components/library/bits';
 
 export const FIELD_TYPES = [
   { id: 'signature', label: 'Signature', icon: PenTool, w: 0.30, h: 0.055 },
@@ -19,77 +21,26 @@ export const FIELD_TYPES = [
   { id: 'strike', label: 'Strike out', icon: Strikethrough, w: 0.30, h: 0.012 },
 ];
 
-const money = (v) => (v == null || v === '' ? '' : `$${Number(v).toLocaleString('en-US', { maximumFractionDigits: 2 })}`);
-const usDate = (d) => { if (!d) return ''; const [y, m, day] = String(d).slice(0, 10).split('-'); return y && m && day ? `${m}/${day}/${y}` : String(d); };
-const listOf = (v) => (Array.isArray(v) ? v.map((x) => (x && typeof x === 'object' ? x.name : x)).filter(Boolean).join(', ') : v || '');
-const usDateTime = (d) => { if (!d) return ''; const t = new Date(d); return Number.isNaN(t.getTime()) ? String(d) : t.toLocaleString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric', hour: 'numeric', minute: '2-digit' }); };
-const days = (v) => (v == null || v === '' ? '' : String(v));
-const today = () => new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+import { DEAL_KEYS, CHOICE_KEYS, dealFacts, fillFromDeal, dealKeyLabel, moneyText } from './dealKeys.js';
+import PopulatePicker from './PopulatePicker';
 
-// Deal facts a box can be tied to. On a template the box stays blank and fills itself in
-// from whichever deal the form is used on.
-// Works with a transaction, an offer, or both merged ({ ...deal, ...offer }).
-export const DEAL_KEYS = [
-  { key: 'property_address', label: 'Property address', get: (d) => d.property_address },
-  { key: 'city', label: 'City', get: (d) => d.city },
-  { key: 'state', label: 'State', get: (d) => d.state },
-  { key: 'zip', label: 'ZIP', get: (d) => d.zip },
-  { key: 'full_address', label: 'Full address', get: (d) => [d.property_address, d.city, [d.state, d.zip].filter(Boolean).join(' ')].filter(Boolean).join(', ') },
-  { key: 'mls_number', label: 'MLS #', get: (d) => d.mls_number },
-  { key: 'sale_price', label: 'Price', get: (d) => money(d.offer_price ?? d.sale_price) },
-  { key: 'list_price', label: 'List price', get: (d) => money(d.list_price) },
-  { key: 'buyers', label: 'Buyer(s)', get: (d) => listOf(d.buyers) || d.buyer_name },
-  { key: 'sellers', label: 'Seller(s)', get: (d) => listOf(d.sellers) || d.seller_name },
-  { key: 'earnest_money', label: 'Earnest money', get: (d) => money(d.earnest_money) },
-  { key: 'financing_type', label: 'Financing type', get: (d) => (d.financing_type === 'cash' ? 'Cash' : d.financing_type || '') },
-  { key: 'down_payment_percent', label: 'Down payment %', get: (d) => (d.down_payment_percent == null || d.down_payment_percent === '' ? '' : `${d.down_payment_percent}%`) },
-  { key: 'loan_amount', label: 'Loan amount', get: (d) => money(d.loan_amount) },
-  { key: 'inspection_days', label: 'Inspection days', get: (d) => days(d.inspection_days) },
-  { key: 'financing_days', label: 'Financing days', get: (d) => days(d.financing_days) },
-  { key: 'seller_concessions', label: 'Seller concessions', get: (d) => money(d.seller_concessions) },
-  { key: 'included_items', label: 'Included items', get: (d) => d.included_items },
-  { key: 'special_terms', label: 'Special terms', get: (d) => d.special_terms },
-  { key: 'offer_expiration', label: 'Offer expires', get: (d) => usDateTime(d.offer_expiration) },
-  { key: 'closing_date', label: 'Closing date', get: (d) => usDate(d.closing_date) },
-  { key: 'acceptance_date', label: 'Acceptance date', get: (d) => usDate(d.acceptance_date) },
-  { key: 'inspection_date', label: 'Inspection deadline', get: (d) => usDate(d.inspection_contingency_date || d.inspection_date) },
-  { key: 'agent_name', label: 'Agent', get: (d) => d.agent_name },
-  { key: 'agent_email', label: 'Agent email', get: (d) => d.agent_email },
-  { key: 'listing_agent_name', label: 'Listing agent', get: (d) => d.listing_agent_name },
-  { key: 'brokerage_name', label: 'Brokerage', get: (d) => d.brokerage_name },
-  { key: 'today', label: "Today's date", get: () => today() },
+export { DEAL_KEYS, CHOICE_KEYS, DEAL_GROUPS, dealFacts, fillFromDeal, moneyText } from './dealKeys.js';
+
+// The library editor's toolbar (like Brokermint's): the everyday boxes up front, the rest under "More".
+// "Money" is a text box that prints as dollars.
+const TOOLBAR = [
+  { id: 'text', label: 'Text', icon: Type },
+  { id: 'money', label: 'Money', icon: DollarSign, as: 'text', extra: { format: 'money', label: 'Amount' } },
+  { id: 'strike', label: 'Strike', icon: Strikethrough },
+  { id: 'checkbox', label: 'Checkbox', icon: CheckSquare },
+  { id: 'signature', label: 'Signature', icon: PenTool },
+  { id: 'initial', label: 'Initials', icon: CaseSensitive },
+  { id: 'date', label: 'Date/Time', icon: Calendar },
 ];
+const SENDER = -1; // "Fill when sending": the agent fills these in before it goes out
+const SENDER_COLOR = '#64748b';
+const SENDER_TYPES = new Set(['text', 'checkbox', 'dropdown', 'strike']);
 
-// Facts with a few set answers: a checkbox can tick itself when the fact matches.
-export const CHOICE_KEYS = [
-  { key: 'financing_type', label: 'Financing', options: ['conventional', 'FHA', 'VA', 'USDA', 'cash', 'other'], get: (d) => d.financing_type || '' },
-  { key: 'appraisal_contingency', label: 'Appraisal contingency', options: ['yes', 'no'], get: (d) => (d.appraisal_contingency == null ? '' : d.appraisal_contingency === false ? 'no' : 'yes') },
-  { key: 'inspection_contingency', label: 'Inspection contingency', options: ['yes', 'no'], get: (d) => (d.inspection_days == null && !d.inspection_contingency_date ? '' : Number(d.inspection_days) > 0 || d.inspection_contingency_date ? 'yes' : 'no') },
-  { key: 'financing_contingency', label: 'Financing contingency', options: ['yes', 'no'], get: (d) => (d.financing_type === 'cash' ? 'no' : d.financing_days == null && !d.financing_contingency_date ? '' : 'yes') },
-  { key: 'seller_concessions_any', label: 'Seller concessions', options: ['yes', 'no'], get: (d) => (d.seller_concessions == null || d.seller_concessions === '' ? '' : Number(d.seller_concessions) > 0 ? 'yes' : 'no') },
-];
-
-/** Facts from the deal that can be dropped onto the document as pre-filled text. */
-export function dealFacts(deal) {
-  if (!deal) return [];
-  return DEAL_KEYS.map((k) => ({ key: k.key, label: k.label, value: String(k.get(deal) || '') })).filter((f) => f.value);
-}
-
-/** Fills boxes tied to a deal fact (from a template) with this deal's values. */
-export function fillFromDeal(fields, deal) {
-  if (!deal) return fields;
-  return (fields || []).map((f) => {
-    if (f.type === 'checkbox' && f.deal_key && f.deal_equals) {
-      const c = CHOICE_KEYS.find((x) => x.key === f.deal_key);
-      const v = c ? c.get(deal) : '';
-      return v ? { ...f, value: String(v).toLowerCase() === String(f.deal_equals).toLowerCase() ? 'X' : '', sender_fill: true } : f;
-    }
-    if (!f.deal_key || String(f.value || '').trim()) return f;
-    const k = DEAL_KEYS.find((x) => x.key === f.deal_key);
-    const v = k ? String(k.get(deal) || '') : '';
-    return v ? { ...f, value: v, from_deal: true } : f;
-  });
-}
 
 // A small preview of each field type inside its box: an icon and a label in the signer's color.
 // Date and dropdown boxes show sample text in the box's own style, so style changes are visible.
@@ -134,7 +85,7 @@ function FieldText({ field, layout, color, editing, onChange, onGrow, onDone }) 
     : (
       <span className="flex items-center gap-1 min-w-0 px-1.5 pointer-events-none w-full" style={{ color, justifyContent: { left: 'flex-start', center: 'center', right: 'flex-end' }[fieldLook(field).align] }}>
         <Type className="w-3.5 h-3.5 flex-shrink-0" strokeWidth={2.2} />
-        <span className="truncate" style={{ fontSize: 11, fontWeight: fieldLook(field).bold ? 800 : 600, fontStyle: fieldLook(field).italic ? 'italic' : 'normal' }}>{field.sender_fill ? 'Agent fills: ' : ''}{field.label || 'Text'}</span>
+        <span className="truncate" style={{ fontSize: 11, fontWeight: fieldLook(field).bold ? 800 : 600, fontStyle: fieldLook(field).italic ? 'italic' : 'normal' }}>{field.format === 'money' ? '$ ' : ''}{field.sender_fill ? 'Agent fills: ' : ''}{field.label || 'Text'}</span>
       </span>
     );
 }
@@ -152,12 +103,21 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
  * shows which signers still have nothing to sign.
  */
 // templateMode: setting up a library form (no deal yet); `persist(fields)` saves instead of the document.
-export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChange, deal, persist, templateMode, autoRun }) {
+// variant="toolbar": the library's full-screen form editor (toolbar on top, settings next to the box).
+// initiator: the "Fill when sending" role is offered (boxes the agent fills in before sending).
+export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChange, deal, persist, templateMode, autoRun, variant, initiator = true }) {
   const signers = doc.signers || [];
   const [fields, setFields] = useState(() => (doc.fields || []).map((f, i) => ({ ...f, id: f.id || `field-${i}-${Date.now()}` })));
   const [layout, setLayout] = useState(null); // { width, height, ratio }
   const [placing, setPlacing] = useState(null); // field type id
   const [placingValue, setPlacingValue] = useState(null); // deal fact being placed as text
+  const [placingExtra, setPlacingExtra] = useState(null); // e.g. { format: 'money' } for a Money box
+  const [dragging, setDragging] = useState(false);
+  const fieldEls = useRef({});
+  const toolbar = variant === 'toolbar';
+  const colorOf = (f) => (toolbar && f.sender_fill ? SENDER_COLOR : SIGNER_COLORS[fieldSignerIndex(f) % SIGNER_COLORS.length]);
+  const locked = (f) => !templateMode && !!f?.readonly; // set in the library: the agent can't change it
+  const roleName = (i) => signers[i]?.name || signers[i]?.email || signers[i]?.role || `Signer ${i + 1}`;
   const [radioGroup, setRadioGroup] = useState(null); // keeps adding options to this group
   const [templateMsg, setTemplateMsg] = useState(null);
   const [activeSigner, setActiveSigner] = useState(0);
@@ -220,7 +180,9 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChan
       required: placing !== 'checkbox' && placing !== 'attachment',
       value: placingValue?.value || '',
       ...(placingValue ? { from_deal: true, deal_key: placingValue.key, label: placingValue.label, sender_fill: true } : {}),
-      signer_index: activeSigner,
+      signer_index: activeSigner === SENDER ? 0 : activeSigner,
+      ...(activeSigner === SENDER ? { sender_fill: true, required: false } : {}),
+      ...(placingExtra || {}),
     };
     if (placing === 'dropdown') field.options = ['Option 1', 'Option 2'];
     if (STYLED_TYPES.has(placing) && lastStyle.current.text) field.style = { ...lastStyle.current.text };
@@ -240,9 +202,20 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChan
     setSelectedId(field.id);
     setPlacing(null);
     setPlacingValue(null);
+    setPlacingExtra(null);
   };
 
-  const stopPlacing = () => { setPlacing(null); setPlacingValue(null); setRadioGroup(null); };
+  const stopPlacing = () => { setPlacing(null); setPlacingValue(null); setRadioGroup(null); setPlacingExtra(null); };
+  // Pick a box to place (toolbar ids include "money", a text box shown as dollars).
+  const choose = (id) => {
+    const t = TOOLBAR.find((x) => x.id === id);
+    const type = t?.as || id;
+    const same = placing === type && JSON.stringify(placingExtra) === JSON.stringify(t?.extra || null);
+    setPlacingValue(null); setRadioGroup(null);
+    if (same) { stopPlacing(); return; }
+    setPlacing(type); setPlacingExtra(t?.extra || null);
+  };
+  const placingId = placing === 'text' && placingExtra?.format === 'money' ? 'money' : placing;
 
   // Drop a deal fact: into the selected text box, or as a new pre-filled text box.
   const applyFact = (fact) => {
@@ -285,6 +258,7 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChan
       x: field.x, y: field.y, w: field.width, h: heightPct(field, layout?.ratio || 1.3),
     };
     e.currentTarget.setPointerCapture?.(e.pointerId);
+    setDragging(true);
   };
   const onDragMove = (e) => {
     const d = dragRef.current;
@@ -302,7 +276,7 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChan
       });
     }
   };
-  const endDrag = () => { dragRef.current = null; };
+  const endDrag = () => { dragRef.current = null; setDragging(false); };
 
   const removeField = (id) => {
     setFields((prev) => prev.filter((f) => f.id !== id));
@@ -320,6 +294,25 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChan
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   });
+
+  // Toolbar layout: where the selected box is on screen (its settings open next to it), and phone or not.
+  const [anchor, setAnchor] = useState(null);
+  const [phone, setPhone] = useState(() => typeof window !== 'undefined' && window.matchMedia?.('(max-width: 639px)').matches);
+  useEffect(() => {
+    if (!toolbar || !window.matchMedia) return undefined;
+    const mq = window.matchMedia('(max-width: 639px)');
+    const on = () => setPhone(mq.matches);
+    mq.addEventListener?.('change', on);
+    return () => mq.removeEventListener?.('change', on);
+  }, [toolbar]);
+  useLayoutEffect(() => {
+    if (!toolbar || !selectedId) { setAnchor(null); return undefined; }
+    let raf = 0;
+    const measure = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(() => { const el = fieldEls.current[selectedId]; setAnchor(el ? el.getBoundingClientRect() : null); }); };
+    measure();
+    window.addEventListener('scroll', measure, true); window.addEventListener('resize', measure);
+    return () => { cancelAnimationFrame(raf); window.removeEventListener('scroll', measure, true); window.removeEventListener('resize', measure); };
+  }, [toolbar, selectedId, fields, layout]);
 
   const signersWithoutSignature = useMemo(() => signers
     .map((s, i) => ({ s, i }))
@@ -386,6 +379,294 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChan
     }
   };
 
+  // ------------------------------------------------------------------ toolbar layout (library editor)
+  function renderToolbar() {
+    const senderOnly = activeSigner === SENDER;
+    const signerOnlyType = (id) => !SENDER_TYPES.has(TOOLBAR.find((t) => t.id === id)?.as || id);
+    const hint = placing === 'strike' ? 'Tap the text to strike out, then drag the corner to cover it.'
+      : placing === 'radio' ? 'Tap each choice on the document. The signer picks one.'
+        : placing ? `Tap the document where the ${placingExtra?.format === 'money' ? 'money box' : (FIELD_TYPES.find((t) => t.id === placing)?.label || '').toLowerCase()} goes${senderOnly ? ' (you fill it in when sending)' : ` for ${roleName(activeSigner)}`}.` : '';
+    const more = [
+      { label: 'Choose one (radio)', icon: CircleDot, onClick: () => choose('radio'), disabled: senderOnly },
+      { label: 'Dropdown', icon: ListChecks, onClick: () => choose('dropdown') },
+      { label: 'Attach a file', icon: Paperclip, onClick: () => choose('attachment'), disabled: senderOnly },
+      '-',
+      { label: `Initials on every page${senderOnly ? '' : ` for ${roleName(activeSigner)}`}`, icon: Copy, onClick: initialsEveryPage, disabled: senderOnly || !layout?.pages?.length },
+      onAutoDetect && { label: detecting ? 'Finding signature lines…' : 'Auto-place with AI', icon: Sparkles, onClick: autoDetect, disabled: detecting || !layout },
+    ];
+    return (
+      <div className="flex flex-col h-full min-h-0">
+        <div className="z-30 border-b bg-background">
+          <div className="flex items-stretch gap-0.5 overflow-x-auto px-2 py-1">
+            {TOOLBAR.map((t) => {
+              const Icon = t.icon;
+              const on = placingId === t.id;
+              const off = !layout || (senderOnly && signerOnlyType(t.id));
+              return (
+                <button key={t.id} type="button" disabled={off} onClick={() => choose(t.id)} aria-pressed={on}
+                  title={off && layout ? 'Pick a signer to place this' : t.label}
+                  className={`shrink-0 min-w-[58px] flex flex-col items-center justify-center gap-0.5 rounded-lg px-2 py-1.5 text-[11px] font-medium transition-colors disabled:opacity-35 ${on ? 'bg-primary text-primary-foreground' : 'text-foreground/80 hover:bg-muted'}`}>
+                  <Icon className="w-[18px] h-[18px]" /> {t.label}
+                </button>
+              );
+            })}
+            <div className="shrink-0 flex items-center"><Menu label="More fields" trigger={<MoreHorizontal className="w-5 h-5" />} items={more} align="left" /></div>
+            <div className="ml-auto shrink-0 hidden sm:flex items-center gap-2 pl-3">
+              <span className="hidden md:inline text-xs text-muted-foreground">Placing for</span>
+              <select value={activeSigner} onChange={(e) => { setActiveSigner(Number(e.target.value)); if (Number(e.target.value) === SENDER && placing && !SENDER_TYPES.has(placing)) stopPlacing(); }}
+                aria-label="Placing fields for" className="rounded-lg border bg-background pl-2 pr-7 py-1.5 text-sm max-w-[44vw] sm:max-w-none"
+                style={{ borderLeft: `4px solid ${senderOnly ? SENDER_COLOR : SIGNER_COLORS[activeSigner % SIGNER_COLORS.length]}` }}>
+                {initiator && <option value={SENDER}>Fill when sending</option>}
+                {signers.map((_, i) => <option key={i} value={i}>{roleName(i)}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="sm:hidden border-t px-2 py-1.5">
+            <select value={activeSigner} onChange={(e) => { setActiveSigner(Number(e.target.value)); if (Number(e.target.value) === SENDER && placing && !SENDER_TYPES.has(placing)) stopPlacing(); }}
+              aria-label="Placing fields for (phone)" className="w-full rounded-lg border bg-background px-2 py-1.5 text-sm"
+              style={{ borderLeft: `4px solid ${senderOnly ? SENDER_COLOR : SIGNER_COLORS[activeSigner % SIGNER_COLORS.length]}` }}>
+              {initiator && <option value={SENDER}>Placing for: Fill when sending</option>}
+              {signers.map((_, i) => <option key={i} value={i}>Placing for: {roleName(i)}</option>)}
+            </select>
+          </div>
+          {placing && (
+            <div className="flex items-center justify-between gap-2 border-t bg-blue-50 dark:bg-blue-950/60 px-3 py-1.5 text-xs text-blue-800 dark:text-blue-200">
+              <span>{hint}</span>
+              <button type="button" className="underline shrink-0" onClick={stopPlacing}>{placing === 'radio' ? 'Done' : 'Cancel'}</button>
+            </div>
+          )}
+          {(error || templateMsg) && (
+            <div className="flex items-center justify-between gap-2 border-t bg-amber-50 dark:bg-amber-950/60 px-3 py-1.5 text-xs text-amber-900 dark:text-amber-200">
+              <span>{error || templateMsg}</span><button type="button" aria-label="Dismiss" onClick={() => { setError(null); setTemplateMsg(null); }}><X className="w-3.5 h-3.5" /></button>
+            </div>
+          )}
+        </div>
+        <div className="flex-1 min-h-0 overflow-auto bg-slate-100 dark:bg-slate-900/70">
+          <div className="mx-auto w-full max-w-[900px] p-2 sm:p-6">
+            <div className="rounded-sm shadow-md bg-white">{canvas}</div>
+            <p className="text-center text-[11px] text-muted-foreground mt-3">
+              {fields.length} field{fields.length === 1 ? '' : 's'}
+              {signersWithoutSignature.length > 0 && signers.length > 0 ? ` · No signature yet for ${signersWithoutSignature.map(({ i }) => roleName(i)).join(', ')}` : ''}
+            </p>
+          </div>
+        </div>
+        {selected && !dragging && !editingId && (phone || anchor) && createPortal(
+          <SettingsPopover anchor={anchor} phone={phone} onClose={() => setSelectedId(null)}>{renderSettings(selected)}</SettingsPopover>, document.body)}
+      </div>
+    );
+  }
+
+  // The selected box's settings, next to it (toolbar layout).
+  function renderSettings(f) {
+    const def = FIELD_TYPES.find((t) => t.id === f.type);
+    const roleValue = f.sender_fill || f.type === 'strike' ? SENDER : fieldSignerIndex(f);
+    const canSender = SENDER_TYPES.has(f.type) && initiator;
+    const styled = STYLED_TYPES.has(f.type) || f.type === 'strike';
+    const populated = f.type === 'checkbox' ? (f.deal_key && f.deal_equals ? `${f.deal_key}::${f.deal_equals}` : null) : f.deal_key || null;
+    const populateText = f.type === 'checkbox'
+      ? (populated ? `${CHOICE_KEYS.find((c) => c.key === f.deal_key)?.label || f.deal_key} is ${f.deal_equals}` : '')
+      : dealKeyLabel(f.deal_key);
+    const sameSigner = fields.filter((x) => x.id !== f.id && fieldSignerIndex(x) === fieldSignerIndex(f) && !x.sender_fill);
+    const conds = [];
+    for (const x of sameSigner) {
+      if (x.type === 'checkbox') conds.push({ key: x.id, label: `"${x.label || 'Checkbox'}" is ticked`, cond: { field_id: x.id } });
+      if (x.type === 'radio') conds.push({ key: x.id, label: `"${x.label || 'Choice'}" is picked`, cond: { field_id: x.id } });
+      if (x.type === 'dropdown') for (const o of (x.options || []).filter(Boolean)) conds.push({ key: `${x.id}::${o}`, label: `Dropdown is "${o}"`, cond: { field_id: x.id, equals: o } });
+    }
+    const condValue = f.show_if ? `${f.show_if.field_id}${f.show_if.equals ? `::${f.show_if.equals}` : ''}` : '';
+    const label = 'block text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-1';
+    const input = 'w-full rounded-lg border bg-background px-2.5 py-1.5 text-base md:text-sm';
+    return (
+      <PopulateSwitch>
+        {(picking, setPicking) => (picking ? (
+          <div>
+            <p className="text-sm font-semibold mb-2">Populate with</p>
+            <PopulatePicker kind={f.type === 'checkbox' ? 'checkbox' : 'text'} value={populated} onCancel={() => setPicking(false)}
+              onPick={(v) => {
+                setPicking(false);
+                if (f.type === 'checkbox') {
+                  if (!v) return updateField(f.id, { deal_key: null, deal_equals: null, value: '' });
+                  const [k, eq] = v.split('::');
+                  return updateField(f.id, { sender_fill: true, deal_key: k, deal_equals: eq, ...(deal ? fillFromDeal([{ ...f, deal_key: k, deal_equals: eq }], deal)[0] : {}) });
+                }
+                if (!v) return updateField(f.id, { deal_key: null, from_deal: false, ...(f.from_deal ? { value: '' } : {}) });
+                const k = DEAL_KEYS.find((x) => x.key === v);
+                const dollars = ['sale_price', 'list_price', 'earnest_money', 'loan_amount', 'seller_concessions'].includes(v);
+                updateField(f.id, { deal_key: v, from_deal: true, sender_fill: true, label: k?.label || f.label, value: deal && k ? String(k.get(deal) || '') : f.from_deal ? '' : f.value, format: dollars ? 'money' : null });
+              }} />
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: colorOf(f) }} />
+              <p className="text-sm font-semibold flex-1">{f.format === 'money' ? 'Money' : def?.label || f.type}</p>
+              <button type="button" title="Remove" aria-label="Remove field" onClick={() => removeField(f.id)} className="p-1.5 rounded-md text-red-600 hover:bg-red-50 dark:hover:bg-red-950"><Trash2 className="w-4 h-4" /></button>
+              <button type="button" aria-label="Close" onClick={() => setSelectedId(null)} className="p-1.5 rounded-md hover:bg-muted"><X className="w-4 h-4" /></button>
+            </div>
+            {f.type !== 'strike' && (
+              <div>
+                <label className={label} htmlFor="fs-role">Role</label>
+                <select id="fs-role" className={input} value={roleValue}
+                  onChange={(e) => { const v = Number(e.target.value); updateField(f.id, v === SENDER ? { sender_fill: true, required: false } : { sender_fill: false, signer_index: v, ...(f.deal_key && f.type !== 'checkbox' ? { deal_key: null, from_deal: false } : {}) }); }}>
+                  {canSender && <option value={SENDER}>Fill when sending</option>}
+                  {signers.map((_, i) => <option key={i} value={i}>{roleName(i)}</option>)}
+                </select>
+              </div>
+            )}
+            {(f.type === 'text' || f.type === 'checkbox') && (
+              <div>
+                <span className={label}>Populate with</span>
+                <button type="button" onClick={() => setPicking(true)} className="w-full flex items-center gap-2 rounded-lg border bg-background px-2.5 py-1.5 text-left text-sm hover:border-primary">
+                  <Home className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+                  <span className={`flex-1 truncate ${populateText ? '' : 'text-muted-foreground'}`}>{populateText || (f.type === 'checkbox' ? 'Nothing (tick by hand)' : 'Nothing (type it in)')}</span>
+                  <ChevronRight className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+                </button>
+              </div>
+            )}
+            <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+              {['text', 'checkbox', 'dropdown'].includes(f.type) && (
+                <label className="flex items-center gap-1.5 text-sm" title="Nobody can change it after it fills in (or the default you typed)">
+                  <input type="checkbox" checked={!!f.readonly} onChange={(e) => updateField(f.id, { readonly: e.target.checked })} /> Read-only
+                </label>
+              )}
+              {f.type !== 'strike' && !f.sender_fill && (
+                <label className="flex items-center gap-1.5 text-sm"><input type="checkbox" checked={f.required !== false} onChange={(e) => updateField(f.id, { required: e.target.checked })} /> Required</label>
+              )}
+            </div>
+            {styled && (
+              <div>
+                <span className={label}>{f.type === 'strike' ? 'Line' : 'Text style'}</span>
+                <div><FieldStyleBar field={f} className="shadow-none flex-wrap max-w-full gap-y-1" onChange={(style) => { updateField(f.id, { style }); rememberStyle(f.type, style); }} /></div>
+              </div>
+            )}
+            {['checkbox', 'radio', 'dropdown', 'attachment', 'text'].includes(f.type) && !(f.type === 'text' && f.deal_key) && (
+              <div>
+                <label className={label} htmlFor="fs-label">{f.type === 'radio' ? 'This choice' : f.type === 'attachment' ? 'What to attach' : 'Label'}</label>
+                <input id="fs-label" className={input} value={f.label || ''} placeholder={f.type === 'attachment' ? 'e.g. Proof of funds' : f.type === 'radio' ? 'e.g. Cash' : f.format === 'money' ? 'e.g. Earnest money' : 'e.g. Lender name'}
+                  onChange={(e) => updateField(f.id, { label: e.target.value.slice(0, 80) })} />
+              </div>
+            )}
+            {f.type === 'text' && !f.deal_key && (
+              <div>
+                <label className={label} htmlFor="fs-default">{templateMode ? 'Default text' : 'Text'}</label>
+                <textarea id="fs-default" rows={2} className={`${input} resize-y`} disabled={locked(f)} value={f.value || ''}
+                  placeholder={f.sender_fill ? 'Leave empty: the agent types it when sending' : 'Leave empty: the signer fills it in'}
+                  onChange={(e) => updateField(f.id, { value: e.target.value })}
+                  onBlur={() => { if (f.format === 'money' && f.value) updateField(f.id, { value: moneyText(f.value) }); }} />
+              </div>
+            )}
+            {f.type === 'dropdown' && (
+              <div>
+                <label className={label} htmlFor="fs-opts">Choices (one per line)</label>
+                <textarea id="fs-opts" rows={3} className={`${input} resize-y`} value={(f.options || []).join('\n')}
+                  onChange={(e) => updateField(f.id, { options: e.target.value.split('\n').map((o) => o.slice(0, 80)).slice(0, 30) })}
+                  onBlur={(e) => updateField(f.id, { options: e.target.value.split('\n').map((o) => o.trim()).filter(Boolean) })} />
+              </div>
+            )}
+            {f.type === 'radio' && (
+              <p className="text-xs text-muted-foreground">Choices: {fields.filter((x) => x.type === 'radio' && x.group === f.group).map((x) => x.label || '?').join(' / ')} ·{' '}
+                <button type="button" className="text-primary underline" onClick={() => { setRadioGroup(f.group); setActiveSigner(fieldSignerIndex(f)); setPlacing('radio'); setSelectedId(null); }}>Add a choice</button></p>
+            )}
+            {f.type !== 'strike' && (conds.length > 0 || f.show_if) && (
+              <div>
+                <label className={label} htmlFor="fs-if">Only show when</label>
+                <select id="fs-if" className={input} value={condValue} onChange={(e) => updateField(f.id, { show_if: conds.find((o) => o.key === e.target.value)?.cond || null })}>
+                  <option value="">Always show</option>
+                  {conds.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+                </select>
+              </div>
+            )}
+            {f.type === 'text' && <p className="text-[11px] text-muted-foreground">Double-click the box to type in it. Drag the corner to resize.</p>}
+          </div>
+        ))}
+      </PopulateSwitch>
+    );
+  }
+
+  // The document with its boxes (shared by both layouts).
+  const canvas = (
+    <PDFPageRenderer url={doc.document_url} containerRef={containerRef} onLayout={setLayout}>
+      <div
+        className={`absolute inset-0 z-10 ${placing ? 'cursor-crosshair' : ''}`}
+        onPointerDown={(e) => { if (placing) handlePlace(e); else setSelectedId(null); }}
+      />
+      {layout && fields.map((field) => {
+        const color = colorOf(field);
+        const isSel = field.id === selectedId;
+        const def = FIELD_TYPES.find((t) => t.id === field.type);
+        return (
+          <div
+            key={field.id}
+            ref={(el) => { if (el) fieldEls.current[field.id] = el; else delete fieldEls.current[field.id]; }}
+            className={`absolute z-20 flex items-center overflow-visible transition-shadow ${['checkbox', 'radio'].includes(field.type) ? 'justify-center' : 'justify-start'} ${field.type === 'radio' ? 'rounded-full' : 'rounded-[4px]'}`}
+            style={{
+              ...fieldStyle(field, layout.ratio),
+              ...(field.type === 'strike'
+                ? { ...edges(isSel ? `1px dashed ${color}` : '1px solid transparent'), background: 'transparent' }
+                : field.type === 'text' && field.value?.trim()
+                  ? { ...edges(`1px solid ${isSel ? color : `${color}55`}`), background: 'rgba(255,255,255,0.92)' }
+                  : {
+                    ...edges(`1.5px solid ${isSel ? color : `${color}8c`}`, ['checkbox', 'radio'].includes(field.type) ? null : `3px solid ${color}`),
+                    background: `linear-gradient(180deg, ${color}14, ${color}24)`,
+                  }),
+              boxShadow: isSel ? `0 0 0 3px ${color}33, 0 4px 12px rgba(15,23,42,0.12)` : field.type === 'strike' ? 'none' : '0 1px 2px rgba(15,23,42,0.06)',
+              touchAction: 'none',
+              cursor: editingId === field.id ? 'text' : 'move',
+            }}
+            title={field.type === 'text' ? 'Double-click to type' : undefined}
+            onDoubleClick={(e) => { if (field.type === 'text' && !locked(field)) { e.stopPropagation(); setSelectedId(field.id); setEditingId(field.id); } }}
+            onPointerDown={(e) => { if (editingId === field.id) return; startDrag(e, field, 'move'); }}
+            onPointerMove={onDragMove}
+            onPointerUp={endDrag}
+            onPointerCancel={endDrag}
+          >
+            {field.type === 'strike' ? (
+              <span className="absolute left-0 right-0 top-1/2 -translate-y-1/2 pointer-events-none rounded-full" style={{ background: fieldLook(field).color, height: strikePx(field, layout.width) }} />
+            ) : field.type === 'text' ? (
+              <FieldText field={field} layout={layout} color={color} editing={editingId === field.id}
+                onChange={(v) => updateField(field.id, { value: v })}
+                onGrow={(h) => updateField(field.id, { hPct: Math.min(h, 100 - field.y) })}
+                onDone={() => { setEditingId(null); if (field.format === 'money' && field.value) updateField(field.id, { value: moneyText(field.value) }); }} />
+            ) : (
+              <FieldPreview field={field} color={color} label={field.label || def?.label || field.type} layout={layout} />
+            )}
+            {field.show_if && <span className="absolute -top-2 -left-2 text-[9px] px-1 rounded bg-amber-400 text-white pointer-events-none" title="Only shows when another box is filled">if</span>}
+          {field.readonly && <span className="absolute -top-2 left-3 w-4 h-4 rounded-full bg-slate-700 text-white flex items-center justify-center pointer-events-none" title="Read-only"><Lock className="w-2.5 h-2.5" /></span>}
+            {isSel && !toolbar && !dragRef.current && (STYLED_TYPES.has(field.type) || field.type === 'strike') && (
+              <div className={`absolute z-40 ${field.y < 3 ? 'top-full mt-2' : 'bottom-full mb-2'} ${field.x > 55 ? 'right-0' : 'left-0'}`} style={{ whiteSpace: 'nowrap' }}
+                onPointerDown={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
+                <FieldStyleBar field={field} onChange={(style) => { updateField(field.id, { style }); rememberStyle(field.type, style); }} />
+              </div>
+            )}
+            {isSel && (
+              <>
+                <button
+                  className="absolute -top-3 -right-3 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center shadow"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => { e.stopPropagation(); removeField(field.id); }}
+                  aria-label="Remove field"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+                <div
+                  className="absolute -bottom-2 -right-2 w-5 h-5 rounded-full border-2 border-white shadow"
+                  style={{ background: color, cursor: 'nwse-resize', touchAction: 'none' }}
+                  onPointerDown={(e) => startDrag(e, field, 'resize')}
+                  onPointerMove={onDragMove}
+                  onPointerUp={endDrag}
+                  onPointerCancel={endDrag}
+                  aria-label="Resize field"
+                />
+              </>
+            )}
+          </div>
+        );
+      })}
+    </PDFPageRenderer>
+  );
+
+  if (toolbar) return renderToolbar();
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 py-2">
       <div className="lg:col-span-2 space-y-2 min-w-0">
@@ -419,82 +700,7 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChan
           </div>
         )}
         <div className="border border-border/50 rounded-lg overflow-auto bg-slate-100 max-h-[60dvh] lg:max-h-[72dvh]">
-          <PDFPageRenderer url={doc.document_url} containerRef={containerRef} onLayout={setLayout}>
-            <div
-              className={`absolute inset-0 z-10 ${placing ? 'cursor-crosshair' : ''}`}
-              onPointerDown={(e) => { if (placing) handlePlace(e); else setSelectedId(null); }}
-            />
-            {layout && fields.map((field) => {
-              const color = SIGNER_COLORS[fieldSignerIndex(field) % SIGNER_COLORS.length];
-              const isSel = field.id === selectedId;
-              const def = FIELD_TYPES.find((t) => t.id === field.type);
-              return (
-                <div
-                  key={field.id}
-                  className={`absolute z-20 flex items-center overflow-visible transition-shadow ${['checkbox', 'radio'].includes(field.type) ? 'justify-center' : 'justify-start'} ${field.type === 'radio' ? 'rounded-full' : 'rounded-[4px]'}`}
-                  style={{
-                    ...fieldStyle(field, layout.ratio),
-                    ...(field.type === 'strike'
-                      ? { ...edges(isSel ? `1px dashed ${color}` : '1px solid transparent'), background: 'transparent' }
-                      : field.type === 'text' && field.value?.trim()
-                        ? { ...edges(`1px solid ${isSel ? color : `${color}55`}`), background: 'rgba(255,255,255,0.92)' }
-                        : {
-                          ...edges(`1.5px solid ${isSel ? color : `${color}8c`}`, ['checkbox', 'radio'].includes(field.type) ? null : `3px solid ${color}`),
-                          background: `linear-gradient(180deg, ${color}14, ${color}24)`,
-                        }),
-                    boxShadow: isSel ? `0 0 0 3px ${color}33, 0 4px 12px rgba(15,23,42,0.12)` : field.type === 'strike' ? 'none' : '0 1px 2px rgba(15,23,42,0.06)',
-                    touchAction: 'none',
-                    cursor: editingId === field.id ? 'text' : 'move',
-                  }}
-                  title={field.type === 'text' ? 'Double-click to type' : undefined}
-                  onDoubleClick={(e) => { if (field.type === 'text') { e.stopPropagation(); setSelectedId(field.id); setEditingId(field.id); } }}
-                  onPointerDown={(e) => { if (editingId === field.id) return; startDrag(e, field, 'move'); }}
-                  onPointerMove={onDragMove}
-                  onPointerUp={endDrag}
-                  onPointerCancel={endDrag}
-                >
-                  {field.type === 'strike' ? (
-                    <span className="absolute left-0 right-0 top-1/2 -translate-y-1/2 pointer-events-none rounded-full" style={{ background: fieldLook(field).color, height: strikePx(field, layout.width) }} />
-                  ) : field.type === 'text' ? (
-                    <FieldText field={field} layout={layout} color={color} editing={editingId === field.id}
-                      onChange={(v) => updateField(field.id, { value: v })}
-                      onGrow={(h) => updateField(field.id, { hPct: Math.min(h, 100 - field.y) })}
-                      onDone={() => setEditingId(null)} />
-                  ) : (
-                    <FieldPreview field={field} color={color} label={field.label || def?.label || field.type} layout={layout} />
-                  )}
-                  {field.show_if && <span className="absolute -top-2 -left-2 text-[9px] px-1 rounded bg-amber-400 text-white pointer-events-none" title="Only shows when another box is filled">if</span>}
-                  {isSel && !dragRef.current && (STYLED_TYPES.has(field.type) || field.type === 'strike') && (
-                    <div className={`absolute z-40 ${field.y < 3 ? 'top-full mt-2' : 'bottom-full mb-2'} ${field.x > 55 ? 'right-0' : 'left-0'}`} style={{ whiteSpace: 'nowrap' }}
-                      onPointerDown={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
-                      <FieldStyleBar field={field} onChange={(style) => { updateField(field.id, { style }); rememberStyle(field.type, style); }} />
-                    </div>
-                  )}
-                  {isSel && (
-                    <>
-                      <button
-                        className="absolute -top-3 -right-3 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center shadow"
-                        onPointerDown={(e) => e.stopPropagation()}
-                        onClick={(e) => { e.stopPropagation(); removeField(field.id); }}
-                        aria-label="Remove field"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </button>
-                      <div
-                        className="absolute -bottom-2 -right-2 w-5 h-5 rounded-full border-2 border-white shadow"
-                        style={{ background: color, cursor: 'nwse-resize', touchAction: 'none' }}
-                        onPointerDown={(e) => startDrag(e, field, 'resize')}
-                        onPointerMove={onDragMove}
-                        onPointerUp={endDrag}
-                        onPointerCancel={endDrag}
-                        aria-label="Resize field"
-                      />
-                    </>
-                  )}
-                </div>
-              );
-            })}
-          </PDFPageRenderer>
+          {canvas}
         </div>
       </div>
 
@@ -598,8 +804,8 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChan
             {selected.type === 'text' && (
               <label className="block text-xs text-muted-foreground">
                 {templateMode ? 'Default text (optional)' : 'Pre-fill (signer can\'t change it)'}
-                <textarea rows={3} className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm text-foreground resize-y"
-                  value={selected.value || ''} placeholder="Leave empty for the signer to fill. You can also double-click the box to type in it."
+                <textarea rows={3} className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm text-foreground resize-y disabled:opacity-60"
+                  disabled={locked(selected)} value={selected.value || ''} placeholder="Leave empty for the signer to fill. You can also double-click the box to type in it."
                   onChange={(e) => updateField(selected.id, { value: e.target.value })} />
               </label>
             )}
@@ -635,7 +841,7 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChan
             )}
             {selected.type === 'checkbox' && selected.sender_fill && !templateMode && (
               <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={selected.value === 'X'} onChange={(e) => updateField(selected.id, { value: e.target.checked ? 'X' : '' })} /> Ticked
+                <input type="checkbox" disabled={locked(selected)} checked={selected.value === 'X'} onChange={(e) => updateField(selected.id, { value: e.target.checked ? 'X' : '' })} /> Ticked{locked(selected) ? ' (read-only)' : ''}
               </label>
             )}
             {selected.type === 'radio' && (
@@ -712,3 +918,41 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChan
     </div>
   );
 }
+
+// Holds whether the "Populate with" picker is showing (so it resets when another box is picked).
+function PopulateSwitch({ children }) {
+  const [picking, setPicking] = useState(false);
+  return children(picking, setPicking);
+}
+
+// The settings card: under (or over) the selected box on a computer, a sheet from the bottom on a phone.
+function SettingsPopover({ anchor, phone, onClose, children }) {
+  const ref = useRef(null);
+  const [h, setH] = useState(360);
+  useLayoutEffect(() => { if (ref.current) setH(ref.current.offsetHeight); });
+  useEffect(() => {
+    const key = (e) => { if (e.key === 'Escape' && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName)) onClose(); };
+    document.addEventListener('keydown', key);
+    return () => document.removeEventListener('keydown', key);
+  }, [onClose]);
+  const stop = (e) => e.stopPropagation();
+  if (phone) {
+    return (
+      <div ref={ref} onPointerDown={stop} className="fixed inset-x-0 bottom-0 z-[95] max-h-[62dvh] overflow-y-auto rounded-t-2xl border-t bg-popover text-popover-foreground shadow-2xl p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-muted-foreground/30" />
+        {children}
+      </div>
+    );
+  }
+  const W = 340; const gap = 10; const vw = window.innerWidth; const vh = window.innerHeight;
+  const below = anchor.bottom + gap + h <= vh - 8 || anchor.top - gap - h < 8;
+  const top = below ? Math.min(anchor.bottom + gap, vh - h - 8) : anchor.top - gap - h;
+  const left = Math.max(8, Math.min(anchor.left, vw - W - 8));
+  return (
+    <div ref={ref} onPointerDown={stop} style={{ position: 'fixed', top: Math.max(8, top), left, width: W, maxHeight: vh - 16 }}
+      className="z-[95] overflow-y-auto rounded-xl border bg-popover text-popover-foreground shadow-2xl p-3.5">
+      {children}
+    </div>
+  );
+}
+

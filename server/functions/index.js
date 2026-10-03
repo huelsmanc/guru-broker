@@ -87,6 +87,7 @@ export const FUNCTIONS = {
   inspectionRequest: () => import('./inspectionRequest.js'),
   inviteUser: () => import('./inviteUser.js'),
   invokeLLM: () => import('./invokeLLM.js'),
+  library: () => import('./library.js'),
   licenseAlerts: () => import('./licenseAlerts.js'),
   listingKit: () => import('./listingKit.js'),
   marketingAI: () => import('./marketingAI.js'),
