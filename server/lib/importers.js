@@ -6,6 +6,7 @@
 // Everything is limited to one brokerage, except a full Base44 import by the super admin.
 
 import { adminClient, appUrl } from './base44.js';
+import { sendInvite, ownMailReady } from './inviteMail.js';
 import { SCHEMA } from '../../src/api/schema.generated.js';
 import { capYearStart, r2 } from '../../shared/commission.js';
 import { normalizeRole, ROLES } from '../../shared/permissions.generated.js';
@@ -22,11 +23,14 @@ async function profileByEmail(db, email) {
 }
 
 /** Finds or creates the login for an email. Returns { id, created }. */
-export async function ensureLogin(db, email, { name, invite } = {}) {
+export async function ensureLogin(db, email, { name, invite, ...opts } = {}) {
   const existing = await profileByEmail(db, email);
   if (existing) return { id: existing.id, created: false, profile: existing };
+  const redirectTo = `${appUrl()}/reset-password?welcome=1&next=%2FDashboard`;
   const res = invite
-    ? await db.auth.admin.inviteUserByEmail(lc(email), { data: { full_name: name || '' }, redirectTo: `${appUrl()}/reset-password?welcome=1&next=%2FDashboard` })
+    ? (ownMailReady()
+      ? await sendInvite(db, { email: lc(email), redirectTo, fullName: name || '', brokerageId: opts.brokerageId, inviter: opts.inviter }).then((d) => ({ data: d, error: null }), (error) => ({ data: null, error }))
+      : await db.auth.admin.inviteUserByEmail(lc(email), { data: { full_name: name || '' }, redirectTo }))
     : await db.auth.admin.createUser({ email: lc(email), email_confirm: true, user_metadata: { full_name: name || '' } });
   if (res.error) {
     // Already has a login but no profile row yet (rare): find it.
@@ -97,7 +101,7 @@ export async function importPeople({ people, brokerageId, invite, actor }) {
       const existing = await profileByEmail(db, email);
       const why = blockedReason(existing, actor, brokerageId);
       if (why) { results.push({ email, ok: false, error: why }); continue; }
-      const login = existing ? { id: existing.id, created: false, profile: existing } : await ensureLogin(db, email, { name: p.name, invite });
+      const login = existing ? { id: existing.id, created: false, profile: existing } : await ensureLogin(db, email, { name: p.name, invite, brokerageId, inviter: [actor?.display_name, actor?.full_name].find((v) => v && !String(v).includes('@')) || '' });
       const current = login.profile || (await db.from('profiles').select('*').eq('id', login.id).maybeSingle()).data;
       const why2 = blockedReason(current, actor, brokerageId);
       if (why2) { results.push({ email, ok: false, error: why2 }); continue; }

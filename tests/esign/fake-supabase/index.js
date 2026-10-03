@@ -88,6 +88,15 @@ export function createClient(url, key, clientOpts) {
       // Logins. Like the real database, creating one also creates the profile row (handle_new_user).
       createUser: async ({ email, user_metadata }) => newLogin(email, user_metadata),
       inviteUserByEmail: async (email, o = {}) => { (globalThis.__invites ||= []).push({ email, redirectTo: o.redirectTo }); return newLogin(email, o.data); },
+      generateLink: async ({ type, email, options = {} }) => {
+        const link = `https://sb/auth/v1/verify?token=t-${email}&type=${type}&redirect_to=${encodeURIComponent(options.redirectTo || '')}`;
+        if (type === 'invite') {
+          if ((globalThis.__db.profiles || []).some((p) => p.email === email)) return { data: null, error: { message: 'A user with this email address has already been registered' } };
+          const r = await newLogin(email, options.data);
+          return { data: { user: r.data?.user, properties: { action_link: link } }, error: r.error || null };
+        }
+        return { data: { user: null, properties: { action_link: link } }, error: null };
+      },
       mfa: {
         listFactors: async ({ userId }) => ({ data: { factors: (globalThis.__factors?.[userId] || []).map((id) => ({ id, factor_type: 'totp', status: 'verified' })) }, error: null }),
         deleteFactor: async ({ id, userId }) => { const l = globalThis.__factors?.[userId] || []; globalThis.__factors[userId] = l.filter((x) => x !== id); return { data: { id }, error: null }; },

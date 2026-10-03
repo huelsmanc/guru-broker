@@ -7,6 +7,7 @@
 import { createClient as createSupabase } from '@supabase/supabase-js';
 import { makeEntities, fromRow } from '../../shared/entities.js';
 import { Core } from './integrations.js';
+import { sendInvite, sendSignInLink, ownMailReady } from './inviteMail.js';
 import { tokenClaims, secondStepNeeded, sessionConfirmed } from './twostep.js';
 
 const URL_ = () => process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
@@ -122,7 +123,12 @@ function buildClient({ token, asService }) {
       const redirectTo = `${appUrl()}/reset-password?welcome=1${opts.nextUrl ? `&next=${encodeURIComponent(opts.nextUrl)}` : ''}`;
       const addr = email.toLowerCase().trim();
       const fullName = String(opts.full_name || '').trim().slice(0, 120) || null;
-      const { data, error } = await admin.auth.admin.inviteUserByEmail(addr, { redirectTo, data: fullName ? { full_name: fullName } : undefined });
+      const inviter = me ? ([me.display_name, me.full_name].find((v) => v && !String(v).includes('@')) || '') : '';
+      let data; let error;
+      if (ownMailReady()) {
+        // Our own branded email from gurubroker.app (Supabase's plain one tends to land in spam).
+        try { data = await sendInvite(admin, { email: addr, redirectTo, fullName, brokerageId, inviter }); } catch (e) { error = e; }
+      } else ({ data, error } = await admin.auth.admin.inviteUserByEmail(addr, { redirectTo, data: fullName ? { full_name: fullName } : undefined }));
       if (error && !/already been registered|already exists/i.test(error.message)) throw new Error(error.message);
       const userId = data?.user?.id;
       if (userId) {
@@ -138,7 +144,9 @@ function buildClient({ token, asService }) {
       if (prof && fullName && !prof.full_name && !prof.display_name) {
         await admin.from('profiles').update({ full_name: fullName, display_name: fullName }).eq('id', prof.id);
       }
-      await admin.auth.signInWithOtp({ email: addr, options: { shouldCreateUser: false, emailRedirectTo: `${appUrl()}${opts.nextUrl || '/Dashboard'}` } }).catch(() => {});
+      const back = `${appUrl()}${opts.nextUrl || '/Dashboard'}`;
+      if (ownMailReady()) await sendSignInLink(admin, { email: addr, redirectTo: back, brokerageId, inviter }).catch((e) => console.error('sign-in email failed', e.message));
+      else await admin.auth.signInWithOtp({ email: addr, options: { shouldCreateUser: false, emailRedirectTo: back } }).catch(() => {});
       return { success: true, already_registered: true };
     },
   };

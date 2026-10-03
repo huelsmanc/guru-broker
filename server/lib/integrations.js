@@ -175,7 +175,7 @@ function normalizeSchema(schema) {
 // ---------------------------------------------------------------------------
 // Email
 
-export async function SendEmail({ to, subject, body, from_name, reply_to, attachments, cc }) {
+export async function SendEmail({ to, subject, body, text, from_name, reply_to, attachments, cc }) {
   const key = process.env.RESEND_API_KEY;
   if (!key) throw new Error('RESEND_API_KEY is not set');
   const fromAddr = process.env.EMAIL_FROM || 'Go Broker Hub <noreply@gurubroker.app>';
@@ -188,7 +188,7 @@ export async function SendEmail({ to, subject, body, from_name, reply_to, attach
       from,
       to: Array.isArray(to) ? to : [to],
       subject,
-      ...(isHtml ? { html: body } : { text: body || '' }),
+      ...(isHtml ? { html: body, ...(text ? { text } : {}) } : { text: body || '' }), // a plain-text copy helps keep mail out of spam
       ...(reply_to ? { reply_to } : {}),
       ...(cc ? { cc: Array.isArray(cc) ? cc : [cc] } : {}),
       // [{ filename, content: base64 string }]
