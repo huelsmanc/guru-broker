@@ -33,7 +33,7 @@ globalThis.fetch = async (url, init = {}) => {
   if (path === '/notes' && method === 'POST') return Response.json({ id: 7, ...body });
   if (path.startsWith('/notes?')) return Response.json({ notes: [{ created: '2026-09-30T10:00:00Z', subject: 'Showing', body: 'Loved the kitchen', createdBy: 'Ann Agent' }] });
   if (path.startsWith('/calls?')) return Response.json({ calls: [{ created: '2026-10-01T15:00:00Z', isIncoming: false, duration: 300, userName: 'Ann Agent' }] });
-  if (path.startsWith('/textMessages?')) return Response.json({ textmessages: [{ created: '2026-10-02T09:00:00Z', isIncoming: true, message: 'We signed!' }] });
+  if (path.startsWith('/textMessages?')) return Response.json({ textmessages: [{ created: '2026-10-02T09:00:00Z', isIncoming: true, message: 'We signed!' }, { created: '2026-09-28T09:00:00Z', isIncoming: true, message: '* Body is hidden for privacy reasons *' }, { created: '2026-09-21T09:00:00Z', isIncoming: false, message: '* Body is hidden for privacy reasons *' }] });
   throw new Error('unexpected FUB path ' + method + ' ' + path);
 };
 globalThis.__users = { owner: { id: 'u0', email: 'owner@x.com' }, ann: { id: 'u1', email: 'ann@x.com' } };
@@ -99,6 +99,8 @@ r = await call('fub', 'ann', { action: 'deal', transaction_id: tx.id });
 assert.equal(r.status, 200, JSON.stringify(r.body));
 assert.equal(r.body.person.name, 'Carla Client'); assert.equal(r.body.person.url, 'https://app.followupboss.com/2/people/view/501');
 assert.deepEqual(r.body.activity.map((a) => a.kind), ['text', 'call', 'note']);
+assert.equal(r.body.hidden.count, 2, 'private texts are counted, not shown'); assert.equal(r.body.hidden.last, '2026-09-28T09:00:00Z');
+assert.ok(!r.body.activity.some((a) => /hidden for privacy/.test(a.text)));
 // Agents search only their own Follow Up Boss people.
 r = await call('fub', 'ann', { action: 'search', q: 'Carla' });
 assert.equal(r.body.people[0].id, 501);

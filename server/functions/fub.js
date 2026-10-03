@@ -185,10 +185,10 @@ export default async (req) => {
         const id = clip(body.person_id, 20).replace(/\D/g, '');
         if (!id) throw new Problem('Pick a lead.');
         if (body.action === 'lead') {
-          const { p, activity } = await personWithActivity(call, id, 25);
+          const { p, activity, hidden } = await personWithActivity(call, id, 25);
           if (!p || !owns(p)) throw new Problem('Lead not found', 404);
           const deals = await E.Transaction.filter({ brokerage_id: bid, fub_person_id: String(p.id) }, '-created_date', 3).catch(() => []);
-          return Response.json({ person: personSummary(p), activity, stages: cfg.stages || [], deals: deals.map((d) => ({ id: d.id, address: d.property_address, status: d.status })) });
+          return Response.json({ person: personSummary(p), activity, hidden, stages: cfg.stages || [], deals: deals.map((d) => ({ id: d.id, address: d.property_address, status: d.status })) });
         }
         const p = await call(`/people/${id}?fields=${PERSON_FIELDS}`).catch(() => null);
         if (!p || !owns(p)) throw new Problem('Lead not found', 404);
@@ -239,8 +239,8 @@ export default async (req) => {
           return Response.json({ connected: true, person: null });
         }
         if (!tx.fub_person_id) return Response.json({ connected: true, person: null });
-        const { p, activity } = await personWithActivity(call, tx.fub_person_id);
-        return Response.json({ connected: true, person: p ? personSummary(p) : { id: tx.fub_person_id, name: 'Follow Up Boss contact', url: personUrl(tx.fub_person_id) }, activity });
+        const { p, activity, hidden } = await personWithActivity(call, tx.fub_person_id);
+        return Response.json({ connected: true, person: p ? personSummary(p) : { id: tx.fub_person_id, name: 'Follow Up Boss contact', url: personUrl(tx.fub_person_id) }, activity, hidden });
       }
 
       default:

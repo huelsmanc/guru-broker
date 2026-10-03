@@ -208,10 +208,16 @@ export async function personWithActivity(call, id, limit = 15) {
     call(`/calls?personId=${pid}&limit=10&sort=-created`).catch(() => ({})),
     call(`/textMessages?personId=${pid}&limit=10&sort=-created`).catch(() => ({})),
   ]);
+  // Follow Up Boss hides some bodies from apps ("* Body is hidden for privacy reasons *"). Those
+  // aren't shown here; they're counted so the page can point to Follow Up Boss instead.
+  const hiddenBody = (t) => !String(t || '').trim() || /hidden for privacy/i.test(String(t));
+  let hidden = 0; let hiddenAt = null;
+  const keep = (a, body) => { if (!hiddenBody(body)) return true; hidden += 1; if (a.at && (!hiddenAt || a.at > hiddenAt)) hiddenAt = a.at; return false; };
   const activity = [
-    ...(notes?.notes || []).map((n) => ({ kind: 'note', at: n.created, by: n.createdBy || '', text: clipTo(n.subject ? `${n.subject}: ${n.body || ''}` : n.body, 400) })),
-    ...(calls?.calls || []).map((c) => ({ kind: 'call', at: c.created, by: c.userName || '', text: clipTo(`${c.isIncoming ? 'Incoming' : 'Outgoing'} call${c.duration ? `, ${Math.round(c.duration / 60)} min` : ''}${c.note ? `: ${c.note}` : ''}`, 400) })),
-    ...(texts?.textmessages || texts?.textMessages || []).map((x) => ({ kind: 'text', at: x.created, by: x.isIncoming ? (p?.name || 'Client') : (x.userName || 'Agent'), text: clipTo(x.message, 400) })),
-  ].filter((a) => a.at).sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, limit);
-  return { p, activity };
+    ...(notes?.notes || []).map((n) => ({ a: { kind: 'note', at: n.created, by: n.createdBy || '', text: clipTo(n.subject ? `${n.subject}: ${n.body || ''}` : n.body, 400) }, body: n.subject || n.body })),
+    ...(calls?.calls || []).map((c) => ({ a: { kind: 'call', at: c.created, by: c.userName || '', text: clipTo(`${c.isIncoming ? 'Incoming' : 'Outgoing'} call${c.duration ? `, ${Math.round(c.duration / 60)} min` : ''}${c.note && !hiddenBody(c.note) ? `: ${c.note}` : ''}`, 400) }, body: 'call' })),
+    ...(texts?.textmessages || texts?.textMessages || []).map((x) => ({ a: { kind: 'text', at: x.created, by: x.isIncoming ? (p?.name || 'Client') : (x.userName || 'Agent'), text: clipTo(x.message, 400) }, body: x.message })),
+  ].filter(({ a, body }) => a.at && keep(a, body)).map(({ a }) => a)
+    .sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, limit);
+  return { p, activity, hidden: { count: hidden, last: hiddenAt } };
 }

@@ -183,7 +183,7 @@ function LeadPanel({ id, onClose }) {
 
               <div>
                 <p className="text-sm font-medium mb-2">Recent activity</p>
-                {!data.activity?.length ? <p className="text-sm text-muted-foreground">Nothing yet.</p> : (
+                {!data.activity?.length ? (!data.hidden?.count && <p className="text-sm text-muted-foreground">Nothing yet.</p>) : (
                   <ul className="space-y-2.5">
                     {data.activity.map((a, i) => {
                       const Icon = ICON[a.kind] || StickyNote;
@@ -195,6 +195,12 @@ function LeadPanel({ id, onClose }) {
                       );
                     })}
                   </ul>
+                )}
+                {data.hidden?.count > 0 && (
+                  <a href={p.url} target="_blank" rel="noreferrer" className="mt-3 flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm hover:bg-muted">
+                    <span className="flex items-center gap-2 min-w-0"><MessageSquare className="w-4 h-4 shrink-0 text-muted-foreground" /><span className="truncate">{data.hidden.count === 1 ? '1 private conversation' : `${data.hidden.count} private conversations`}{data.hidden.last ? ` · ${ago(data.hidden.last)}` : ''}</span></span>
+                    <span className="shrink-0 flex items-center gap-1 text-primary font-medium">View <ExternalLink className="w-3.5 h-3.5" /></span>
+                  </a>
                 )}
               </div>
               <a href={p.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-sm text-primary">Open in Follow Up Boss <ExternalLink className="w-4 h-4" /></a>
