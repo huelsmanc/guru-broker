@@ -32,6 +32,7 @@ export const FUNCTIONS = {
   createMasterAdmin: () => import('./createMasterAdmin.js'),
   createSubmission: () => import('./createSubmission.js'),
   createSubmissionFromTemplate: () => import('./createSubmissionFromTemplate.js'),
+  culture: () => import('./culture.js'),
   dealAssistant: () => import('./dealAssistant.js'),
   dealChat: () => import('./dealChat.js'),
   dealChatSync: () => import('./dealChatSync.js'),

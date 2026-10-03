@@ -1,222 +1,310 @@
-import React, { useState, useEffect } from 'react';
+// Culture → Shout-outs: thank a teammate in front of the team. The person gets an alert; everyone
+// can react. A "Most appreciated" board shows who's been recognized most this month.
+import React, { useMemo, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Heart, Plus, Sparkles, Zap } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { motion } from 'framer-motion';
-import RecognitionCard from '@/components/recognition/RecognitionCard';
-import GiveRecognitionDialog from '@/components/recognition/GiveRecognitionDialog';
+import { Megaphone, SmilePlus, MoreHorizontal, Trash2, Search, Loader2, X, Lock, Trophy } from 'lucide-react';
+import { Avatar, ago, nameOf, lc, useTeam, useLive, act, chip } from '@/components/culture/shared';
+import { isAdminRole } from '../../shared/permissions.generated.js';
 
-const CATEGORIES = [
-  { id: 'teamwork', label: 'Teamwork', emoji: '🤝' },
-  { id: 'client_service', label: 'Client Service', emoji: '😊' },
-  { id: 'sales', label: 'Sales', emoji: '🎯' },
-  { id: 'leadership', label: 'Leadership', emoji: '⭐' },
-  { id: 'creativity', label: 'Creativity', emoji: '💡' },
-  { id: 'persistence', label: 'Persistence', emoji: '💪' },
-  { id: 'other', label: 'Other', emoji: '👏' },
+export const SHOUT_CATEGORIES = [
+  { id: 'teamwork', label: 'Teamwork', emoji: '🤝', tint: 'bg-sky-50 text-sky-700 dark:bg-sky-950 dark:text-sky-300', bar: 'from-sky-400 to-cyan-400' },
+  { id: 'client_service', label: 'Client care', emoji: '😊', tint: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300', bar: 'from-emerald-400 to-teal-400' },
+  { id: 'sales', label: 'Big win', emoji: '🎯', tint: 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300', bar: 'from-amber-400 to-orange-400' },
+  { id: 'leadership', label: 'Leadership', emoji: '⭐', tint: 'bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300', bar: 'from-violet-400 to-fuchsia-400' },
+  { id: 'creativity', label: 'Creativity', emoji: '💡', tint: 'bg-pink-50 text-pink-700 dark:bg-pink-950 dark:text-pink-300', bar: 'from-pink-400 to-rose-400' },
+  { id: 'persistence', label: 'Hustle', emoji: '💪', tint: 'bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300', bar: 'from-orange-400 to-red-400' },
+  { id: 'other', label: 'Thank you', emoji: '👏', tint: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300', bar: 'from-slate-300 to-slate-400' },
 ];
+const CAT = Object.fromEntries(SHOUT_CATEGORIES.map((c) => [c.id, c]));
+const REACTIONS = ['❤️', '🎉', '🔥', '👏', '💪', '🚀', '😂', '🙌'];
+const monthStart = () => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1).getTime(); };
 
 export default function Recognition() {
   const { user, brokerageId } = useOutletContext();
-  const queryClient = useQueryClient();
-  const [showDialog, setShowDialog] = useState(false);
-  const [filterCategory, setFilterCategory] = useState('all');
-
-  const { data: recognitions = [] } = useQuery({
-    queryKey: ['recognitions', brokerageId],
-    queryFn: () => base44.entities.Recognition.filter({ brokerage_id: brokerageId }, '-created_date', 200),
-    enabled: !!brokerageId,
+  const me = lc(user?.email);
+  const { team, person } = useTeam(user);
+  const [composing, setComposing] = useState(null); // null | '' | an email to preselect
+  const [view, setView] = useState('all');
+  const [cat, setCat] = useState('all');
+  const key = ['recognitions', brokerageId];
+  useLive('Recognition', key);
+  const { data: all = [], isLoading } = useQuery({
+    queryKey: key, enabled: !!brokerageId,
+    queryFn: () => base44.entities.Recognition.filter({ brokerage_id: brokerageId }, '-created_date', 300),
   });
 
-  const { data: brokerageUsers = [] } = useQuery({
-    queryKey: ['brokerage-users-recognition', user?.id],
-    queryFn: async () => {
-      const res = await base44.functions.invoke('getBrokerageUsers', {});
-      return res.data?.users || [];
-    },
-    enabled: !!user?.id,
-    staleTime: 0,
-  });
-
-  // Helper to get display name with fallback
-  const getDisplayName = (user) => user?.display_name || user?.full_name || 'Unknown';
-
-  React.useEffect(() => {
-    const unsubRec = base44.entities.Recognition.subscribe(() => {
-      queryClient.invalidateQueries({ queryKey: ['recognitions', brokerageId] });
-    });
-    const unsubUser = base44.entities.User.subscribe(() => {
-      queryClient.refetchQueries({ queryKey: ['brokerage-users-recognition', user?.id] });
-      queryClient.invalidateQueries({ queryKey: ['recognitions', brokerageId] });
-    });
-    return () => {
-      unsubRec();
-      unsubUser();
-    };
-  }, [brokerageId, user?.id, queryClient]);
-
-  const filteredRecognitions = recognitions.filter(r => {
-    const categoryMatch = filterCategory === 'all' || r.category === filterCategory;
-    return categoryMatch;
-  });
-
-  // Count recognitions given and received
-  const givenCount = recognitions.filter(r => r.from_email === user?.email).length;
-  const receivedCount = recognitions.filter(r => r.to_email === user?.email).length;
-  const totalGiven = recognitions.length;
+  const list = all.filter((r) => (cat === 'all' || r.category === cat)
+    && (view === 'all' || (view === 'mine' ? lc(r.to_email) === me : lc(r.from_email) === me)));
+  const board = useMemo(() => {
+    const n = new Map();
+    for (const r of all) if (Date.parse(r.created_date) >= monthStart()) n.set(lc(r.to_email), (n.get(lc(r.to_email)) || 0) + 1);
+    return [...n.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+  }, [all]);
+  const forMe = all.filter((r) => lc(r.to_email) === me).length;
+  const fromMe = all.filter((r) => lc(r.from_email) === me).length;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background via-background to-background/50 p-6 lg:p-10 overflow-hidden relative">
-      {/* Animated background blur */}
-      <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-destructive/5 to-accent/5 rounded-full blur-3xl opacity-40 -z-10 animate-pulse" />
-      <div className="absolute bottom-1/4 left-0 w-96 h-96 bg-gradient-to-br from-primary/5 to-destructive/5 rounded-full blur-3xl opacity-40 -z-10 animate-pulse" />
-
-      <div className="max-w-6xl mx-auto">
-        {/* Hero Section */}
-        <motion.div initial={{ opacity: 0, y: -30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="mb-16">
-          <div className="flex items-center justify-between gap-8 flex-col sm:flex-row">
-            <div>
-              <div className="flex items-center gap-4 mb-4">
-                <motion.div 
-                  initial={{ scale: 0 }} 
-                  animate={{ scale: 1 }} 
-                  transition={{ delay: 0.2, type: 'spring' }}
-                  className="w-14 h-14 rounded-2xl bg-gradient-to-br from-destructive to-destructive/70 flex items-center justify-center shadow-lg shadow-destructive/30"
-                >
-                  <Heart className="w-7 h-7 text-white" fill="white" />
-                </motion.div>
-                <div>
-                  <h1 className="text-4xl lg:text-5xl font-black text-foreground tracking-tighter">Peer Recognition</h1>
-                  <p className="text-sm text-muted-foreground mt-1.5 font-medium">Celebrate excellence and inspire greatness</p>
-                </div>
-              </div>
-            </div>
-            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.3 }}>
-              <Button 
-                onClick={() => setShowDialog(true)} 
-                className="gap-2.5 rounded-full h-12 px-6 bg-gradient-to-r from-green-500 to-emerald-500 hover:shadow-2xl hover:shadow-green-500/40 text-white font-semibold transition-all duration-300 hover:scale-105"
-              >
-                <Sparkles className="w-4 h-4" /> Give Kudos
-              </Button>
-            </motion.div>
-          </div>
-        </motion.div>
-
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-12">
-          {[
-            { label: 'Given', value: givenCount, delay: 0, gradient: 'from-blue-500/20 to-blue-600/10' },
-            { label: 'Received', value: receivedCount, delay: 0.1, gradient: 'from-purple-500/20 to-purple-600/10' },
-            { label: 'Team Total', value: totalGiven, delay: 0.2, gradient: 'from-rose-500/20 to-rose-600/10' },
-          ].map((stat, idx) => (
-            <motion.div
-              key={idx}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: stat.delay, duration: 0.5 }}
-              className="group"
-            >
-              <div className={`relative h-full bg-gradient-to-br ${stat.gradient} backdrop-blur-xl rounded-2xl border border-white/10 p-7 overflow-hidden hover:border-white/20 transition-all duration-300 hover:shadow-2xl`}>
-                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-br from-white/5 to-transparent rounded-2xl" />
-                <div className="relative">
-                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-3 opacity-70">{stat.label}</p>
-                  <p className="text-4xl font-black text-foreground mb-1">{stat.value}</p>
-                  <div className="h-1 w-12 bg-gradient-to-r from-primary to-accent rounded-full" />
-                </div>
-              </div>
-            </motion.div>
-          ))}
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-10 py-6">
+      <div className="flex flex-wrap items-end justify-between gap-3 mb-5">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Shout-outs</h1>
+          <p className="text-sm text-muted-foreground">Thank a teammate where everyone can see it.</p>
         </div>
+        <button onClick={() => setComposing('')} className="inline-flex items-center gap-2 rounded-full bg-primary text-primary-foreground px-4 py-2.5 text-sm font-semibold shadow-sm hover:opacity-90">
+          <Megaphone className="w-4 h-4" /> Give a shout-out
+        </button>
+      </div>
 
-        {/* Filter Section */}
-        <motion.div 
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="mb-12 bg-gradient-to-r from-primary/10 to-accent/10 rounded-2xl border border-primary/20 p-6 backdrop-blur-xl"
-        >
-          <div className="flex items-center gap-3 mb-5">
-            <Zap className="w-5 h-5 text-primary" />
-            <p className="text-sm font-bold text-foreground uppercase tracking-wider">Filter by Category</p>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => setFilterCategory('all')}
-              className={`px-5 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${
-                filterCategory === 'all'
-                  ? 'bg-gradient-to-r from-primary to-accent text-white shadow-lg shadow-primary/30'
-                  : 'bg-white/10 text-foreground border border-white/20 hover:bg-white/15 hover:border-white/30'
-              }`}
-            >
-              All
-            </motion.button>
-            {CATEGORIES.map((cat, i) => (
-              <motion.button
-                key={cat.id}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.05 * i }}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => setFilterCategory(cat.id)}
-                className={`px-5 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center gap-2 ${
-                  filterCategory === cat.id
-                    ? 'bg-gradient-to-r from-primary to-accent text-white shadow-lg shadow-primary/30'
-                    : 'bg-white/10 text-foreground border border-white/20 hover:bg-white/15 hover:border-white/30'
-                }`}
-              >
-                <span className="text-base">{cat.emoji}</span>
-                {cat.label}
-              </motion.button>
+      <div className="grid lg:grid-cols-[1fr_300px] gap-6 items-start">
+        <div className="min-w-0 space-y-4">
+          <button onClick={() => setComposing('')} className="w-full flex items-center gap-3 rounded-2xl border bg-card p-3 text-left hover:bg-muted/50">
+            <Avatar name={nameOf(user)} photo={user?.headshot} size={40} />
+            <span className="flex-1 rounded-full bg-muted px-4 py-2.5 text-sm text-muted-foreground">Who made your day better?</span>
+          </button>
+
+          {board.length > 0 && <Board board={board} person={person} me={me} onGive={setComposing} className="lg:hidden" />}
+
+          <div className="flex items-center gap-1 rounded-full bg-muted p-1 w-fit max-w-full text-sm">
+            {[['all', 'Everyone'], ['mine', `For you${forMe ? ` · ${forMe}` : ''}`], ['given', `From you${fromMe ? ` · ${fromMe}` : ''}`]].map(([k, l]) => (
+              <button key={k} onClick={() => setView(k)} className={`rounded-full px-3.5 py-1.5 whitespace-nowrap ${view === k ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground hover:text-foreground'}`}>{l}</button>
             ))}
           </div>
-        </motion.div>
+          <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 [scrollbar-width:none]">
+            <button onClick={() => setCat('all')} className={chip(cat === 'all')}>All</button>
+            {SHOUT_CATEGORIES.map((c) => <button key={c.id} onClick={() => setCat(c.id)} className={chip(cat === c.id)}><span>{c.emoji}</span>{c.label}</button>)}
+          </div>
 
-        {/* Recognitions List */}
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4, duration: 0.6 }} className="space-y-4">
-          {filteredRecognitions.length === 0 ? (
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9 }} 
-              animate={{ opacity: 1, scale: 1 }} 
-              className="text-center py-24"
-            >
-              <motion.div 
-                animate={{ y: [0, -10, 0] }} 
-                transition={{ duration: 3, repeat: Infinity }}
-                className="mb-4"
-              >
-                <Heart className="w-16 h-16 text-muted-foreground/30 mx-auto" />
-              </motion.div>
-              <p className="text-muted-foreground text-lg font-medium">
-                {recognitions.length === 0 ? '✨ Be the first to give kudos!' : 'No recognitions in this category.'}
-              </p>
-            </motion.div>
-          ) : (
-            filteredRecognitions.map((recognition, i) => (
-              <motion.div
-                key={recognition.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.08, duration: 0.4 }}
-                whileHover={{ y: -4 }}
-              >
-                <RecognitionCard recognition={recognition} isOwn={recognition.from_email === user?.email} user={user} brokerageId={brokerageId} brokerageUsers={brokerageUsers} />
-              </motion.div>
-            ))
+          {isLoading ? <div className="py-16 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
+            : !list.length ? (
+              <div className="rounded-2xl border border-dashed bg-card p-10 text-center">
+                <p className="text-3xl mb-2">👏</p>
+                <p className="font-medium">{all.length ? 'Nothing here yet' : 'No shout-outs yet'}</p>
+                <p className="text-sm text-muted-foreground mt-1">{all.length ? 'Try another filter.' : 'Be the first to thank someone on the team.'}</p>
+              </div>
+            ) : list.map((r) => <ShoutCard key={r.id} r={r} me={me} admin={isAdminRole(user?.role)} person={person} />)}
+        </div>
+
+        <aside className="hidden lg:block space-y-4 sticky top-4">
+          <Board board={board} person={person} me={me} onGive={setComposing} />
+          <div className="rounded-2xl border bg-card p-4 grid grid-cols-2 gap-3 text-center">
+            <div><p className="text-2xl font-bold">{forMe}</p><p className="text-xs text-muted-foreground">For you</p></div>
+            <div><p className="text-2xl font-bold">{fromMe}</p><p className="text-xs text-muted-foreground">From you</p></div>
+          </div>
+        </aside>
+      </div>
+
+      {composing !== null && <Composer user={user} team={team} preset={composing} onClose={() => setComposing(null)} />}
+    </div>
+  );
+}
+
+function Board({ board, person, me, onGive, className = '' }) {
+  return (
+    <div className={`rounded-2xl border bg-card p-4 ${className}`}>
+      <p className="flex items-center gap-1.5 text-sm font-semibold mb-3"><Trophy className="w-4 h-4 text-amber-500" /> Most appreciated this month</p>
+      {!board.length ? <p className="text-sm text-muted-foreground">No shout-outs yet this month.</p> : (
+        <ol className="flex lg:flex-col gap-3 overflow-x-auto [scrollbar-width:none]">
+          {board.map(([email, n], i) => {
+            const u = person(email);
+            return (
+              <li key={email} className="flex lg:flex-row flex-col items-center gap-2 lg:gap-3 shrink-0 w-[72px] lg:w-auto text-center lg:text-left">
+                <div className="relative">
+                  <Avatar name={nameOf(u, email)} photo={u?.headshot} size={44} />
+                  <span className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center ring-2 ring-card ${i === 0 ? 'bg-amber-400 text-amber-950' : 'bg-muted text-foreground'}`}>{i + 1}</span>
+                </div>
+                <div className="min-w-0 w-full lg:flex-1">
+                  <p className="text-xs lg:text-sm font-medium truncate">{lc(email) === me ? 'You' : nameOf(u, email).split(' ')[0]}</p>
+                  <p className="text-[11px] text-muted-foreground">{n} shout-out{n === 1 ? '' : 's'}</p>
+                </div>
+                {lc(email) !== me && <button onClick={() => onGive(email)} className="hidden lg:inline text-xs text-primary font-medium hover:underline">Thank</button>}
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </div>
+  );
+}
+
+function ShoutCard({ r, me, admin, person }) {
+  const queryClient = useQueryClient();
+  const [picker, setPicker] = useState(false);
+  const [menu, setMenu] = useState(false);
+  const [err, setErr] = useState('');
+  const c = CAT[r.category] || CAT.other;
+  const to = person(r.to_email); const from = r.is_anonymous ? null : person(r.from_email);
+  const toName = lc(r.to_email) === me ? 'you' : nameOf(to, r.to_name);
+  const fromName = r.is_anonymous ? 'Someone' : lc(r.from_email) === me ? 'You' : nameOf(from, r.from_name);
+  const reactions = (r.reactions || []).filter((x) => x.users?.length);
+  const canDelete = admin || (!!me && lc(r.from_email) === me);
+  const key = ['recognitions', r.brokerage_id];
+
+  const react = async (emoji) => {
+    setPicker(false); setErr('');
+    // Show it right away; the server keeps everyone's taps.
+    queryClient.setQueryData(key, (old) => (old || []).map((x) => {
+      if (x.id !== r.id) return x;
+      let list = (x.reactions || []).map((y) => ({ ...y, users: [...(y.users || [])] }));
+      const hit = list.find((y) => y.emoji === emoji);
+      if (hit) hit.users = hit.users.map(lc).includes(me) ? hit.users.filter((e) => lc(e) !== me) : [...hit.users, me];
+      else list.push({ emoji, users: [me] });
+      return { ...x, reactions: list.filter((y) => y.users.length) };
+    }));
+    try { await act('shout_react', { id: r.id, emoji }); } catch (e) { setErr(e.message); }
+    queryClient.invalidateQueries({ queryKey: key });
+  };
+  const remove = async () => {
+    setMenu(false);
+    if (!window.confirm('Delete this shout-out?')) return;
+    try { await act('shout_delete', { id: r.id }); queryClient.invalidateQueries({ queryKey: key }); } catch (e) { setErr(e.message); }
+  };
+
+  return (
+    <article className="relative rounded-2xl border bg-card">
+      <div className={`h-1 rounded-t-2xl bg-gradient-to-r ${c.bar}`} />
+      <div className="p-4 sm:p-5">
+        <div className="flex items-start gap-3">
+          <div className="relative shrink-0 w-[60px] h-11">
+            {r.is_anonymous
+              ? <div className="absolute left-0 top-0 w-[30px] h-[30px] rounded-full bg-muted flex items-center justify-center"><Lock className="w-3.5 h-3.5 text-muted-foreground" /></div>
+              : <Avatar name={nameOf(from, r.from_name)} photo={from?.headshot} size={30} className="absolute left-0 top-0" />}
+            <Avatar name={nameOf(to, r.to_name)} photo={to?.headshot} size={36} className="absolute right-0 bottom-0 ring-[3px] ring-card" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[15px] leading-snug"><span className="font-semibold">{fromName}</span> <span className="text-muted-foreground">gave</span> <span className="font-semibold">{toName}</span> <span className="text-muted-foreground">a shout-out</span></p>
+            <div className="flex flex-wrap items-center gap-2 mt-1">
+              <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${c.tint}`}>{c.emoji} {c.label}</span>
+              <span className="text-xs text-muted-foreground">{ago(r.created_date)}</span>
+            </div>
+          </div>
+          {canDelete && (
+            <div className="relative">
+              <button onClick={() => setMenu(!menu)} className="p-1.5 -m-1 rounded-lg text-muted-foreground hover:bg-muted" aria-label="More"><MoreHorizontal className="w-5 h-5" /></button>
+              {menu && <>
+                <div className="fixed inset-0 z-10" onClick={() => setMenu(false)} />
+                <div className="absolute right-0 top-8 z-20 w-40 rounded-xl border bg-popover shadow-lg p-1">
+                  <button onClick={remove} className="w-full flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-950"><Trash2 className="w-4 h-4" /> Delete</button>
+                </div>
+              </>}
+            </div>
           )}
-        </motion.div>
+        </div>
 
-        <GiveRecognitionDialog
-          open={showDialog}
-          onClose={() => setShowDialog(false)}
-          brokerageId={brokerageId}
-          user={user}
-          brokerageUsers={brokerageUsers}
-        />
+        <p className="mt-3 text-[15px] leading-relaxed whitespace-pre-wrap break-words">{r.message}</p>
+
+        <div className="mt-4 flex flex-wrap items-center gap-1.5">
+          {reactions.map((x) => {
+            const on = x.users.map(lc).includes(me);
+            return (
+              <button key={x.emoji} onClick={() => react(x.emoji)} title={x.users.map((e) => (lc(e) === me ? 'You' : nameOf(person(e), e))).join(', ')}
+                className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-sm transition-colors ${on ? 'border-primary/40 bg-primary/10 text-primary font-medium' : 'hover:bg-muted'}`}>
+                <span>{x.emoji}</span><span className="text-xs tabular-nums">{x.users.length}</span>
+              </button>
+            );
+          })}
+          <div className="relative">
+            <button onClick={() => setPicker(!picker)} className="inline-flex items-center gap-1 rounded-full border border-dashed px-2.5 py-1 text-sm text-muted-foreground hover:bg-muted" aria-label="React">
+              <SmilePlus className="w-4 h-4" />{!reactions.length && <span className="text-xs">React</span>}
+            </button>
+            {picker && <>
+              <div className="fixed inset-0 z-10" onClick={() => setPicker(false)} />
+              <div className="absolute left-0 bottom-full mb-2 z-20 w-max grid grid-cols-4 sm:flex gap-0.5 rounded-2xl sm:rounded-full border bg-popover shadow-lg p-1">
+                {REACTIONS.map((e) => <button key={e} onClick={() => react(e)} className="w-10 h-10 rounded-full text-xl hover:bg-muted hover:scale-110 transition-transform">{e}</button>)}
+              </div>
+            </>}
+          </div>
+        </div>
+        {err && <p className="text-xs text-red-600 mt-2">{err}</p>}
+      </div>
+    </article>
+  );
+}
+
+function Composer({ user, team, preset, onClose }) {
+  const queryClient = useQueryClient();
+  const me = lc(user?.email);
+  const people = team.filter((u) => lc(u.email) !== me).sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
+  const [to, setTo] = useState(preset || '');
+  const [q, setQ] = useState('');
+  const [category, setCategory] = useState('teamwork');
+  const [message, setMessage] = useState('');
+  const [anon, setAnon] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const picked = people.find((u) => lc(u.email) === lc(to));
+  const shown = people.filter((u) => !q || `${nameOf(u)} ${u.email}`.toLowerCase().includes(q.toLowerCase()));
+
+  const send = async () => {
+    setBusy(true); setErr('');
+    try {
+      const { data } = await base44.functions.invoke('giveShoutout', { to_email: picked.email, message, category, is_anonymous: anon });
+      if (data?.error) throw new Error(data.error);
+      queryClient.invalidateQueries({ queryKey: ['recognitions'] });
+      onClose();
+    } catch (e) { setErr(e.message); setBusy(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[70] bg-black/40 flex items-end sm:items-center justify-center sm:p-4" onClick={onClose}>
+      <div className="w-full sm:max-w-lg max-h-[92vh] bg-background rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 pt-4 pb-2">
+          <p className="font-semibold text-lg">Give a shout-out</p>
+          <button onClick={onClose} className="p-1.5 -mr-1.5 rounded-lg hover:bg-muted" aria-label="Close"><X className="w-5 h-5" /></button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-5 pb-4 space-y-5">
+          <div>
+            <p className="text-sm font-medium mb-2">Who?</p>
+            {picked ? (
+              <div className="flex items-center gap-3 rounded-2xl border bg-muted/40 p-2.5">
+                <Avatar name={nameOf(picked)} photo={picked.headshot} size={40} />
+                <div className="min-w-0 flex-1"><p className="font-medium truncate">{nameOf(picked)}</p><p className="text-xs text-muted-foreground truncate capitalize">{String(picked.role || '').replace('_', ' ')}</p></div>
+                <button onClick={() => setTo('')} className="text-sm text-primary font-medium px-2">Change</button>
+              </div>
+            ) : (
+              <>
+                <div className="relative mb-2">
+                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search the team" className="w-full rounded-xl border bg-background pl-9 pr-3 py-2.5 text-base md:text-sm" />
+                </div>
+                <div className="grid grid-cols-4 sm:grid-cols-5 gap-1 max-h-56 overflow-y-auto">
+                  {shown.map((u) => (
+                    <button key={u.id} onClick={() => setTo(u.email)} className="flex flex-col items-center gap-1 rounded-xl p-2 hover:bg-muted min-w-0">
+                      <Avatar name={nameOf(u)} photo={u.headshot} size={44} />
+                      <span className="text-xs leading-tight text-center line-clamp-2 break-words w-full">{nameOf(u)}</span>
+                    </button>
+                  ))}
+                  {!shown.length && <p className="col-span-full text-sm text-muted-foreground py-3">No one matches.</p>}
+                </div>
+              </>
+            )}
+          </div>
+
+          <div>
+            <p className="text-sm font-medium mb-2">For</p>
+            <div className="flex flex-wrap gap-2">
+              {SHOUT_CATEGORIES.map((c) => <button key={c.id} onClick={() => setCategory(c.id)} className={chip(category === c.id)}><span>{c.emoji}</span>{c.label}</button>)}
+            </div>
+          </div>
+
+          <div>
+            <p className="text-sm font-medium mb-2">Message</p>
+            <textarea value={message} onChange={(e) => setMessage(e.target.value.slice(0, 1000))} rows={4} placeholder={picked ? `What did ${nameOf(picked).split(' ')[0]} do?` : 'What did they do?'}
+              className="w-full rounded-xl border bg-background px-3 py-2.5 text-base md:text-sm resize-none" />
+          </div>
+
+          <label className="flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5 cursor-pointer">
+            <span><span className="text-sm font-medium flex items-center gap-1.5"><Lock className="w-3.5 h-3.5" /> Send anonymously</span><span className="block text-xs text-muted-foreground">No one, admins included, will see it was you.</span></span>
+            <input type="checkbox" checked={anon} onChange={(e) => setAnon(e.target.checked)} className="w-5 h-5 shrink-0 accent-primary" />
+          </label>
+          {err && <p className="text-sm text-red-600">{err}</p>}
+        </div>
+        <div className="border-t px-5 py-3" style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
+          <button onClick={send} disabled={!picked || !message.trim() || busy} className="w-full rounded-full bg-primary text-primary-foreground py-3 font-semibold disabled:opacity-40 inline-flex items-center justify-center gap-2">
+            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Megaphone className="w-4 h-4" />} Send shout-out
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -28,6 +28,9 @@ r = await call('jake', { to_email: 'cody@x.com', message: 'Secret thanks', is_an
 assert.equal(r.status, 200);
 assert.ok(__db.notification.some((x) => x.title === 'Someone on your team gave you a shout-out 🎉'));
 assert.ok(!__db.notification.some((x) => x.title.includes('Jake') && x.description === 'Secret thanks'), 'anonymous stays anonymous');
+const anonRec = __db.recognition.find((x) => x.message === 'Secret thanks');
+assert.equal(anonRec.from_email, ''); assert.equal(anonRec.from_name, 'Someone'); assert.ok(!anonRec.created_by, 'not stamped with the giver');
+assert.ok(!JSON.stringify(anonRec).includes('jake@'), 'the giver is sealed');
 
 assert.equal((await call('jake', { to_email: 'zed@y.com', message: 'hi' })).status, 400, 'teammates only');
 assert.equal((await call('jake', { to_email: 'jake@x.com', message: 'me' })).status, 400, 'not yourself');

@@ -139,8 +139,8 @@ export default function SocialFeedWidget({ brokerageId, user }) {
               <>
                 <Heart className="w-4 h-4 text-red-500 flex-shrink-0" />
                 <p className="text-foreground leading-tight text-xs lg:text-sm truncate">
-                  <span className="font-semibold">{currentItem.data.from_name}</span> recognized{' '}
-                  <span className="font-semibold text-primary">{currentItem.data.to_name}</span> • {currentItem.data.message}
+                  <span className="font-semibold">{currentItem.data.is_anonymous ? 'Someone' : currentItem.data.from_name}</span> gave{' '}
+                  <span className="font-semibold text-primary">{currentItem.data.to_name}</span> a shout-out • {currentItem.data.message}
                 </p>
               </>
             ) : currentItem?.type === 'bell' ? (

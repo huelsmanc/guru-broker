@@ -1,7 +1,8 @@
 // Culture → Shout-outs: saves a shout-out and tells the person who got it (in the app and on their
-// phone). The shout-out is saved with the giver's own access; names come from the profiles here.
-import { createClientFromRequest } from '../lib/base44.js';
+// phone). Saved by the app after checking both people are on the same team; names come from the profiles.
+import { createClientFromRequest, adminClient } from '../lib/base44.js';
 import { notifyPeople } from '../lib/team.js';
+import { sealKey } from '../lib/fub.js';
 
 const lc = (e) => String(e || '').toLowerCase().trim();
 const nameOf = (u) => [u?.display_name, u?.full_name].map((v) => String(v || '').trim()).find((v) => v && !v.includes('@')) || String(u?.email || '').split('@')[0];
@@ -20,11 +21,16 @@ export default async (req) => {
     const text = String(message).trim().slice(0, 1000);
     if (!text) return Response.json({ error: 'Add a message' }, { status: 400 });
 
-    const rec = await base44.entities.Recognition.create({
-      brokerage_id: me.brokerage_id, from_email: lc(me.email), from_name: nameOf(me),
+    // Anonymous: the giver's email is sealed so teammates (and the dashboard ticker) never see who it was.
+    const anon = !!is_anonymous;
+    const { data: rec, error } = await adminClient().from('recognition').insert({ // as the app, so an anonymous one isn't stamped with the giver
+      created_by: anon ? null : lc(me.email),
+      brokerage_id: me.brokerage_id, from_email: anon ? '' : lc(me.email), from_name: anon ? 'Someone' : nameOf(me),
       to_email: lc(to.email), to_name: nameOf(to), message: text,
-      category: CATEGORIES.has(category) ? category : 'other', is_anonymous: !!is_anonymous,
-    });
+      category: CATEGORIES.has(category) ? category : 'other', is_anonymous: anon, reactions: [],
+      extra: anon ? { from_sealed: sealKey(lc(me.email)) } : {},
+    }).select('*').single();
+    if (error) throw new Error(error.message);
     const from = is_anonymous ? 'Someone on your team' : nameOf(me);
     await notifyPeople(E, {
       brokerageId: me.brokerage_id, people: [to],

@@ -49,7 +49,7 @@ export function createClient(url, key, clientOpts) {
         return { data: null, error: null };
       }
       if (action === 'insert') {
-        const items = (Array.isArray(payload) ? payload : [payload]).map((p) => ({ id: p.id || `id${++n}`, created_date: new Date(Date.now() + n).toISOString(), extra: {}, ...p }));
+        const items = (Array.isArray(payload) ? payload : [payload]).map((p) => ({ id: p.id || `id${++n}`, created_date: new Date(Date.now() + n).toISOString(), updated_date: new Date(Date.now() + n).toISOString(), extra: {}, ...p }));
         rows.push(...items);
         return { data: single ? structuredClone(items[0]) : structuredClone(items), error: null };
       }
