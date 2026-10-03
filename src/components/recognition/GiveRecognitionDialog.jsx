@@ -38,16 +38,9 @@ export default function GiveRecognitionDialog({ open, onClose, brokerageId, user
       const agent = brokerageUsers.find(u => u.email === selectedAgent);
       if (!agent) throw new Error('Agent not found');
 
-      await base44.entities.Recognition.create({
-        brokerage_id: brokerageId,
-        from_email: user.email,
-        from_name: user.full_name,
-        to_email: agent.email,
-        to_name: agent.full_name,
-        message,
-        category,
-        is_anonymous: isAnonymous,
-      });
+      // Saved by the server, which also tells them (in the app and on their phone).
+      const { data } = await base44.functions.invoke('giveShoutout', { to_email: agent.email, message, category, is_anonymous: isAnonymous });
+      if (data?.error) throw new Error(data.error);
       queryClient.invalidateQueries({ queryKey: ['recognitions', brokerageId] });
     },
     onSuccess: () => {
@@ -154,6 +147,7 @@ export default function GiveRecognitionDialog({ open, onClose, brokerageId, user
             </div>
           )}
 
+          {createRecognition.error && <p className="text-sm text-red-600">{createRecognition.error.message}</p>}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel

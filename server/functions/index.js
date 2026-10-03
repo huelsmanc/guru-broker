@@ -75,6 +75,7 @@ export const FUNCTIONS = {
   getPublicDocumentSecure: () => import('./getPublicDocumentSecure.js'),
   getReviewByToken: () => import('./getReviewByToken.js'),
   getSubmissionByToken: () => import('./getSubmissionByToken.js'),
+  giveShoutout: () => import('./giveShoutout.js'),
   imageProxy: () => import('./imageProxy.js'),
   importBase44: () => import('./importBase44.js'),
   importHistory: () => import('./importHistory.js'),
