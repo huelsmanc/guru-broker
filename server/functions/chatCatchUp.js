@@ -19,12 +19,14 @@ export default async (req) => {
     const { kind, key } = body;
     let { since } = body;
     const E = base44.entities; // caller's own access
-    if (!since) {
+    const recent = !!body.recent; // "Summarize the recent conversation" (nothing new to catch up on)
+    if (recent) since = null;
+    else if (!since) {
       const [rs] = await E.ChatReadState.filter({ kind: kind === 'thread' ? 'thread' : kind, conv_key: key }, '-created_date', 1).catch(() => []);
       since = rs?.last_read_at;
     }
     const floor = new Date(Date.now() - 7 * 864e5).toISOString();
-    since = !since || since < floor ? new Date(Date.now() - 864e5).toISOString() : since;
+    since = recent ? floor : (!since || since < floor ? new Date(Date.now() - 864e5).toISOString() : since);
     const after = { $gt: since };
     let msgs = [];
     if (kind === 'channel') msgs = await E.SocialMessage.filter({ brokerage_id: me.brokerage_id, channel: key, created_date: after }, 'created_date', 400);
@@ -38,7 +40,8 @@ export default async (req) => {
       msgs = [...a, ...b].sort((x, y) => String(x.created_date).localeCompare(String(y.created_date)));
     } else return Response.json({ error: 'Unknown conversation' }, { status: 400 });
 
-    const fromOthers = msgs.filter((m) => lc(m.sender_email) !== myEmail);
+    if (recent) msgs = msgs.slice(-60);
+    const fromOthers = recent ? msgs : msgs.filter((m) => lc(m.sender_email) !== myEmail);
     if (fromOthers.length < 2) return Response.json({ count: fromOthers.length, summary: null, since });
     const people = await base44.asServiceRole.entities.User.filter({ brokerage_id: me.brokerage_id }, 'full_name', 5000);
     const names = new Map(people.map((u) => [lc(u.email), u.display_name || u.full_name]));
