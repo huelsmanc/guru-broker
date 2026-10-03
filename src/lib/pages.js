@@ -3,8 +3,30 @@
 import { lazy } from 'react';
 
 const loaders = [];
-/** Like React.lazy, but remembered so it can be fetched ahead of time. */
-export function page(load) { loaders.push(load); return lazy(load); }
+const STALE = /dynamically imported module|Importing a module script failed|error loading dynamically imported|Failed to fetch module|not a valid JavaScript MIME type|Unable to preload CSS|Loading (CSS )?chunk/i;
+
+/** A newer version went live while the app was open, so the old page files are gone: load the new version.
+ *  Up to 3 tries a minute, so a real outage can't cause a reload loop. */
+export function reloadForNewVersion() {
+  let tries = [];
+  try { tries = JSON.parse(sessionStorage.getItem('gbh-new-version') || '[]').filter((t) => Date.now() - t < 60000); } catch { /* ignore */ }
+  if (tries.length >= 3) return false;
+  try { sessionStorage.setItem('gbh-new-version', JSON.stringify([...tries, Date.now()])); } catch { /* ignore */ }
+  const u = new URL(window.location.href); u.searchParams.set('v', Date.now().toString(36));
+  window.location.replace(u.href);
+  return true;
+}
+export const isStaleLoad = (err) => STALE.test(String(err?.message || err || ''));
+
+/** Like React.lazy, but remembered so it can be fetched ahead of time, and a page from an old
+ *  version reloads the app instead of showing an error. */
+export function page(load) {
+  loaders.push(load);
+  return lazy(() => load().catch((err) => {
+    if (typeof window !== 'undefined' && isStaleLoad(err) && reloadForNewVersion()) return new Promise(() => {}); // the reload takes over
+    throw err;
+  }));
+}
 
 let started = false;
 export function preloadPages() {
