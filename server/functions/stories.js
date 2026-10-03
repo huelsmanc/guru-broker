@@ -8,7 +8,7 @@
 import { createClientFromRequest, isServiceRequest, adminClient } from '../lib/base44.js';
 import { isAdminRole } from '../lib/team.js';
 import { pathFromUrl, parsePath, PRIVATE_BUCKET } from '../lib/files.js';
-import { autoStory, listingPhoto, photoOf, dealLine, clearExpired, signStories, DAY } from '../lib/stories.js';
+import { autoStory, realName, listingPhoto, photoOf, dealLine, clearExpired, signStories, DAY } from '../lib/stories.js';
 
 class Problem extends Error { constructor(msg, status = 400) { super(msg); this.status = status; } }
 const lc = (e) => String(e || '').toLowerCase().trim();
@@ -34,7 +34,8 @@ export default async (req) => {
           const s = await autoStory(E, { brokerageId: row.brokerage_id, person: agent, type: 'closed', key: `closed:${row.id}`, subtitle: dealLine(row), image: await listingPhoto(row).catch(() => '') });
           return Response.json({ made: !!s });
         }
-        if (entity === 'User' && row?.brokerage_id && (type === 'create' || !old?.brokerage_id) && !isAdminRole(row.role)) {
+        // Welcome once they have a name (an invite with only an email waits until they sign up).
+        if (entity === 'User' && row?.brokerage_id && realName(row) && (type === 'create' || !old?.brokerage_id || !realName(old)) && !isAdminRole(row.role)) {
           const s = await autoStory(E, { brokerageId: row.brokerage_id, person: row, type: 'welcome', key: `welcome:${row.id}` });
           return Response.json({ made: !!s });
         }

@@ -52,7 +52,7 @@ export default function ResetPassword() {
       try {
         const u = await base44.auth.me();
         setMe(u);
-        setName(u.display_name || u.full_name || '');
+        setName([u.display_name, u.full_name].find((v) => v && !String(v).includes('@')) || '');
         if (u.brokerage_id) {
           const [s] = await base44.entities.BrokerageSettings.filter({ brokerage_id: u.brokerage_id }).catch(() => []);
           const b = s?.brokerage_name ? null : await base44.entities.Brokerage.get(u.brokerage_id).catch(() => null);
@@ -63,7 +63,7 @@ export default function ResetPassword() {
     })();
   }, []);
 
-  const needsName = WELCOME && me && !(me.display_name || me.full_name);
+  const needsName = WELCOME && me && ![me.display_name, me.full_name].some((v) => v && !String(v).includes('@')); // an invite may hold only the email
 
   const submit = async (e) => {
     e.preventDefault();

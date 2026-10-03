@@ -15,7 +15,9 @@ export const AUTO = {
   welcome: { emoji: '👋', title: (n) => `Welcome to the team, ${n}!` },
 };
 
-const firstName = (u) => String(u?.display_name || u?.full_name || u?.email || 'Someone').trim().split(/\s+/)[0];
+/** The person's real name, or '' when all we have is an email (an invited agent who hasn't signed up yet). */
+export const realName = (u) => [u?.display_name, u?.full_name].map((v) => String(v || '').trim()).find((v) => v && !v.includes('@')) || '';
+const firstName = (u) => realName(u).split(/\s+/)[0] || String(u?.email || 'Someone').split('@')[0];
 const street = (addr) => String(addr || '').split(',')[0].trim();
 
 /** Is the brokerage showing celebration stories? (Settings → Brokerage; on unless turned off.) */
@@ -33,11 +35,18 @@ export async function autoStory(E, { brokerageId, person, type, key, subtitle = 
   if (person.suspended || person.role === 'super_admin') return null;
   if (!(await autoOn(E, brokerageId))) return null;
   const existing = await E.Story.filter({ brokerage_id: brokerageId, auto_key: key }, '-created_date', 1).catch(() => []);
-  if (existing.length) return null;
+  if (existing.length) {
+    // A welcome posted before the person had a name: put the name on it now.
+    const old = existing[0];
+    if (type === 'welcome' && realName(person) && /@/.test(`${old.title} ${old.author_name}`)) {
+      return E.Story.update(old.id, { title: AUTO[type].title(firstName(person), years), author_name: realName(person) }).catch(() => null);
+    }
+    return null;
+  }
   try {
     return await E.Story.create({
       brokerage_id: brokerageId, kind: 'auto', auto_type: type, auto_key: key,
-      author_email: lc(person.email), author_name: person.display_name || person.full_name || person.email, author_photo: person.headshot || '',
+      author_email: lc(person.email), author_name: realName(person) || person.email, author_photo: person.headshot || '',
       title: AUTO[type].title(firstName(person), years), subtitle: clip(subtitle, 200), image_url: clip(image, 1000), link: clip(link, 300),
       expires_at: new Date(Date.now() + DAY).toISOString(), pinned: false,
     });

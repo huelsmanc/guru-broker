@@ -81,6 +81,19 @@ assert.ok(__db.story.some((s) => s.title === 'Welcome to the team, Nina!'));
 r = await svc({ event: { type: 'create', entity_name: 'User', data: { id: 'u6', email: 'boss2@x.com', role: 'broker', brokerage_id: 'B1' } } });
 assert.equal(r.body.skipped, true);
 
+// Invited with only an email: no welcome until they sign up with a name.
+r = await svc({ event: { type: 'create', entity_name: 'User', data: { id: 'u7', email: 'jake@x.com', full_name: 'jake@x.com', role: 'agent', brokerage_id: 'B1' } } });
+assert.equal(r.body.skipped, true, 'email-only invite waits');
+r = await svc({ event: { type: 'update', entity_name: 'User', data: { id: 'u7', email: 'jake@x.com', full_name: 'Jake Woodward', role: 'agent', brokerage_id: 'B1' }, old_data: { brokerage_id: 'B1', full_name: 'jake@x.com' } } });
+assert.equal(r.body.made, true);
+assert.ok(__db.story.some((s) => s.title === 'Welcome to the team, Jake!' && s.author_name === 'Jake Woodward'));
+// A welcome already posted with the email gets the name instead of a second story.
+__db.story.push({ id: 'sOld', brokerage_id: 'B1', kind: 'auto', auto_type: 'welcome', auto_key: 'welcome:u8', title: 'Welcome to the team, pat@x.com!', author_name: 'pat@x.com', author_email: 'pat@x.com', expires_at: new Date(Date.now() + 864e5).toISOString() });
+const before = __db.story.length;
+r = await svc({ event: { type: 'update', entity_name: 'User', data: { id: 'u8', email: 'pat@x.com', full_name: 'Pat Lane', role: 'agent', brokerage_id: 'B1' }, old_data: { brokerage_id: 'B1', full_name: 'pat@x.com' } } });
+assert.equal(__db.story.length, before, 'no second welcome');
+assert.equal(__db.story.find((s) => s.id === 'sOld').title, 'Welcome to the team, Pat!');
+
 // Hourly: an agent's new MLS listing, once.
 r = await svc({ scan: true });
 assert.equal(r.body.made, 1);
