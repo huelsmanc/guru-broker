@@ -141,3 +141,7 @@ html, body { overflow-x: clip; }
 .gbh-press-pop { animation: gbh-press-pop 180ms cubic-bezier(.2,.9,.3,1.2); }
 .gbh-press-emoji { animation: gbh-press-emoji 220ms cubic-bezier(.2,.9,.3,1.3) both; }
 @media (prefers-reduced-motion: reduce) { .gbh-press-in, .gbh-press-pop, .gbh-press-emoji { animation: none; } }
+/* Double-tap heart */
+@keyframes gbh-heart-burst { 0% { opacity: 0; transform: translateY(-50%) scale(0.3); } 25% { opacity: 1; transform: translateY(-50%) scale(1.25); } 45% { transform: translateY(-50%) scale(0.95); } 70% { opacity: 1; transform: translateY(-50%) scale(1.05); } 100% { opacity: 0; transform: translateY(-80%) scale(1); } }
+.gbh-heart-burst { animation: gbh-heart-burst 750ms ease-out forwards; filter: drop-shadow(0 4px 10px rgba(0,0,0,.2)); }
+@media (prefers-reduced-motion: reduce) { .gbh-heart-burst { animation: none; } }

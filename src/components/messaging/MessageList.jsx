@@ -205,19 +205,26 @@ function PressMenu({ press, me, canModerate, kind, onReact, onEdit, onDelete, on
   );
 }
 
-/** Press-and-hold on touch screens. Returns handlers for a message row, plus whether it's a phone. */
-function usePressHold(onHold) {
+/** Press-and-hold and double-tap on touch screens (double-click on computers). */
+function usePressHold(onHold, onDouble) {
   const touch = useMemo(() => typeof window !== 'undefined' && !window.matchMedia?.('(hover: hover) and (pointer: fine)').matches, []);
-  const t = useRef(null); const start = useRef(null); const fired = useRef(false);
+  const t = useRef(null); const start = useRef(null); const fired = useRef(false); const moved = useRef(false); const lastTap = useRef(null);
   const cancel = () => { clearTimeout(t.current); t.current = null; };
-  const bind = (payload, getEl) => (!touch ? {} : {
+  const bind = (payload, getEl) => (!touch ? { onDoubleClick: (e) => { e.preventDefault(); window.getSelection?.()?.removeAllRanges(); onDouble(payload); } } : {
     onTouchStart: (e) => {
-      fired.current = false; const p = e.touches[0]; start.current = { x: p.clientX, y: p.clientY };
+      fired.current = false; moved.current = false; const p = e.touches[0]; start.current = { x: p.clientX, y: p.clientY };
       const el = getEl(e);
-      cancel(); t.current = setTimeout(() => { fired.current = true; navigator.vibrate?.(8); onHold(payload, el.getBoundingClientRect()); }, 420);
+      cancel(); t.current = setTimeout(() => { fired.current = true; lastTap.current = null; navigator.vibrate?.(8); onHold(payload, el.getBoundingClientRect()); }, 420);
     },
-    onTouchMove: (e) => { const p = e.touches[0]; if (start.current && Math.hypot(p.clientX - start.current.x, p.clientY - start.current.y) > 8) cancel(); },
-    onTouchEnd: (e) => { cancel(); if (fired.current) e.preventDefault(); },
+    onTouchMove: (e) => { const p = e.touches[0]; if (start.current && Math.hypot(p.clientX - start.current.x, p.clientY - start.current.y) > 8) { moved.current = true; cancel(); } },
+    onTouchEnd: (e) => {
+      cancel();
+      if (fired.current) { e.preventDefault(); return; }
+      if (moved.current) return;
+      const now = Date.now(); const id = payload.msg.id;
+      if (lastTap.current && lastTap.current.id === id && now - lastTap.current.t < 320) { e.preventDefault(); lastTap.current = null; onDouble(payload); }
+      else lastTap.current = { id, t: now };
+    },
     onTouchCancel: cancel,
     onContextMenu: (e) => e.preventDefault(),
   });
@@ -251,7 +258,12 @@ export default function MessageList({ conv, kind, chat, variant = 'slack', canMo
   const [newBelow, setNewBelow] = useState(0);
   const [hover, setHoverRaw] = useState(null);
   const [press, setPress] = useState(null); // phones: the held message
-  const { touch, bind } = usePressHold((p, rect) => { setPress({ ...p, rect }); });
+  const [burst, setBurst] = useState(null); // double-tap: a heart pops on the message
+  const { touch, bind } = usePressHold((p, rect) => { setPress({ ...p, rect }); }, ({ msg }) => {
+    const hearted = (msg.reactions || []).some((r) => r.emoji === '❤️' && (r.users || []).map(lc).includes(me));
+    if (!hearted) react(msg.id, '❤️'); // like Messenger: double-tap adds a heart (it never takes one away)
+    setBurst(msg.id); setTimeout(() => setBurst((b) => (b === msg.id ? null : b)), 750);
+  });
   // On phones the hover toolbar is replaced by press-and-hold (a tap used to drag the toolbar to whatever you touched).
   const setHover = (id) => { if (!touch) setHoverRaw(id); };
   const [editing, setEditing] = useState(null);
@@ -364,6 +376,7 @@ export default function MessageList({ conv, kind, chat, variant = 'slack', canMo
                         {own && lastMine?.id === m.id && seenBy && <span className="text-[11px] text-muted-foreground mt-0.5 px-1 flex items-center gap-1">{seenBy}</span>}
                       </div>
                       {tools}
+                      {burst === m.id && <span className={cn('pointer-events-none absolute top-1/2 -translate-y-1/2 text-5xl gbh-heart-burst z-20', own ? 'right-10' : 'left-14')}>❤️</span>}
                     </div>
                   );
                 }
@@ -395,6 +408,7 @@ export default function MessageList({ conv, kind, chat, variant = 'slack', canMo
                       {own && lastMine?.id === m.id && seenBy && <p className="text-[11px] text-muted-foreground mt-0.5">{seenBy}</p>}
                     </div>
                     {tools}
+                    {burst === m.id && <span className="pointer-events-none absolute left-16 top-1/2 -translate-y-1/2 text-5xl gbh-heart-burst z-20">❤️</span>}
                   </div>
                 );
               })}
