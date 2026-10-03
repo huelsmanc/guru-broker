@@ -10,6 +10,7 @@
 //                      it to the transaction if there is one
 
 import { markSent, markProgress, markSigned, privateSignedLink } from './checklistEsign.js';
+import { sealValue, openSignatureData, SEALED_TYPES } from './fieldSeal.js';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { adminClient, appUrl } from './base44.js';
 import { SendEmail } from './integrations.js';
@@ -337,11 +338,13 @@ export async function recordSignature({ entities, token, signedFields, req, user
   const ua = String(userAgent || req.headers.get('user-agent') || '').slice(0, 400);
   const signedAt = new Date().toISOString();
 
+  const typeOf = new Map((doc.fields || []).map((f) => [String(f.id), f.type]));
   await entities.SignatureData.create({
     submission_id: sub.id,
     signer_email: signer.email,
     signer_name: signer.name,
-    fields: values,
+    // Typed answers (tax numbers, addresses...) are stored encrypted.
+    fields: values.map((v) => (SEALED_TYPES.has(typeOf.get(String(v.field_id))) ? { ...v, value: sealValue(v.value) } : v)),
     signed_at: signedAt,
     ip_address: ip,
     user_agent: ua,
@@ -669,7 +672,7 @@ export function signedDocLink(sub) {
 
 /** Generates, stores and distributes the signed PDF. Safe to call more than once. */
 export async function finalize({ entities, sub, doc }) {
-  const signatureData = await entities.SignatureData.filter({ submission_id: sub.id }, 'created_date', 100);
+  const signatureData = openSignatureData(await entities.SignatureData.filter({ submission_id: sub.id }, 'created_date', 100));
   const events = await entities.ESignAuditLog.filter({ document_id: doc.id }, 'created_date', 200).catch(() => []);
   const originalBytes = await fetchBytes(doc.original_document_url || doc.document_url);
   const verifyUrl = `${appUrl()}/verify?id=${encodeURIComponent(sub.id)}`;
@@ -723,10 +726,12 @@ export async function finalize({ entities, sub, doc }) {
   // Put the signed copy on the checklist item it was sent from. Onboarding paperwork (W-9s carry
   // tax numbers) is linked without the open-with-key part, so only the people allowed can open it.
   let onChecklist = false;
+  let privateCopy = null; // onboarding paperwork: { agent } — never emailed as an attachment
   if (doc.checklist_id && doc.checklist_item_id) {
     try {
       const [cl] = await entities.Checklist.filter({ id: doc.checklist_id }, '-created_date', 1);
       if (cl && cl.brokerage_id === doc.brokerage_id) {
+        if (cl.subject_type === 'onboarding') privateCopy = { agent: String(cl.subject_email || '').toLowerCase() };
         onChecklist = !!(await markSigned(doc, updated, cl.subject_type === 'onboarding' ? privateSignedLink(updated) : link));
       }
     } catch (err) {
@@ -802,7 +807,9 @@ export async function finalize({ entities, sub, doc }) {
 
   // Email everyone the signed PDF.
   const filename = `${ASCII(doc.title || 'Document').replace(/[^A-Za-z0-9 ._-]/g, '').trim() || 'Document'} - signed.pdf`;
-  const attach = bytes.length < 9_000_000 ? [{ filename, content: Buffer.from(bytes).toString('base64') }] : undefined;
+  // Onboarding paperwork (a W-9 has a tax number) isn't attached: email stays in inboxes forever.
+  // Those people get a link that only opens after signing in.
+  const attach = !privateCopy && bytes.length < 9_000_000 ? [{ filename, content: Buffer.from(bytes).toString('base64') }] : undefined;
   const recipients = new Map();
   if (sub.created_by_email) recipients.set(sub.created_by_email.toLowerCase(), sub.created_by_name || 'there');
   for (const s of sub.signers) recipients.set(s.email.toLowerCase(), s.name || s.email);
@@ -813,8 +820,8 @@ export async function finalize({ entities, sub, doc }) {
         subject: `Completed: "${doc.title}" is fully signed`,
         body: shell('Document completed', `
           <p>Hi ${esc(name)},</p>
-          <p>Everyone has signed <strong>${esc(doc.title)}</strong>. ${attach ? 'The signed PDF is attached.' : ''}</p>
-          ${button(link, 'Download signed PDF', '#16a34a')}
+          <p>Everyone has signed <strong>${esc(doc.title)}</strong>. ${attach ? 'The signed PDF is attached.' : privateCopy ? 'For your privacy the signed copy isn’t attached. Sign in to Guru Broker to view or download it.' : ''}</p>
+          ${button(privateCopy ? `${appUrl()}${email === privateCopy.agent ? '/Profile#onboarding' : '/Settings?tab=users'}` : link, privateCopy ? 'View in Guru Broker' : 'Download signed PDF', '#16a34a')}
           <p style="font-size:12px;color:#6b7280;">The last page is a certificate listing each signer, when they signed and from where.</p>`),
         from_name: 'Guru Broker E-Sign',
         attachments: attach,

@@ -2,6 +2,7 @@
 // server/lib/esign.js). Documents signed before the migration have no PDF, so they
 // still use the original page, which draws signatures over the document.
 import { isAdminRole, can } from '../lib/team.js';
+import { openSignatureData } from '../lib/fieldSeal.js';
 import { createClientFromRequest, adminClient } from '../lib/base44.js';
 import { readFileBytes } from '../lib/files.js';
 
@@ -252,7 +253,7 @@ export default (async (req) => {
     }
 
     // Load all signature data for this submission
-    const signatureDataList = await base44.asServiceRole.entities.SignatureData.filter({ submission_id: submissionId }, '-created_date', 100);
+    const signatureDataList = openSignatureData(await base44.asServiceRole.entities.SignatureData.filter({ submission_id: submissionId }, '-created_date', 100));
 
     // Detect page count
     let numPages = 1;

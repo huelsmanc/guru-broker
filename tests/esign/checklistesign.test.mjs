@@ -86,6 +86,12 @@ r = await call('submitSignature', null, { submissionToken: tokenFrom(r.body.url)
 assert.equal(r.body.completed, true);
 assert.equal(item('w9').status, 'approved');
 const w9url = item('w9').document_url;
+// The tax number is stored encrypted, and the finished W-9 isn't emailed as an attachment.
+assert.ok(!JSON.stringify(__db.signature_data).includes('123-45-6789'), 'typed answers encrypted at rest');
+const w9mails = emails.filter((m) => /Completed: "W-9"/.test(m.subject));
+assert.ok(w9mails.length >= 1);
+assert.ok(w9mails.every((m) => !m.attachments && !/key=/.test(m.html)), 'no PDF and no open-with-key link in the email');
+assert.match(w9mails.find((m) => m.to[0] === 'jake@x.com').html, /\/Profile#onboarding/);
 
 // The signed W-9 opens for Jake and admins, not for other agents or the TC.
 const view = async (tok) => { const st = (await GET(new Request(`https://gurubroker.app${w9url}`, { headers: tok ? { authorization: `Bearer ${tok}` } : {} }))).status; return st < 400 ? 'open' : st; };
