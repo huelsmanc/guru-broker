@@ -114,6 +114,7 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChan
   const [placingExtra, setPlacingExtra] = useState(null); // e.g. { format: 'money' } for a Money box
   const [dragging, setDragging] = useState(false);
   const fieldEls = useRef({});
+  const docScroll = useRef(null);
   const toolbar = variant === 'toolbar';
   const colorOf = (f) => (toolbar && f.sender_fill ? SENDER_COLOR : SIGNER_COLORS[fieldSignerIndex(f) % SIGNER_COLORS.length]);
   const locked = (f) => !templateMode && !!f?.readonly; // set in the library: the agent can't change it
@@ -441,8 +442,8 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChan
             </div>
           )}
         </div>
-        <div className="flex-1 min-h-0 overflow-auto bg-slate-100 dark:bg-slate-900/70">
-          <div className="mx-auto w-full max-w-[900px] p-2 sm:p-6">
+        <div ref={docScroll} className="flex-1 min-h-0 overflow-auto bg-slate-100 dark:bg-slate-900/70">
+          <div className={`mx-auto w-full max-w-[900px] p-2 sm:p-6 ${selectedId ? 'pb-[60dvh]' : 'pb-24'}`}>
             <div className="rounded-sm shadow-md bg-white">{canvas}</div>
             <p className="text-center text-[11px] text-muted-foreground mt-3">
               {fields.length} field{fields.length === 1 ? '' : 's'}
@@ -451,7 +452,7 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChan
           </div>
         </div>
         {selected && !dragging && !editingId && (phone || anchor) && createPortal(
-          <SettingsPopover anchor={anchor} phone={phone} onClose={() => setSelectedId(null)}>{renderSettings(selected)}</SettingsPopover>, document.body)}
+          <SettingsPopover anchor={anchor} phone={phone} revealKey={selected.id} onReveal={(dy) => docScroll.current?.scrollBy({ top: dy, behavior: 'smooth' })} onClose={() => setSelectedId(null)}>{renderSettings(selected)}</SettingsPopover>, document.body)}
       </div>
     );
   }
@@ -478,7 +479,7 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChan
     const input = 'w-full rounded-lg border bg-background px-2.5 py-1.5 text-base md:text-sm';
     return (
       <PopulateSwitch>
-        {(picking, setPicking) => (picking ? (
+        {(picking, setPicking, more, setMore) => (picking ? (
           <div>
             <p className="text-sm font-semibold mb-2">Populate with</p>
             <PopulatePicker kind={f.type === 'checkbox' ? 'checkbox' : 'text'} value={populated} onCancel={() => setPicking(false)}
@@ -533,20 +534,20 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChan
                 <label className="flex items-center gap-1.5 text-sm"><input type="checkbox" checked={f.required !== false} onChange={(e) => updateField(f.id, { required: e.target.checked })} /> Required</label>
               )}
             </div>
-            {styled && (
+            {styled && (more || f.type === 'strike') && (
               <div>
                 <span className={label}>{f.type === 'strike' ? 'Line' : 'Text style'}</span>
                 <div><FieldStyleBar field={f} className="shadow-none flex-wrap max-w-full gap-y-1" onChange={(style) => { updateField(f.id, { style }); rememberStyle(f.type, style); }} /></div>
               </div>
             )}
-            {['checkbox', 'radio', 'dropdown', 'attachment', 'text'].includes(f.type) && !(f.type === 'text' && f.deal_key) && (
+            {['checkbox', 'radio', 'dropdown', 'attachment', 'text'].includes(f.type) && !(f.type === 'text' && f.deal_key) && (more || ['radio', 'attachment'].includes(f.type)) && (
               <div>
                 <label className={label} htmlFor="fs-label">{f.type === 'radio' ? 'This choice' : f.type === 'attachment' ? 'What to attach' : 'Label'}</label>
                 <input id="fs-label" className={input} value={f.label || ''} placeholder={f.type === 'attachment' ? 'e.g. Proof of funds' : f.type === 'radio' ? 'e.g. Cash' : f.format === 'money' ? 'e.g. Earnest money' : 'e.g. Lender name'}
                   onChange={(e) => updateField(f.id, { label: e.target.value.slice(0, 80) })} />
               </div>
             )}
-            {f.type === 'text' && !f.deal_key && (
+            {f.type === 'text' && !f.deal_key && more && (
               <div>
                 <label className={label} htmlFor="fs-default">{templateMode ? 'Default text' : 'Text'}</label>
                 <textarea id="fs-default" rows={2} className={`${input} resize-y`} disabled={locked(f)} value={f.value || ''}
@@ -567,7 +568,7 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChan
               <p className="text-xs text-muted-foreground">Choices: {fields.filter((x) => x.type === 'radio' && x.group === f.group).map((x) => x.label || '?').join(' / ')} ·{' '}
                 <button type="button" className="text-primary underline" onClick={() => { setRadioGroup(f.group); setActiveSigner(fieldSignerIndex(f)); setPlacing('radio'); setSelectedId(null); }}>Add a choice</button></p>
             )}
-            {f.type !== 'strike' && (conds.length > 0 || f.show_if) && (
+            {f.type !== 'strike' && more && (conds.length > 0 || f.show_if) && (
               <div>
                 <label className={label} htmlFor="fs-if">Only show when</label>
                 <select id="fs-if" className={input} value={condValue} onChange={(e) => updateField(f.id, { show_if: conds.find((o) => o.key === e.target.value)?.cond || null })}>
@@ -576,7 +577,12 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChan
                 </select>
               </div>
             )}
-            {f.type === 'text' && <p className="text-[11px] text-muted-foreground">Double-click the box to type in it. Drag the corner to resize.</p>}
+            {f.type !== 'strike' && (
+              <button type="button" onClick={() => setMore(!more)} className="flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+                <ChevronRight className={`w-3.5 h-3.5 transition-transform ${more ? 'rotate-90' : ''}`} /> {more ? 'Fewer options' : f.type === 'text' ? 'Style, label and default text' : 'More options'}
+              </button>
+            )}
+            {f.type === 'text' && more && <p className="text-[11px] text-muted-foreground">Double-click the box to type in it. Drag the corner to resize.</p>}
           </div>
         ))}
       </PopulateSwitch>
@@ -922,37 +928,60 @@ export default function ESignFieldEditor({ doc, onComplete, onAutoDetect, onChan
 // Holds whether the "Populate with" picker is showing (so it resets when another box is picked).
 function PopulateSwitch({ children }) {
   const [picking, setPicking] = useState(false);
-  return children(picking, setPicking);
+  const [more, setMore] = useState(false);
+  return children(picking, setPicking, more, setMore);
 }
 
-// The settings card: under (or over) the selected box on a computer, a sheet from the bottom on a phone.
-function SettingsPopover({ anchor, phone, onClose, children }) {
+// The settings card: next to the selected box, never on top of it. Below it if there's room, else above,
+// else beside it; if none fits, the document scrolls so the box sits near the top. On a phone it's a
+// sheet from the bottom and the document scrolls so the box stays visible above it.
+function SettingsPopover({ anchor, phone, onClose, onReveal, revealKey, children }) {
   const ref = useRef(null);
-  const [h, setH] = useState(360);
-  useLayoutEffect(() => { if (ref.current) setH(ref.current.offsetHeight); });
+  const [h, setH] = useState(320);
+  const revealed = useRef(null);
+  useLayoutEffect(() => { if (ref.current) setH(ref.current.scrollHeight); });
   useEffect(() => {
     const key = (e) => { if (e.key === 'Escape' && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName)) onClose(); };
     document.addEventListener('keydown', key);
     return () => document.removeEventListener('keydown', key);
   }, [onClose]);
+  const vw = window.innerWidth; const vh = window.innerHeight;
+  const W = 340; const gap = 10; const MIN = 240;
+  const below = anchor ? vh - anchor.bottom - gap - 8 : 0;
+  const above = anchor ? anchor.top - gap - 8 : 0;
+  let place = 'below';
+  if (phone) place = 'sheet';
+  else if (below >= Math.min(h, MIN)) place = 'below';
+  else if (above >= Math.min(h, MIN)) place = 'above';
+  else if (vw - anchor.right - gap - 8 >= W) place = 'right';
+  else if (anchor.left - gap - 8 >= W) place = 'left';
+  else place = 'scroll';
+  const sheetH = Math.min(h, vh * 0.55);
+  // Scroll the document (once per box) when the card would otherwise cover the box.
+  useEffect(() => {
+    if (!anchor || revealed.current === revealKey) return;
+    if (place === 'scroll') { revealed.current = revealKey; onReveal?.(anchor.top - 140); }
+    else if (place === 'sheet' && anchor.bottom > vh - sheetH - 16) { revealed.current = revealKey; onReveal?.(anchor.bottom - (vh - sheetH - 24)); }
+  });
   const stop = (e) => e.stopPropagation();
-  if (phone) {
+  if (place === 'sheet') {
     return (
-      <div ref={ref} onPointerDown={stop} className="fixed inset-x-0 bottom-0 z-[95] max-h-[62dvh] overflow-y-auto rounded-t-2xl border-t bg-popover text-popover-foreground shadow-2xl p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+      <div ref={ref} onPointerDown={stop} style={{ maxHeight: '55dvh' }} className="fixed inset-x-0 bottom-0 z-[95] overflow-y-auto rounded-t-2xl border-t bg-popover text-popover-foreground shadow-2xl p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-muted-foreground/30" />
         {children}
       </div>
     );
   }
-  const W = 340; const gap = 10; const vw = window.innerWidth; const vh = window.innerHeight;
-  const below = anchor.bottom + gap + h <= vh - 8 || anchor.top - gap - h < 8;
-  const top = below ? Math.min(anchor.bottom + gap, vh - h - 8) : anchor.top - gap - h;
-  const left = Math.max(8, Math.min(anchor.left, vw - W - 8));
+  const x = Math.max(8, Math.min(anchor.left, vw - W - 8));
+  const y = Math.max(8, Math.min(anchor.top, vh - Math.min(h, vh - 16) - 8));
+  const style = place === 'below' || place === 'scroll' ? { top: anchor.bottom + gap, left: x, maxHeight: Math.max(160, below) }
+    : place === 'above' ? { bottom: vh - anchor.top + gap, left: x, maxHeight: above }
+      : place === 'right' ? { top: y, left: anchor.right + gap, maxHeight: vh - 16 }
+        : { top: y, left: anchor.left - gap - W, maxHeight: vh - 16 };
   return (
-    <div ref={ref} onPointerDown={stop} style={{ position: 'fixed', top: Math.max(8, top), left, width: W, maxHeight: vh - 16 }}
+    <div ref={ref} onPointerDown={stop} style={{ position: 'fixed', width: W, ...style }}
       className="z-[95] overflow-y-auto rounded-xl border bg-popover text-popover-foreground shadow-2xl p-3.5">
       {children}
     </div>
   );
 }
-
