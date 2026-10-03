@@ -18,22 +18,26 @@ export default function FubIntegration({ brokerageId }) {
   const [agents, setAgents] = useState([]);
   const [draft, setDraft] = useState(null);
 
-  const load = async () => {
-    const { data } = await base44.functions.invoke('fub', { action: 'status' });
-    setS(data); setDraft(data.connected ? { contract_stages: data.contract_stages, closed_stage: data.closed_stage, flex_sources: (data.flex_sources || []).join(', '), flex_pct: data.flex_pct, user_map: data.user_map || {} } : null);
+  // Status and the editable settings always change together (a status without its settings crashed the page).
+  const apply = (data, keepDraft = false) => {
+    if (!data) return;
+    setS(data);
+    if (!data.connected) setDraft(null);
+    else if (!keepDraft || !draft) setDraft({ contract_stages: data.contract_stages || [], closed_stage: data.closed_stage || '', flex_sources: (data.flex_sources || []).join(', '), flex_pct: data.flex_pct ?? '', user_map: data.user_map || {} });
   };
+  const load = async () => apply((await base44.functions.invoke('fub', { action: 'status' })).data);
   useEffect(() => {
     load().catch((e) => setMsg(e.message));
     if (brokerageId) base44.entities.User.filter({ brokerage_id: brokerageId }, 'full_name', 1000).then(setAgents).catch(() => {});
   }, [brokerageId]);
 
   const run = async (label, fn) => { setBusy(label); setMsg(''); try { await fn(); } catch (e) { setMsg(e.message); } finally { setBusy(''); } };
-  const connect = () => run('connect', async () => { const { data } = await base44.functions.invoke('fub', { action: 'connect', api_key: key }); setKey(''); setS(data); await load(); });
-  const save = () => run('save', async () => { const { data } = await base44.functions.invoke('fub', { action: 'settings', ...draft }); setS(data); setMsg('Saved'); });
-  const sync = () => run('sync', async () => { const { data } = await base44.functions.invoke('fub', { action: 'sync' }); setS(data); setMsg(data.made ? `${data.made} new deal${data.made === 1 ? '' : 's'} opened.` : 'Checked: nothing new.'); });
+  const connect = () => run('connect', async () => { const { data } = await base44.functions.invoke('fub', { action: 'connect', api_key: key }); setKey(''); apply(data); await load(); });
+  const save = () => run('save', async () => { const { data } = await base44.functions.invoke('fub', { action: 'settings', ...draft }); apply(data); setMsg('Saved'); });
+  const sync = () => run('sync', async () => { const { data } = await base44.functions.invoke('fub', { action: 'sync' }); apply(data, true); setMsg(data.made ? `${data.made} new deal${data.made === 1 ? '' : 's'} opened.` : 'Checked: nothing new.'); });
   const disconnect = () => { if (window.confirm('Disconnect Follow Up Boss? Deals already opened stay as they are.')) run('disconnect', async () => { await base44.functions.invoke('fub', { action: 'disconnect' }); await load(); }); };
 
-  if (!s) return <div className="bg-card rounded-2xl border p-6"><Loader2 className="w-5 h-5 animate-spin" /></div>;
+  if (!s || (s.connected && !draft)) return <div className="bg-card rounded-2xl border p-6"><Loader2 className="w-5 h-5 animate-spin" /></div>;
   return (
     <div className="bg-card rounded-2xl border p-6 space-y-5">
       <div>
@@ -70,7 +74,7 @@ export default function FubIntegration({ brokerageId }) {
             <div>
               <Label>Stages that open a deal</Label>
               <div className="mt-1.5 flex flex-wrap gap-1.5">
-                {(s.stages.length ? s.stages : draft.contract_stages).map((st) => {
+                {((s.stages || []).length ? s.stages : draft.contract_stages).map((st) => {
                   const on = draft.contract_stages.includes(st);
                   return <button key={st} type="button" onClick={() => setDraft({ ...draft, contract_stages: on ? draft.contract_stages.filter((x) => x !== st) : [...draft.contract_stages, st] })}
                     className={`rounded-full border px-2.5 py-1 text-xs ${on ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-muted'}`}>{st}</button>;
@@ -80,7 +84,7 @@ export default function FubIntegration({ brokerageId }) {
             <div>
               <Label>Stage to set when a deal closes here</Label>
               <select className={sel} value={draft.closed_stage} onChange={(e) => setDraft({ ...draft, closed_stage: e.target.value })}>
-                {(s.stages.length ? s.stages : [draft.closed_stage]).map((st) => <option key={st}>{st}</option>)}
+                {((s.stages || []).length ? s.stages : [draft.closed_stage]).map((st) => <option key={st}>{st}</option>)}
               </select>
             </div>
             <div>
@@ -99,7 +103,7 @@ export default function FubIntegration({ brokerageId }) {
             <Label>Follow Up Boss users</Label>
             <p className="text-xs text-muted-foreground mb-2">Matched to agents by email. Pick the agent for anyone who isn't.</p>
             <div className="divide-y rounded-lg border">
-              {s.users.map((u) => (
+              {(s.users || []).map((u) => (
                 <div key={u.id} className="flex flex-wrap items-center gap-2 px-3 py-2">
                   <div className="min-w-0 flex-1"><p className="text-sm truncate">{u.name}</p><p className="text-[11px] text-muted-foreground truncate">{u.email}{u.role ? ` · ${u.role}` : ''}</p></div>
                   <select className="rounded-md border border-input bg-background px-2 py-1.5 text-base md:text-sm max-w-[55%]" value={draft.user_map[u.id] || ''}
