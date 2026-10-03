@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { format, isToday, isYesterday } from 'date-fns';
-import { SmilePlus, Pencil, Trash2, Pin, MessageSquare, Copy, Loader2, AlertCircle, ArrowDown, Check, CheckCheck, Phone, Video, FileText, Plus } from 'lucide-react';
+import { SmilePlus, Pencil, Trash2, Pin, MessageSquare, Copy, Loader2, AlertCircle, ArrowDown, Check, CheckCheck, Phone, Video, FileText, Plus, MoreVertical } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { base44 } from '@/api/base44Client';
 import EmojiPicker from '@/components/chat/EmojiPicker';
@@ -231,6 +231,50 @@ function usePressHold(onHold, onDouble) {
   return { touch, bind };
 }
 
+// Computers, DMs and groups: Messenger-style. Hovering a message shows two small buttons beside
+// it (more, react). Reactions open only when you click the smiley.
+const HOVER_REACTIONS = ['❤️', '😂', '😮', '😢', '😡', '👍'];
+function BubbleTools({ msg, own, canModerate, kind, onReact, onEdit, onDelete, onThread, open, setOpen }) {
+  const isText = !String(msg.content || '').startsWith('[');
+  const which = open?.id === msg.id ? open.type : null;
+  const items = [
+    onThread && { label: 'Reply in thread', icon: MessageSquare, run: () => onThread(msg) },
+    isText && { label: 'Copy', icon: Copy, run: () => navigator.clipboard?.writeText(msg.content) },
+    own && isText && { label: 'Edit', icon: Pencil, run: () => onEdit(msg) },
+    (own || (canModerate && kind !== 'dm')) && { label: 'Delete', icon: Trash2, run: () => onDelete(msg), danger: true },
+  ].filter(Boolean);
+  const btn = 'w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground';
+  return (
+    <div className={cn('relative self-center flex items-center gap-0.5 shrink-0 transition-opacity', which ? 'opacity-100' : 'opacity-0 group-hover:opacity-100', own ? 'flex-row' : 'flex-row-reverse')} onClick={(e) => e.stopPropagation()}>
+      {items.length > 0 && <button className={btn} title="More" onClick={() => setOpen(which === 'more' ? null : { id: msg.id, type: 'more' })}><MoreVertical className="w-4 h-4" /></button>}
+      <button className={btn} title="React" onClick={() => setOpen(which === 'react' ? null : { id: msg.id, type: 'react' })}><SmilePlus className="w-[18px] h-[18px]" /></button>
+      {which && <div className="fixed inset-0 z-20" onClick={() => setOpen(null)} />}
+      {which === 'react' && (
+        <div className={cn('absolute bottom-full mb-1.5 z-30 flex items-center gap-0.5 rounded-full border bg-card shadow-xl px-1.5 py-1 gbh-press-pop', own ? 'right-0' : 'left-0')}>
+          {HOVER_REACTIONS.map((e) => (
+            <button key={e} onClick={() => { onReact(msg.id, e); setOpen(null); }} className="w-9 h-9 rounded-full text-2xl leading-none flex items-center justify-center hover:bg-muted hover:scale-125 transition-transform">{e}</button>
+          ))}
+          <button onClick={() => setOpen({ id: msg.id, type: 'picker' })} className="w-9 h-9 rounded-full flex items-center justify-center bg-muted text-foreground" title="More reactions"><Plus className="w-5 h-5" /></button>
+        </div>
+      )}
+      {which === 'picker' && (
+        <div className={cn('absolute bottom-full mb-1.5 z-30 w-[300px] rounded-2xl border bg-card shadow-xl p-2 grid grid-cols-6 gap-1 gbh-press-pop', own ? 'right-0' : 'left-0')}>
+          {MORE_REACTIONS.map((e) => <button key={e} onClick={() => { onReact(msg.id, e); setOpen(null); }} className="h-10 rounded-xl text-2xl hover:bg-muted">{e}</button>)}
+        </div>
+      )}
+      {which === 'more' && (
+        <div className={cn('absolute bottom-full mb-1.5 z-30 w-48 rounded-xl border bg-card shadow-xl p-1 gbh-press-pop', own ? 'right-0' : 'left-0')}>
+          {items.map((it) => (
+            <button key={it.label} onClick={() => { setOpen(null); it.run(); }} className={cn('w-full flex items-center justify-between rounded-lg px-3 py-2 text-sm hover:bg-muted', it.danger ? 'text-red-600' : 'text-foreground')}>
+              {it.label}<it.icon className="w-4 h-4" />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function EditBox({ msg, onSave, onCancel }) {
   const [v, setV] = useState(msg.content);
   return (
@@ -258,6 +302,7 @@ export default function MessageList({ conv, kind, chat, variant = 'slack', canMo
   const [newBelow, setNewBelow] = useState(0);
   const [hover, setHoverRaw] = useState(null);
   const [press, setPress] = useState(null); // phones: the held message
+  const [hoverOpen, setHoverOpen] = useState(null); // computers: { id, type: 'react' | 'picker' | 'more' }
   const [burst, setBurst] = useState(null); // double-tap: a heart pops on the message
   const { touch, bind } = usePressHold((p, rect) => { setPress({ ...p, rect }); }, ({ msg }) => {
     const hearted = (msg.reactions || []).some((r) => r.emoji === '❤️' && (r.users || []).map(lc).includes(me));
@@ -354,7 +399,10 @@ export default function MessageList({ conv, kind, chat, variant = 'slack', canMo
                 const person = chat.personOf(m.sender_email, m.sender_name);
                 const time = format(new Date(m.created_date), 'h:mm a');
                 const showTools = hover === m.id && !editing && !m._pending && !m._failed;
-                const tools = showTools && <Toolbar msg={m} own={own} canModerate={canModerate} kind={kind} onReact={react} onEdit={setEditing} onDelete={setConfirmDel} onPin={setPinned} onThread={onThread} align={variant === 'bubble' && own ? 'right' : 'left'} />;
+                const hoverTools = !touch && variant === 'bubble' && !editing && !m._pending && !m._failed
+                  ? <BubbleTools msg={m} own={own} canModerate={canModerate} kind={kind} onReact={react} onEdit={setEditing} onDelete={setConfirmDel} onThread={onThread} open={hoverOpen} setOpen={setHoverOpen} />
+                  : null;
+                const tools = variant !== 'bubble' && showTools && <Toolbar msg={m} own={own} canModerate={canModerate} kind={kind} onReact={react} onEdit={setEditing} onDelete={setConfirmDel} onPin={setPinned} onThread={onThread} align={variant === 'bubble' && own ? 'right' : 'left'} />;
                 const status = m._failed ? <button className="text-[11px] text-red-600 flex items-center gap-1" onClick={() => retry(m)}><AlertCircle className="w-3 h-3" /> Not sent. Tap to retry</button> : null;
                 const replies = threadCounts[m.id];
 
@@ -363,6 +411,7 @@ export default function MessageList({ conv, kind, chat, variant = 'slack', canMo
                     <div key={r.key} className={cn('group relative flex gap-2 px-3 sm:px-4', r.compact ? 'mt-0.5' : 'mt-3', own && 'justify-end')}
                       onMouseEnter={() => setHover(m.id)} onMouseLeave={() => setHover(null)} onClick={(e) => { e.stopPropagation(); setHover(m.id); }}>
                       {!own && <div className="w-8 flex-shrink-0 self-start">{!r.compact && <Avatar person={person} size={32} online={chat.online.has(lc(m.sender_email))} />}</div>}
+                      {own && hoverTools}
                       <div className={cn('flex flex-col min-w-0 max-w-[80%] sm:max-w-[65%]', own && 'items-end')}>
                         {!own && !r.compact && kind === 'group' && <span className="text-[11px] text-muted-foreground ml-1 mb-0.5">{person.name}</span>}
                         {editing?.id === m.id ? <EditBox msg={m} onCancel={() => setEditing(null)} onSave={(v) => { edit(m.id, v); setEditing(null); }} /> : (
@@ -375,7 +424,7 @@ export default function MessageList({ conv, kind, chat, variant = 'slack', canMo
                         {(status || m.edited_at) && <div className="flex gap-2 mt-0.5 px-1">{m.edited_at && <span className="text-[11px] text-muted-foreground">edited</span>}{status}</div>}
                         {own && lastMine?.id === m.id && seenBy && <span className="text-[11px] text-muted-foreground mt-0.5 px-1 flex items-center gap-1">{seenBy}</span>}
                       </div>
-                      {tools}
+                      {!own && hoverTools}
                       {burst === m.id && <span className={cn('pointer-events-none absolute top-1/2 -translate-y-1/2 text-5xl gbh-heart-burst z-20', own ? 'right-10' : 'left-14')}>❤️</span>}
                     </div>
                   );
