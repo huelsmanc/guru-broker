@@ -6,7 +6,7 @@ import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Plus, Upload, Loader2, FileText, CheckSquare, Square, Send, Check, X, MessageSquare, Library, PenTool, Trash2, Download } from 'lucide-react';
+import { Plus, Upload, Loader2, FileText, CheckSquare, Square, Send, Check, X, MessageSquare, Library, PenTool, Trash2, Download, PenLine, Clock, BellRing } from 'lucide-react';
 import { can, isAdminRole } from '../../../shared/permissions.generated.js';
 import { Section, Empty, Pill } from './ui';
 import UnifiedESignCreator from '@/components/esign/UnifiedESignCreator';
@@ -41,7 +41,28 @@ export default function WorkspaceChecklists({ tx, user, subjectType = 'transacti
   const wide = useWide();
   const admin = isAdminRole(user?.role);
   const approver = admin || can(user, 'docs.approve') || (subjectType === 'transaction' && approvesDealItems(user));
-  const manage = admin || can(user, 'tx.checklist_manage') || (subjectType === 'transaction' && reviewsAllDeals(user)) || String(tx?.tc_email || '').toLowerCase() === user?.email?.toLowerCase();
+  const manage = subjectType === 'onboarding'
+    ? admin || can(user, 'users.manage') // same rule the server uses for onboarding
+    : admin || can(user, 'tx.checklist_manage') || reviewsAllDeals(user) || String(tx?.tc_email || '').toLowerCase() === user?.email?.toLowerCase();
+  const me = String(user?.email || '').toLowerCase();
+  // Items with an e-sign form ready to send (ICA, W-9...), for admins.
+  const { data: forms = {} } = useQuery({
+    queryKey: ['checklist-forms', active?.id, active?.template_id],
+    enabled: !!active?.id && manage && subjectType === 'onboarding',
+    staleTime: 60_000,
+    queryFn: async () => (await base44.functions.invoke('checklistEsign', { action: 'forms', checklist_id: active.id })).data.forms || {},
+  });
+  const unsent = active ? active.items.filter((i) => forms[i.id] && !['sent', 'partly_signed', 'signed'].includes(i.esign?.status) && !['approved', 'exempt'].includes(i.status)) : [];
+  const [sendingAll, setSendingAll] = useState(false);
+  const sendAll = async () => {
+    if (!window.confirm(`Send ${unsent.length} form${unsent.length === 1 ? '' : 's'} for signature (${unsent.map((i) => i.title).join(', ')})?`)) return;
+    setSendingAll(true);
+    try {
+      const { data } = await base44.functions.invoke('checklistEsign', { action: 'send_all', checklist_id: active.id });
+      if (data.failed?.length) window.alert(`Sent ${data.sent.length}. Not sent:\n${data.failed.map((f) => `• ${f.title}: ${f.error}`).join('\n')}`);
+      refresh();
+    } catch (err) { window.alert(err.message); } finally { setSendingAll(false); }
+  };
 
   // Uploads are private to the deal (or to the person, for onboarding).
   const fileScope = subjectType === 'transaction' ? { kind: 'tx', id: tx.id } : { kind: 'user', id: subjectUserId || user?.id };
@@ -49,7 +70,8 @@ export default function WorkspaceChecklists({ tx, user, subjectType = 'transacti
   const run = async (body) => {
     try { await act({ checklist_id: active.id, ...body }); refresh(); } catch (err) { window.alert(err.message); }
   };
-  const panel = item ? <ItemPanel key={item.id} checklistId={active.id} fileScope={fileScope} item={item} tx={tx} user={user} approver={approver} admin={admin} manage={manage} run={run} /> : null;
+  const panel = item ? <ItemPanel key={item.id} checklistId={active.id} fileScope={fileScope} item={item} tx={tx} user={user} approver={approver} admin={admin} manage={manage} run={run}
+    subjectType={subjectType} subjectEmail={subjectEmail} form={forms[item.id]} refresh={refresh} /> : null;
 
   return (
     <div className="max-w-6xl">
@@ -61,6 +83,7 @@ export default function WorkspaceChecklists({ tx, user, subjectType = 'transacti
               {lists.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
             </select>
           )}
+          {unsent.length > 0 && <Button className="gap-1.5" disabled={sendingAll} onClick={sendAll}>{sendingAll ? <Loader2 className="w-4 h-4 animate-spin" /> : <PenLine className="w-4 h-4" />} Send {unsent.length} form{unsent.length === 1 ? '' : 's'} to sign</Button>}
           <Button variant="outline" className="gap-1.5" onClick={() => setAdding(true)}><Plus className="w-4 h-4" /> Add checklist</Button>
           {active && manage && <Button variant="ghost" size="icon" title="Remove checklist" onClick={() => window.confirm(`Remove "${active.name}" from this ${subjectType === 'transaction' ? 'deal' : 'agent'}?`) && run({ action: 'remove' })}><Trash2 className="w-4 h-4" /></Button>}
         </>}>
@@ -78,7 +101,8 @@ export default function WorkspaceChecklists({ tx, user, subjectType = 'transacti
                         : done ? <CheckSquare className="w-4 h-4 text-green-600 flex-shrink-0" /> : <Square className="w-4 h-4 text-muted-foreground flex-shrink-0" />}
                       <span className={`flex-1 text-sm ${done ? 'text-muted-foreground' : ''}`}>{it.title}{it.required === false ? <span className="text-xs text-muted-foreground"> (optional)</span> : ''}</span>
                       {it.due_date && <span className="text-xs text-muted-foreground hidden sm:inline">{new Date(`${it.due_date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>}
-                      {it.status !== 'open' ? <Pill status={it.status}>{WORD[it.status]}</Pill> : it.requires_document ? (it.form_url
+                      {['sent', 'partly_signed'].includes(it.esign?.status) && !done ? <SignChip esign={it.esign} me={me} />
+                        : it.status !== 'open' ? <Pill status={it.status}>{WORD[it.status]}</Pill> : forms[it.id] ? <span className="text-xs text-violet-700 flex items-center gap-1"><PenLine className="w-3 h-3" /> Ready to send</span> : it.requires_document ? (it.form_url
                         ? <span className="text-xs text-emerald-700 flex items-center gap-1"><Library className="w-3 h-3" /> Use form</span>
                         : <span className="text-xs text-emerald-700 flex items-center gap-1"><Upload className="w-3 h-3" /> Upload</span>) : null}
                     </button>
@@ -126,11 +150,11 @@ function AddItem({ onAdd }) {
   );
 }
 
-function ItemPanel({ checklistId, fileScope, item, tx, user, approver, admin, manage, run }) {
+function ItemPanel({ checklistId, fileScope, item, tx, user, approver, admin, manage, run, subjectType, subjectEmail, form, refresh }) {
   const fileRef = useRef(null);
   const [busy, setBusy] = useState(null);
   const [picking, setPicking] = useState(false);
-  const [signing, setSigning] = useState(null); // document url being sent for signature
+  const [signing, setSigning] = useState(null); // document url being sent for signature ('' = upload one)
   const { data: people = [] } = useQuery({
     queryKey: ['mentionable', checklistId],
     queryFn: async () => (await act({ action: 'mentionable', checklist_id: checklistId })).people,
@@ -167,6 +191,8 @@ function ItemPanel({ checklistId, fileScope, item, tx, user, approver, admin, ma
           Assigned to {nameOf(item.assignee_email)}{item.due_date ? ` · Due ${new Date(`${item.due_date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''}
         </p>
       </div>
+      <EsignCard item={item} checklistId={checklistId} user={user} manage={manage} form={form} refresh={refresh}
+        onCustom={() => setSigning(item.document_url && !item.esign ? item.document_url : item.form_url || '')} subjectType={subjectType} />
       <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 [&>*]:justify-center sm:[&>*]:justify-start">
         {item.requires_document && (
           <>
@@ -198,7 +224,7 @@ function ItemPanel({ checklistId, fileScope, item, tx, user, approver, admin, ma
         )}
       </div>
       {admin && !['exempt', 'approved'].includes(item.status) && (
-        <button className="text-xs text-muted-foreground underline -mt-2" onClick={() => { const note = window.prompt('Reason for marking this not needed (optional)', ''); if (note !== null) go('exempt', { action: 'exempt', item_id: item.id, note }); }}>Not needed for this deal? Mark exempt</button>
+        <button className="text-xs text-muted-foreground underline -mt-2" onClick={() => { const note = window.prompt('Reason for marking this not needed (optional)', ''); if (note !== null) go('exempt', { action: 'exempt', item_id: item.id, note }); }}>Not needed for this {subjectType === 'onboarding' ? 'agent' : 'deal'}? Mark exempt</button>
       )}
       {item.form_url && !item.document_url && (
         <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 dark:bg-emerald-950/20 p-3">
@@ -257,16 +283,112 @@ function ItemPanel({ checklistId, fileScope, item, tx, user, approver, admin, ma
       </div>
       {picking && <LibraryPicker brokerageId={tx?.brokerage_id || user?.brokerage_id} onClose={() => setPicking(false)}
         onPick={(f) => { setPicking(false); run({ action: 'attach', item_id: item.id, url: f.file_url, name: f.file_name }); }} />}
-      {signing && (
+      {signing !== null && (
         <Dialog open onOpenChange={(o) => !o && setSigning(null)}>
           <DialogContent className="w-[96vw] max-w-6xl max-h-[94dvh] overflow-y-auto">
             <DialogHeader><DialogTitle>Send "{item.title}" for signature</DialogTitle></DialogHeader>
+            {/* sent from here, the item follows the request: out for signature, then signed */}
             <UnifiedESignCreator user={user} brokerageId={tx?.brokerage_id || user?.brokerage_id} transactionId={tx?.id}
               initialTitle={`${item.title}${tx?.property_address ? ` - ${tx.property_address}` : ''}`} initialDocumentUrl={signing}
-              checklistLink={tx ? { checklist_id: checklistId, item_id: item.id } : undefined}
+              checklistLink={{ checklist_id: checklistId, item_id: item.id }}
+              initialSigners={subjectType === 'onboarding' && subjectEmail ? [{ id: 'agent', name: '', email: subjectEmail }] : []}
               onCancel={() => setSigning(null)} onComplete={() => setSigning(null)} />
           </DialogContent>
         </Dialog>
+      )}
+    </div>
+  );
+}
+
+const firstName = (n) => String(n || '').split(/[\s@]/)[0];
+const shortDate = (d) => (d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '');
+/** Whose turn it is on a request sent in order: the first who hasn't signed. */
+const turnOf = (esign) => [...(esign?.signers || [])].sort((a, b) => (a.order || 0) - (b.order || 0)).find((s) => !s.signed);
+
+function SignChip({ esign, me }) {
+  const next = turnOf(esign);
+  const mine = next && next.email === me;
+  return (
+    <span className={`text-xs flex items-center gap-1 rounded-full px-2 py-0.5 font-medium ${mine ? 'bg-violet-600 text-white' : 'bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300'}`}>
+      <PenLine className="w-3 h-3" /> {mine ? 'Sign now' : next ? `Waiting on ${firstName(next.name)}` : 'Out for signature'}
+    </span>
+  );
+}
+
+/** The e-sign part of an item: send it, follow it, sign it. */
+function EsignCard({ item, checklistId, user, manage, form, refresh, onCustom, subjectType }) {
+  const [busy, setBusy] = useState('');
+  const me = String(user?.email || '').toLowerCase();
+  const e = item.esign;
+  const live = ['sent', 'partly_signed'].includes(e?.status);
+  const done = ['approved', 'exempt', 'done'].includes(item.status);
+  const call = async (label, body) => {
+    setBusy(label);
+    try { const { data } = await base44.functions.invoke('checklistEsign', { checklist_id: checklistId, item_id: item.id, ...body }); refresh(); return data; }
+    catch (err) { window.alert(err.message); return null; } finally { setBusy(''); }
+  };
+  const signNow = async () => {
+    const back = `${window.location.pathname}${window.location.search}${window.location.hash || ''}`;
+    const data = await call('sign', { action: 'my_link', back });
+    if (data?.url) window.location.href = data.url;
+  };
+  const remind = async () => {
+    setBusy('remind');
+    try { await base44.functions.invoke('esignManage', { action: 'nudge', submissionId: e.submission_id }); window.alert('Reminder sent.'); }
+    catch (err) { window.alert(err.message); } finally { setBusy(''); }
+  };
+
+  if (live) {
+    const next = turnOf(e);
+    const myTurn = next?.email === me;
+    return (
+      <div className="rounded-xl border border-violet-200 bg-violet-50/70 dark:bg-violet-950/20 dark:border-violet-900 p-3 space-y-2.5">
+        <div className="flex items-start gap-2">
+          <PenLine className="w-4 h-4 text-violet-600 mt-0.5 shrink-0" />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold">Out for signature</p>
+            <p className="text-xs text-muted-foreground">Sent {shortDate(e.sent_at)}{e.sent_by_name ? ` by ${e.sent_by_name}` : ''}. Reminders go out every 2 days.</p>
+          </div>
+        </div>
+        <ol className="space-y-1.5">
+          {[...(e.signers || [])].sort((a, b) => (a.order || 0) - (b.order || 0)).map((s) => (
+            <li key={s.email} className="flex items-center gap-2 text-sm">
+              {s.signed ? <Check className="w-4 h-4 text-green-600" /> : <Clock className={`w-4 h-4 ${s === next ? 'text-violet-600' : 'text-muted-foreground'}`} />}
+              <span className={s.signed ? 'text-muted-foreground' : ''}>{s.name || s.email}{s.email === me ? ' (you)' : ''}</span>
+              <span className="text-xs text-muted-foreground ml-auto">{s.signed ? `Signed ${shortDate(s.signed_at)}` : s === next ? 'Their turn' : 'After that'}</span>
+            </li>
+          ))}
+        </ol>
+        <div className="flex flex-wrap gap-2">
+          {myTurn && <Button size="sm" className="gap-1.5 bg-violet-600 hover:bg-violet-700" disabled={!!busy} onClick={signNow}>{busy === 'sign' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PenLine className="w-3.5 h-3.5" />} Sign now</Button>}
+          {manage && !myTurn && <Button size="sm" variant="outline" className="gap-1.5" disabled={!!busy} onClick={remind}>{busy === 'remind' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <BellRing className="w-3.5 h-3.5" />} Remind {firstName(next?.name)}</Button>}
+          {manage && <Button size="sm" variant="ghost" className="text-red-600" disabled={!!busy} onClick={() => window.confirm('Cancel this signing request? The link stops working.') && call('void', { action: 'void' })}>Cancel request</Button>}
+        </div>
+      </div>
+    );
+  }
+  if (e?.status === 'signed') {
+    return <p className="text-xs flex items-center gap-1.5 text-green-700"><Check className="w-3.5 h-3.5" /> Signed by everyone {shortDate(e.completed_at)}{item.reviewed_by === 'e-sign' ? ' and approved automatically' : ''}.</p>;
+  }
+  if (!manage || done || !item.requires_document || subjectType !== 'onboarding') {
+    return e?.status === 'voided' ? <p className="text-xs text-muted-foreground">Signing request cancelled {shortDate(e.voided_at)}.</p> : null;
+  }
+  const roles = form?.roles || [];
+  return (
+    <div className="rounded-xl border border-dashed border-violet-300 p-3 space-y-2">
+      {e?.status === 'voided' && <p className="text-xs text-muted-foreground">Last request cancelled {shortDate(e.voided_at)}.</p>}
+      {form ? (
+        <>
+          <Button size="sm" className="gap-1.5 bg-violet-600 hover:bg-violet-700" disabled={!!busy} onClick={() => call('send', { action: 'send' })}>
+            {busy === 'send' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PenLine className="w-3.5 h-3.5" />} Send to sign
+          </Button>
+          <p className="text-xs text-muted-foreground">{roles.length > 1 ? 'The agent signs first, then you countersign. ' : 'Only the agent signs. '}It's filed here and approved once everyone signs. <button className="underline" onClick={onCustom}>Use a different document</button></p>
+        </>
+      ) : (
+        <>
+          <Button size="sm" variant="outline" className="gap-1.5" onClick={onCustom}><PenLine className="w-3.5 h-3.5" /> Send a document to sign</Button>
+          <p className="text-xs text-muted-foreground">Upload the form, place where they sign, and send. The signed copy is filed here. Tip: set it up once in Checklist templates to send with one tap next time.</p>
+        </>
       )}
     </div>
   );

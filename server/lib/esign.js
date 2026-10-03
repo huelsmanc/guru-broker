@@ -9,6 +9,7 @@
 //                      stores it privately, emails everyone the signed PDF, and attaches
 //                      it to the transaction if there is one
 
+import { markSent, markProgress, markSigned, privateSignedLink } from './checklistEsign.js';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { adminClient, appUrl } from './base44.js';
 import { SendEmail } from './integrations.js';
@@ -253,6 +254,7 @@ export async function startSigning({ entities, doc, signers, sequenceType, trans
   const signersNow = sub.signers.map((s) => first.find((f) => signerKey(f) === signerKey(s)) || s);
   await entities.ESignSubmission.update(sub.id, { signers: signersNow });
 
+  await markSent(doc, { ...sub, signers: signersNow }, sender); // sent from a checklist item: the item shows it's out for signature
   await audit(entities, {
     document_id: doc.id,
     action: 'sent',
@@ -376,6 +378,7 @@ export async function recordSignature({ entities, token, signedFields, req, user
     }),
   }).catch(() => {});
 
+  if (!completed) await markProgress(doc, updated);
   if (!completed) {
     // In order: email whoever is next.
     for (const next of whoseTurn(updated)) {
@@ -717,20 +720,14 @@ export async function finalize({ entities, sub, doc }) {
     }
   }
 
-  // Put the signed copy on the checklist item it was sent from.
+  // Put the signed copy on the checklist item it was sent from. Onboarding paperwork (W-9s carry
+  // tax numbers) is linked without the open-with-key part, so only the people allowed can open it.
   let onChecklist = false;
   if (doc.checklist_id && doc.checklist_item_id) {
     try {
       const [cl] = await entities.Checklist.filter({ id: doc.checklist_id }, '-created_date', 1);
       if (cl && cl.brokerage_id === doc.brokerage_id) {
-        const at = new Date().toISOString();
-        const items = (cl.items || []).map((i) => (i.id !== doc.checklist_item_id ? i : {
-          ...i, document_url: link, document_name: `${doc.title} (signed)`, uploaded_by: 'e-sign', uploaded_at: at,
-          status: ['approved', 'review_requested'].includes(i.status) ? i.status : 'uploaded',
-          history: [...(i.history || []), { at, by: 'e-sign', what: 'signed copy attached' }],
-        }));
-        await entities.Checklist.update(cl.id, { items });
-        onChecklist = true;
+        onChecklist = !!(await markSigned(doc, updated, cl.subject_type === 'onboarding' ? privateSignedLink(updated) : link));
       }
     } catch (err) {
       console.error('Could not attach to checklist:', err.message);

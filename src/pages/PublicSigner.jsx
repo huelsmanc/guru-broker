@@ -34,6 +34,8 @@ export default function PublicSigner() {
   const [params] = useSearchParams();
   const token = params.get('token');
   const inPerson = params.get('inperson') === '1';
+  // Opened from inside Guru Broker (a checklist's "Sign now"): offer the way back afterwards.
+  const back = /^\/(?!\/)/.test(params.get('back') || '') ? params.get('back') : '';
   const [proof, setProof] = useState(() => {
     const fromHash = (window.location.hash.match(/proof=([\w-]+)/) || [])[1];
     if (fromHash) { saveProof(token, fromHash); window.history.replaceState(null, '', window.location.pathname + window.location.search); return fromHash; }
@@ -209,7 +211,8 @@ export default function PublicSigner() {
         text={done.completed
           ? 'Everyone has signed. The completed PDF is on its way to your inbox.'
           : "Your signature is recorded. You'll get the completed PDF by email once everyone has signed."}
-        extra={inPerson ? <p className="text-xs text-gray-400 mt-4">You can hand the device back to your agent.</p> : null}
+        extra={inPerson ? <p className="text-xs text-gray-400 mt-4">You can hand the device back to your agent.</p>
+          : back ? <a href={back} className="mt-5 inline-block rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white">Back to Guru Broker</a> : null}
       />
     );
   }

@@ -12,3 +12,11 @@ export async function applyTemplate(E, tpl, { brokerageId, subjectType, subjectI
     template_id: tpl.id, name: tpl.name, items, status: 'open',
   });
 }
+
+/** A checklist is complete when every required item is approved, exempt or done. */
+export function checklistStatus(items) {
+  const req = items.filter((i) => i.required !== false);
+  if (req.length && req.every((i) => ['approved', 'exempt', 'done'].includes(i.status))) return 'complete';
+  if (items.some((i) => i.status === 'review_requested')) return 'review';
+  return 'open';
+}

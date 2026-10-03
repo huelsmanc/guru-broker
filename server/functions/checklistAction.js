@@ -13,7 +13,7 @@
 //   complete  { checklist_id, item_id, done }               (checkbox tasks)
 //   comment   { checklist_id, item_id, text }
 //   remove_item { checklist_id, item_id } | remove { checklist_id }
-import { applyTemplate } from '../lib/checklists.js';
+import { applyTemplate, checklistStatus } from '../lib/checklists.js';
 import { esc } from '../lib/esign.js';
 import { createClientFromRequest, adminClient } from '../lib/base44.js';
 import { isAdminRole, can, notifyPeople, mentionablePeople } from '../lib/team.js';
@@ -67,13 +67,6 @@ async function ensureTemplates(E, brokerageId) {
     await E.ChecklistTemplate.create({ brokerage_id: brokerageId, ...t, items: t.items.map((i) => ({ id: newId(), required: true, ...i })), active: true });
   }
   return E.ChecklistTemplate.filter({ brokerage_id: brokerageId }, 'name', 200);
-}
-
-function checklistStatus(items) {
-  const req = items.filter((i) => i.required !== false);
-  if (req.length && req.every((i) => ['approved', 'exempt', 'done'].includes(i.status))) return 'complete';
-  if (items.some((i) => i.status === 'review_requested')) return 'review';
-  return 'open';
 }
 
 export default async (req) => {

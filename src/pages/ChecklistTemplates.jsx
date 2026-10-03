@@ -5,7 +5,8 @@ import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Plus, Trash2, ArrowUp, ArrowDown, Save, Copy, FileText, CheckSquare, Paperclip, Upload, X } from 'lucide-react';
+import { Loader2, Plus, Trash2, ArrowUp, ArrowDown, Save, Copy, FileText, CheckSquare, Paperclip, Upload, X, PenLine } from 'lucide-react';
+import { FieldsSetupDialog } from '@/components/repository/FormFieldsDialog';
 import { isAdminRole } from '../../shared/permissions.generated.js';
 import { Empty } from '@/components/workspace/ui';
 import { LibraryPicker } from '@/components/workspace/WorkspaceChecklists';
@@ -30,6 +31,12 @@ export default function ChecklistTemplates() {
   const [saving, setSaving] = useState(false);
   const [formFor, setFormFor] = useState(null); // item index choosing a form from the library
   const [uploading, setUploading] = useState(null);
+  const [signFor, setSignFor] = useState(null); // item index: setting up its e-sign boxes
+  const { data: esignTemplates = [] } = useQuery({
+    queryKey: ['esign-templates', brokerageId], enabled: !!brokerageId,
+    queryFn: () => base44.entities.ESignTemplate.filter({ brokerage_id: brokerageId }, 'title', 300),
+  });
+  const esignById = new Map(esignTemplates.map((t) => [t.id, t]));
   if (!isAdminRole(user?.role)) return <div className="p-8 text-sm">Admins only.</div>;
 
   const save = async () => {
@@ -106,12 +113,27 @@ export default function ChecklistTemplates() {
                       </label>
                     </span>
                   ))}
+                  {edit.kind === 'onboarding' && it.requires_document && (it.esign_template_id && esignById.get(it.esign_template_id) ? (
+                    <button onClick={() => setSignFor(i)} title="Edit where they sign" className="flex items-center gap-1 text-xs rounded bg-violet-50 text-violet-800 border border-violet-200 px-2 py-1">
+                      <PenLine className="w-3 h-3" /> E-sign: {(esignById.get(it.esign_template_id).roles || ['Agent']).join(' + ')}
+                    </button>
+                  ) : it.form_url ? (
+                    <Button size="sm" variant="ghost" className="h-8 gap-1 text-xs text-violet-700" title="Place signature boxes so you can send it for e-signature" onClick={() => setSignFor(i)}><PenLine className="w-3.5 h-3.5" /> Set up e-sign</Button>
+                  ) : null)}
                   <Button size="icon" variant="ghost" disabled={i === 0} onClick={() => move(i, -1)}><ArrowUp className="w-4 h-4" /></Button>
                   <Button size="icon" variant="ghost" disabled={i === edit.items.length - 1} onClick={() => move(i, 1)}><ArrowDown className="w-4 h-4" /></Button>
                   <Button size="icon" variant="ghost" onClick={() => setEdit({ ...edit, items: edit.items.filter((_, j) => j !== i) })}><Trash2 className="w-4 h-4" /></Button>
                 </li>
               ))}
             </ul>
+            {edit.kind === 'onboarding' && (
+              <p className="text-xs text-muted-foreground mt-3 rounded-lg bg-violet-50/60 border border-violet-100 px-3 py-2">
+                <PenLine className="w-3.5 h-3.5 inline -mt-0.5 mr-1 text-violet-600" />
+                For paperwork like an ICA or W-9: attach the blank form (upload or <Paperclip className="w-3 h-3 inline" /> Form), then <b>Set up e-sign</b> and place where the agent signs.
+                Keep a <b>Broker</b> signer for forms you countersign (the admin who sends it signs second); remove it for forms only the agent signs.
+                Then send it from the agent's onboarding checklist with one tap.
+              </p>
+            )}
             <div className="flex flex-wrap gap-2 mt-3">
               <Button size="sm" variant="outline" onClick={() => setEdit({ ...edit, items: [...edit.items, { id: uid(), title: '', requires_document: true, required: true }] })}><FileText className="w-4 h-4 mr-1" /> Add document</Button>
               <Button size="sm" variant="outline" onClick={() => setEdit({ ...edit, items: [...edit.items, { id: uid(), title: '', requires_document: false, required: true }] })}><CheckSquare className="w-4 h-4 mr-1" /> Add task</Button>
@@ -124,8 +146,34 @@ export default function ChecklistTemplates() {
           </div>
         )}
       </main>
+      {signFor != null && edit?.items[signFor] && <SignSetup item={edit.items[signFor]} template={esignById.get(edit.items[signFor].esign_template_id)} brokerageId={brokerageId} user={user}
+        onCreated={async (id) => {
+          // Remember the form on the item and save the checklist template right away, so it isn't lost.
+          const items = edit.items.map((x, j) => (j === signFor ? { ...x, esign_template_id: id } : x));
+          setEdit((e) => ({ ...e, items }));
+          if (edit.id) await base44.entities.ChecklistTemplate.update(edit.id, { items }).then(() => queryClient.invalidateQueries({ queryKey: key })).catch(() => {});
+        }}
+        onClose={() => { setSignFor(null); queryClient.invalidateQueries({ queryKey: ['esign-templates', brokerageId] }); }} />}
       {formFor != null && <LibraryPicker brokerageId={brokerageId} onClose={() => setFormFor(null)}
         onPick={(f) => { setItem(formFor, { form_url: f.file_url, form_name: f.file_name }); setFormFor(null); }} />}
     </div>
   );
+}
+
+/** Places the e-sign boxes on an onboarding form. Saved as an e-sign template; the item keeps its id. */
+function SignSetup({ item, template, brokerageId, user, onCreated, onClose }) {
+  const idRef = React.useRef(template?.id || null);
+  const creating = React.useRef(null);
+  const save = async (fields, roles) => {
+    if (roles.length > 2) throw new Error('Onboarding forms can have the agent and one broker signer.');
+    const data = { fields, roles, title: item.title || item.form_name || 'Form', document_url: item.form_url };
+    if (!idRef.current) {
+      if (!creating.current) creating.current = base44.entities.ESignTemplate.create({ ...data, brokerage_id: brokerageId, created_by_email: user?.email })
+        .then(async (t) => { idRef.current = t.id; await onCreated(t.id); return t; });
+      await creating.current;
+    }
+    await base44.entities.ESignTemplate.update(idRef.current, data);
+  };
+  return <FieldsSetupDialog title={item.title || item.form_name} documentUrl={template?.document_url || item.form_url} fileName={item.form_name} brokerageId={brokerageId}
+    initialFields={template?.fields || []} initialRoles={template?.roles} defaultRoles={['Agent', 'Broker']} saved={!!template} onSave={save} onClose={onClose} />;
 }

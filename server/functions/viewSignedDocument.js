@@ -1,6 +1,7 @@
 // Opens a completed document. New requests get the real signed PDF (built by
 // server/lib/esign.js). Documents signed before the migration have no PDF, so they
 // still use the original page, which draws signatures over the document.
+import { isAdminRole, can } from '../lib/team.js';
 import { createClientFromRequest, adminClient } from '../lib/base44.js';
 import { readFileBytes } from '../lib/files.js';
 
@@ -183,8 +184,17 @@ export default (async (req) => {
     const key = url.searchParams.get('key');
     let allowed = !!submission.access_key && key === submission.access_key;
     if (!allowed) {
-      const me = await base44.auth.me().catch(() => null);
-      allowed = !!me && (me.role === 'super_admin' || (me.brokerage_id && me.brokerage_id === submission.brokerage_id));
+      // Opened in a browser tab (no header): the app's sign-in cookie says who it is.
+      const cookieTok = (req.headers.get('cookie') || '').match(/(?:^|;\s*)gbh_at=([^;]+)/)?.[1];
+      const who = !req.headers.get('authorization') && cookieTok
+        ? createClientFromRequest(new Request(req.url, { headers: { authorization: `Bearer ${decodeURIComponent(cookieTok)}` } }))
+        : base44;
+      const me = await who.auth.me().catch(() => null);
+      // Deal paperwork: anyone at the brokerage (as before). Anything else, like onboarding forms
+      // (a W-9 has a tax number): only the people who signed it, who sent it, and admins.
+      const mine = (e) => !!e && String(e).toLowerCase() === String(me?.email || '').toLowerCase();
+      allowed = !!me && (me.role === 'super_admin' || (me.brokerage_id && me.brokerage_id === submission.brokerage_id && (
+        !!submission.transaction_id || isAdminRole(me.role) || can(me, 'users.manage') || mine(submission.created_by_email) || (submission.signers || []).some((s) => mine(s.email)))));
     }
     // Submissions from before the migration have no key; keep their old links working.
     if (!allowed && submission.access_key) {
