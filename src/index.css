@@ -132,3 +132,12 @@
 /* Phones: the page never slides sideways; wide things (tables, tab rows) scroll inside their own box. */
 html, body { overflow-x: clip; }
 @supports not (overflow: clip) { html, body { overflow-x: hidden; } }
+
+/* Press-and-hold message menu (phones) */
+@keyframes gbh-press-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes gbh-press-pop { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
+@keyframes gbh-press-emoji { from { opacity: 0; transform: translateY(8px) scale(0.6); } to { opacity: 1; transform: none; } }
+.gbh-press-in { animation: gbh-press-in 140ms ease-out; }
+.gbh-press-pop { animation: gbh-press-pop 180ms cubic-bezier(.2,.9,.3,1.2); }
+.gbh-press-emoji { animation: gbh-press-emoji 220ms cubic-bezier(.2,.9,.3,1.3) both; }
+@media (prefers-reduced-motion: reduce) { .gbh-press-in, .gbh-press-pop, .gbh-press-emoji { animation: none; } }

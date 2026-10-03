@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { format, isToday, isYesterday } from 'date-fns';
-import { SmilePlus, Pencil, Trash2, Pin, MessageSquare, Copy, Loader2, AlertCircle, ArrowDown, Check, CheckCheck, Phone, Video, FileText } from 'lucide-react';
+import { SmilePlus, Pencil, Trash2, Pin, MessageSquare, Copy, Loader2, AlertCircle, ArrowDown, Check, CheckCheck, Phone, Video, FileText, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { base44 } from '@/api/base44Client';
 import EmojiPicker from '@/components/chat/EmojiPicker';
@@ -137,6 +137,93 @@ function Toolbar({ msg, own, canModerate, kind, onReact, onEdit, onDelete, onPin
   );
 }
 
+
+// Phones: press and hold a message (like Messenger). The screen dims, the message stays where it was,
+// reactions sit above it and actions below. Tapping anywhere else closes it.
+const PRESS_REACTIONS = ['❤️', '😂', '😮', '😢', '😡', '👍'];
+const MORE_REACTIONS = ['😍', '🥰', '😊', '🤣', '😅', '😎', '🤔', '🙄', '😬', '😭', '🥳', '🤯', '😴', '🤝', '🙏', '👏', '🙌', '💪', '👀', '🔥', '🎉', '💯', '✅', '❌', '🏡', '🔑', '💰', '📈', '🚀', '⭐', '💙', '💚', '🤞', '👌', '✌️', '🤷'];
+function PressMenu({ press, me, canModerate, kind, onReact, onEdit, onDelete, onPin, onThread, onClose, children }) {
+  const { msg, rect, own } = press;
+  const [more, setMore] = useState(false);
+  const isText = !String(msg.content || '').startsWith('[');
+  const mineReacted = new Set((msg.reactions || []).filter((r) => (r.users || []).map(lc).includes(me)).map((r) => r.emoji));
+  const items = [
+    onThread && { label: 'Reply in thread', icon: MessageSquare, run: () => onThread(msg) },
+    isText && { label: 'Copy', icon: Copy, run: () => navigator.clipboard?.writeText(msg.content) },
+    kind === 'channel' && canModerate && { label: msg.pinned ? 'Unpin' : 'Pin', icon: Pin, run: () => onPin(msg.id, !msg.pinned) },
+    own && isText && { label: 'Edit', icon: Pencil, run: () => onEdit(msg) },
+    (own || (canModerate && kind !== 'dm')) && { label: 'Delete', icon: Trash2, run: () => onDelete(msg), danger: true },
+  ].filter(Boolean);
+
+  // Keep the message where it was; slide it only as far as needed so the bar and menu fit.
+  const vh = window.innerHeight; const vw = window.innerWidth;
+  const BAR = 60; const GAP = 10; const MENU = more ? 230 : items.length * 52;
+  const barW = 7 * 40 + 6 * 4 + 16;
+  const bodyH = Math.min(rect.height, vh * 0.4);
+  const total = BAR + GAP + bodyH + GAP + MENU;
+  const safeTop = 16 + (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sat')) || 0);
+  let top = rect.top - BAR - GAP;
+  top = Math.max(safeTop, Math.min(top, vh - total - 16));
+  const side = own ? { right: Math.max(12, vw - rect.right) } : { left: Math.max(12, rect.left) };
+  const pick = (e) => { onReact(msg.id, e); onClose(); };
+
+  useEffect(() => {
+    const esc = (e) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', esc);
+    const html = document.documentElement; const was = html.style.overflow; html.style.overflow = 'hidden';
+    return () => { window.removeEventListener('keydown', esc); html.style.overflow = was; };
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-[80] gbh-press-in" onClick={onClose} onContextMenu={(e) => e.preventDefault()}
+      style={{ background: 'rgba(0,0,0,0.25)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', touchAction: 'none' }}>
+      <div className="absolute flex flex-col gap-2.5" style={{ top, ...side, maxWidth: vw - 24, alignItems: own ? 'flex-end' : 'flex-start' }} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-1 rounded-full bg-card shadow-xl px-2 py-1.5 gbh-press-pop"
+          style={own ? { marginRight: Math.min(0, vw - (side.right || 0) - barW - 12) } : { marginLeft: Math.min(0, vw - 12 - ((side.left || 0) + barW)) }}>
+          {PRESS_REACTIONS.map((e, i) => (
+            <button key={e} onClick={() => pick(e)} style={{ animationDelay: `${i * 25}ms` }}
+              className={cn('w-10 h-10 rounded-full text-[28px] leading-none flex items-center justify-center gbh-press-emoji active:scale-125 transition-transform', mineReacted.has(e) && 'bg-muted')}>{e}</button>
+          ))}
+          <button onClick={() => setMore((x) => !x)} className="w-10 h-10 rounded-full bg-muted flex items-center justify-center text-foreground" aria-label="More reactions"><Plus className="w-6 h-6" /></button>
+        </div>
+        <div className="pointer-events-none overflow-hidden" style={{ width: rect.width, maxHeight: bodyH }}>{children}</div>
+        {more ? (
+          <div className="w-[300px] max-w-full rounded-2xl bg-card shadow-xl p-2 grid grid-cols-6 gap-1 gbh-press-pop">
+            {MORE_REACTIONS.map((e) => <button key={e} onClick={() => pick(e)} className="h-11 rounded-xl text-2xl active:bg-muted">{e}</button>)}
+          </div>
+        ) : items.length > 0 && (
+          <div className="w-64 max-w-full rounded-2xl bg-card/95 shadow-xl overflow-hidden divide-y gbh-press-pop">
+            {items.map((it) => (
+              <button key={it.label} onClick={() => { onClose(); it.run(); }} className={cn('w-full flex items-center justify-between px-4 h-[52px] text-[17px] active:bg-muted', it.danger ? 'text-red-600' : 'text-foreground')}>
+                {it.label}<it.icon className="w-5 h-5" />
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Press-and-hold on touch screens. Returns handlers for a message row, plus whether it's a phone. */
+function usePressHold(onHold) {
+  const touch = useMemo(() => typeof window !== 'undefined' && !window.matchMedia?.('(hover: hover) and (pointer: fine)').matches, []);
+  const t = useRef(null); const start = useRef(null); const fired = useRef(false);
+  const cancel = () => { clearTimeout(t.current); t.current = null; };
+  const bind = (payload, getEl) => (!touch ? {} : {
+    onTouchStart: (e) => {
+      fired.current = false; const p = e.touches[0]; start.current = { x: p.clientX, y: p.clientY };
+      const el = getEl(e);
+      cancel(); t.current = setTimeout(() => { fired.current = true; navigator.vibrate?.(8); onHold(payload, el.getBoundingClientRect()); }, 420);
+    },
+    onTouchMove: (e) => { const p = e.touches[0]; if (start.current && Math.hypot(p.clientX - start.current.x, p.clientY - start.current.y) > 8) cancel(); },
+    onTouchEnd: (e) => { cancel(); if (fired.current) e.preventDefault(); },
+    onTouchCancel: cancel,
+    onContextMenu: (e) => e.preventDefault(),
+  });
+  return { touch, bind };
+}
+
 function EditBox({ msg, onSave, onCancel }) {
   const [v, setV] = useState(msg.content);
   return (
@@ -162,7 +249,11 @@ export default function MessageList({ conv, kind, chat, variant = 'slack', canMo
   const prevLen = useRef(0);
   const restoring = useRef(null);
   const [newBelow, setNewBelow] = useState(0);
-  const [hover, setHover] = useState(null);
+  const [hover, setHoverRaw] = useState(null);
+  const [press, setPress] = useState(null); // phones: the held message
+  const { touch, bind } = usePressHold((p, rect) => { setPress({ ...p, rect }); });
+  // On phones the hover toolbar is replaced by press-and-hold (a tap used to drag the toolbar to whatever you touched).
+  const setHover = (id) => { if (!touch) setHoverRaw(id); };
   const [editing, setEditing] = useState(null);
   const [confirmDel, setConfirmDel] = useState(null);
   const [loadingOlder, setLoadingOlder] = useState(false);
@@ -263,7 +354,8 @@ export default function MessageList({ conv, kind, chat, variant = 'slack', canMo
                       <div className={cn('flex flex-col min-w-0 max-w-[80%] sm:max-w-[65%]', own && 'items-end')}>
                         {!own && !r.compact && kind === 'group' && <span className="text-[11px] text-muted-foreground ml-1 mb-0.5">{person.name}</span>}
                         {editing?.id === m.id ? <EditBox msg={m} onCancel={() => setEditing(null)} onSave={(v) => { edit(m.id, v); setEditing(null); }} /> : (
-                          <div title={time} className={cn('rounded-2xl px-3.5 py-2 text-sm leading-relaxed', own ? 'bg-primary text-primary-foreground rounded-br-md' : 'bg-muted text-foreground rounded-bl-md', String(m.content).startsWith('[file]') && 'bg-transparent p-0')}>
+                          <div title={time} {...(m._pending || m._failed ? {} : bind({ msg: m, own, variant }, (e) => e.currentTarget))}
+                            className={cn('rounded-2xl px-3.5 py-2 text-sm leading-relaxed', own ? 'bg-primary text-primary-foreground rounded-br-md' : 'bg-muted text-foreground rounded-bl-md', String(m.content).startsWith('[file]') && 'bg-transparent p-0', touch && 'select-none [-webkit-touch-callout:none]', press?.msg.id === m.id && 'invisible')}>
                             <MessageBody msg={m} personOf={chat.personOf} renderCall={renderCall} bubble own={own} />
                           </div>
                         )}
@@ -277,7 +369,8 @@ export default function MessageList({ conv, kind, chat, variant = 'slack', canMo
                 }
 
                 return (
-                  <div key={r.key} className={cn('group relative flex gap-3 px-4 sm:px-5 hover:bg-muted/40', r.compact ? 'py-0.5' : 'pt-2 pb-0.5 mt-1', m.pinned && 'bg-amber-50/70 dark:bg-amber-900/10')}
+                  <div key={r.key} className={cn('group relative flex gap-3 px-4 sm:px-5 hover:bg-muted/40', r.compact ? 'py-0.5' : 'pt-2 pb-0.5 mt-1', m.pinned && 'bg-amber-50/70 dark:bg-amber-900/10', touch && 'select-none [-webkit-touch-callout:none]')}
+                    {...(m._pending || m._failed ? {} : bind({ msg: m, own, variant, person, time }, (e) => e.currentTarget))}
                     onMouseEnter={() => setHover(m.id)} onMouseLeave={() => setHover(null)} onClick={(e) => { e.stopPropagation(); setHover(m.id); }}>
                     <div className="w-9 flex-shrink-0">
                       {r.compact ? <span className="hidden group-hover:block text-[10px] text-muted-foreground pt-1 text-right">{format(new Date(m.created_date), 'h:mm')}</span>
@@ -318,6 +411,20 @@ export default function MessageList({ conv, kind, chat, variant = 'slack', canMo
         <button onClick={() => toBottom(true)} className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-primary text-primary-foreground text-xs font-medium px-3 py-1.5 shadow-lg flex items-center gap-1">
           <ArrowDown className="w-3.5 h-3.5" /> {newBelow} new message{newBelow > 1 ? 's' : ''}
         </button>
+      )}
+      {press && (
+        <PressMenu press={press} me={me} canModerate={canModerate} kind={kind} onReact={react} onEdit={setEditing} onDelete={setConfirmDel} onPin={setPinned} onThread={onThread} onClose={() => setPress(null)}>
+          {press.variant === 'bubble' ? (
+            <div className={cn('rounded-2xl px-3.5 py-2 text-sm leading-relaxed shadow-lg w-full', press.own ? 'bg-primary text-primary-foreground rounded-br-md' : 'bg-muted text-foreground rounded-bl-md', String(press.msg.content).startsWith('[file]') && 'bg-transparent p-0 shadow-none')}>
+              <MessageBody msg={press.msg} personOf={chat.personOf} renderCall={renderCall} bubble own={press.own} />
+            </div>
+          ) : (
+            <div className="rounded-2xl bg-card shadow-lg px-4 py-3 text-sm leading-relaxed">
+              <p className="text-sm font-semibold">{press.person?.name} <span className="text-[11px] font-normal text-muted-foreground">{press.time}</span></p>
+              <MessageBody msg={press.msg} personOf={chat.personOf} renderCall={renderCall} />
+            </div>
+          )}
+        </PressMenu>
       )}
       {confirmDel && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setConfirmDel(null)}>
