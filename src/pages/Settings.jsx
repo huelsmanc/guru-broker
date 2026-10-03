@@ -13,6 +13,7 @@ import NotificationSettings from '@/components/NotificationSettings';
 import TechLinksTab from '@/components/settings/TechLinksTab';
 import BrokerageUsers from '@/pages/BrokerageUsers';
 import CertificateSigner from '@/components/compliance/CertificateSigner';
+import FubIntegration from '@/components/settings/FubIntegration';
 import { isAdminRole, normalizeRole, can } from '../../shared/permissions.generated.js';
 
 export default function Settings() {
@@ -123,6 +124,7 @@ export default function Settings() {
             {isAdmin && <TabsTrigger value="users">Users</TabsTrigger>}
             {isAdmin && <TabsTrigger value="colors">Brand Colors</TabsTrigger>}
             {isAdmin && <TabsTrigger value="tech_links">Tech Links</TabsTrigger>}
+            {isAdmin && <TabsTrigger value="integrations">Integrations</TabsTrigger>}
             <TabsTrigger value="notifications">Notifications</TabsTrigger>
           </TabsList>
 
@@ -337,6 +339,7 @@ export default function Settings() {
         )}
 
         {isAdmin && <TabsContent value="users"><BrokerageUsers embedded /></TabsContent>}
+        {isAdmin && <TabsContent value="integrations" className="max-w-3xl"><FubIntegration brokerageId={brokerageId} /></TabsContent>}
 
         <TabsContent value="notifications" className="max-w-2xl">
           <div className="bg-card rounded-2xl border border-border p-6">

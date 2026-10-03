@@ -16,6 +16,7 @@ import InspectionRequest from './InspectionRequest';
 import CloseDeal from './CloseDeal';
 import { changeField, setDeadlineDone, postUpdate } from '@/lib/dealActions';
 import AddressAutocomplete from '@/components/AddressAutocomplete';
+import FubPanel from './FubPanel';
 
 const STATUSES = [['active', 'Active'], ['pending', 'Pending'], ['clear_to_close', 'Clear to close'], ['closed', 'Closed'], ['cancelled', 'Cancelled']];
 const HEALTH = { good: ['On track', 'bg-emerald-100 text-emerald-800'], watch: ['Needs a look', 'bg-amber-100 text-amber-800'], risk: ['At risk', 'bg-red-100 text-red-800'] };
@@ -119,6 +120,7 @@ export default function WorkspaceOverview({ tx, user, refresh, canEdit, admin, o
 
         <div className="space-y-5 min-w-0">
           <People tx={tx} contacts={contacts} onManage={() => goTab('contacts')} />
+          <FubPanel tx={tx} canEdit={canEdit} />
           <div className="rounded-2xl border bg-card p-4">
             <p className="font-semibold mb-2">Money</p>
             <Row label="Price" value={money(tx.sale_price)} />
