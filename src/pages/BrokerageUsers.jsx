@@ -9,7 +9,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Users, Trash2, ToggleLeft, ToggleRight, Plus, ShieldCheck, Crown, Briefcase, Pencil } from 'lucide-react';
 import { motion } from 'framer-motion';
-import OnboardingChecklist from '@/components/onboarding/OnboardingChecklist';
 import UserAdminDialog from '@/components/users/UserAdminDialog';
 import RoleOptions, { roleLabel } from '@/components/users/RoleOptions';
 import { isAdminRole, normalizeRole, can } from '../../shared/permissions.generated.js';
@@ -22,8 +21,7 @@ export default function BrokerageUsers({ embedded = false }) {
   const [showInvite, setShowInvite] = useState(false);
   const [inviteForm, setInviteForm] = useState({ email: '', full_name: '', role: 'agent' });
   const [inviting, setInviting] = useState(false);
-  const [selectedOnboarding, setSelectedOnboarding] = useState(null);
-  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [editTab, setEditTab] = useState('profile');
   const [editingUser, setEditingUser] = useState(null);
   const [showEditUser, setShowEditUser] = useState(false);
 
@@ -48,13 +46,6 @@ export default function BrokerageUsers({ embedded = false }) {
     staleTime: 0,
   });
 
-  // Get onboarding records
-  const { data: onboardings = [] } = useQuery({
-    queryKey: ['onboarding', brokerageId],
-    queryFn: () => base44.entities.Onboarding.filter({ brokerage_id: brokerageId }, '-created_date', 200),
-    enabled: !!brokerageId && isAdmin,
-  });
-
   const deleteUser = useMutation({
     mutationFn: (id) => base44.entities.User.delete(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['brokerage-users', brokerageId] }),
@@ -73,25 +64,6 @@ export default function BrokerageUsers({ embedded = false }) {
       return base44.entities.User.update(u.id, { duties: [...duties] });
     },
     onSuccess: () => queryClient.invalidateQueries(),
-  });
-
-  const openOnboarding = useMutation({
-    mutationFn: async (agentUser) => {
-      let onboarding = onboardings.find(o => o.agent_email === agentUser.email);
-      if (!onboarding) {
-        onboarding = await base44.entities.Onboarding.create({
-          brokerage_id: brokerageId,
-          agent_email: agentUser.email,
-          agent_name: agentUser.display_name || agentUser.full_name || agentUser.email.split('@')[0],
-        });
-        await queryClient.invalidateQueries({ queryKey: ['onboarding', brokerageId] });
-      }
-      return onboarding;
-    },
-    onSuccess: (onboarding) => {
-      setSelectedOnboarding(onboarding);
-      setShowOnboarding(true);
-    },
   });
 
   // Subscribe to user updates to keep display names fresh
@@ -124,20 +96,10 @@ export default function BrokerageUsers({ embedded = false }) {
       }, 2000);
     }
     
-    // Auto-create onboarding for agents only
-    if (normalizeRole(inviteForm.role) === 'agent') {
-      await base44.entities.Onboarding.create({
-        brokerage_id: brokerageId,
-        agent_email: inviteForm.email,
-        agent_name: inviteForm.full_name || inviteForm.email.split('@')[0],
-      });
-    }
-    
     setInviting(false);
     setShowInvite(false);
     setInviteForm({ email: '', full_name: '', role: 'agent' });
     queryClient.invalidateQueries({ queryKey: ['brokerage-users', brokerageId] });
-    queryClient.invalidateQueries({ queryKey: ['onboarding', brokerageId] });
   };
 
   if (!isAdmin) {
@@ -258,6 +220,7 @@ export default function BrokerageUsers({ embedded = false }) {
                     size="sm"
                     className="gap-1.5 rounded-xl text-xs text-primary hover:text-primary hover:bg-primary/10"
                     onClick={() => {
+                      setEditTab('profile');
                       setEditingUser(u);
                       setShowEditUser(true);
                     }}
@@ -269,8 +232,7 @@ export default function BrokerageUsers({ embedded = false }) {
                       variant="ghost"
                       size="sm"
                       className="gap-1.5 rounded-xl text-xs text-primary hover:text-primary hover:bg-primary/10"
-                      onClick={() => openOnboarding.mutate(u)}
-                      disabled={openOnboarding.isPending}
+                      onClick={() => { setEditTab('onboarding'); setEditingUser(u); setShowEditUser(true); }}
                     >
                       <Briefcase className="w-4 h-4" /> Onboarding
                     </Button>
@@ -358,19 +320,12 @@ export default function BrokerageUsers({ embedded = false }) {
         </DialogContent>
       </Dialog>
 
-      {/* Onboarding Checklist Modal */}
-      <OnboardingChecklist
-        open={showOnboarding}
-        onClose={() => setShowOnboarding(false)}
-        onboarding={selectedOnboarding}
-        brokerageId={brokerageId}
-      />
-
       {/* Edit User Profile Modal */}
       {showEditUser && editingUser && (
         <UserAdminDialog
           person={editingUser}
           me={user}
+          initialTab={editTab}
           onClose={() => { setShowEditUser(false); setEditingUser(null); queryClient.invalidateQueries({ queryKey: ['brokerage-users', brokerageId] }); }}
         />
       )}

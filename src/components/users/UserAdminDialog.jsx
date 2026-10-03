@@ -14,9 +14,9 @@ const TABS = [['profile', 'Profile'], ['licenses', 'Licenses'], ['commission', '
 const US = 'AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY'.split(' ');
 
 // Brokermint-style user editor for admins.
-export default function UserAdminDialog({ person, me, onClose }) {
+export default function UserAdminDialog({ person, me, onClose, initialTab = 'profile' }) {
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState('profile');
+  const [tab, setTab] = useState(initialTab);
   const [f, setF] = useState(() => ({ ...person, licenses: person.licenses?.length ? person.licenses : [{ state: person.license_state || '', number: person.license_number || '', expiration: person.license_expiration || '' }], permissions: person.permissions || {} }));
   const [saving, setSaving] = useState(false);
   const [people, setPeople] = useState([]);
