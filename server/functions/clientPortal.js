@@ -12,6 +12,7 @@
 //    team {transaction_id}   -> clients with their portal status and links, requests, client chat
 //    invite {transaction_id, contact_id, email?} | new_link {...} | disable {...}
 //    request {transaction_id, title, note} | cancel_request {transaction_id, request_id}
+import { doneFields } from '../../shared/dealTimeline.js';
 import { createClientFromRequest, adminClient } from '../lib/base44.js';
 import { isAdminRole, can, notifyPeople } from '../lib/team.js';
 import { reviewsAllDeals } from '../../shared/access.js';
@@ -117,13 +118,13 @@ async function clientAction(E, action, body) {
     const [team, brand, progress, group] = await Promise.all([teamOf(E, tx), brandFor(E, tx.brokerage_id), progressOf(E, tx), ensureClientChat(E, tx)]);
     const photos = new Map(team.map((p) => [p.email, p.photo]));
     const opts = { dates: true, checklist: true, agent: true, ...(tx.share_options || {}) };
-    const done = tx.completed_dates || {};
+    const done = doneFields(tx);
     return {
       me: { name: c.name, email: lc(c.email), role: c.role },
       brand,
       deal: {
         property: tx.property_address, status: tx.status, side: tx.deal_type || null,
-        dates: opts.dates ? DATES.filter(([k]) => tx[k]).map(([k, label]) => ({ label, date: tx[k], done: !!done[k] })) : [],
+        dates: opts.dates ? DATES.filter(([k]) => tx[k]).map(([k, label]) => ({ label, date: tx[k], done: done.has(k) })) : [],
         progress: opts.checklist ? progress : null,
       },
       team: opts.agent ? team : team.map(({ name, role, photo }) => ({ name, role, photo })),

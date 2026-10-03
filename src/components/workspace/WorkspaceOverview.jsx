@@ -17,6 +17,7 @@ import CloseDeal from './CloseDeal';
 import { changeField, setDeadlineDone, postUpdate } from '@/lib/dealActions';
 import AddressAutocomplete from '@/components/AddressAutocomplete';
 import FubPanel from './FubPanel';
+import Autopilot from './Autopilot';
 
 const STATUSES = [['active', 'Active'], ['pending', 'Pending'], ['clear_to_close', 'Clear to close'], ['closed', 'Closed'], ['cancelled', 'Cancelled']];
 const HEALTH = { good: ['On track', 'bg-emerald-100 text-emerald-800'], watch: ['Needs a look', 'bg-amber-100 text-amber-800'], risk: ['At risk', 'bg-red-100 text-red-800'] };
@@ -120,6 +121,7 @@ export default function WorkspaceOverview({ tx, user, refresh, canEdit, admin, o
 
         <div className="space-y-5 min-w-0">
           <People tx={tx} contacts={contacts} onManage={() => goTab('contacts')} />
+          <Autopilot tx={tx} contacts={contacts} canEdit={canEdit} user={user} onManagePeople={() => goTab('contacts')} refresh={refresh} />
           <FubPanel tx={tx} canEdit={canEdit} />
           <div className="rounded-2xl border bg-card p-4">
             <p className="font-semibold mb-2">Money</p>
@@ -266,7 +268,7 @@ function Timeline({ tx, user, deadlines, canEdit, refresh }) {
       <div className="flex flex-wrap items-center gap-2 mb-3">
         <CalendarClock className="w-4 h-4 text-primary" />
         <p className="font-semibold">Timeline</p>
-        <span className="ml-auto text-xs text-muted-foreground">Reminders go out 48 hours before each date</span>
+        <span className="ml-auto text-xs text-muted-foreground">Autopilot reminds everyone before each date</span>
       </div>
       {!deadlines.length && <p className="text-sm text-muted-foreground">No dates yet. Drop the contract in Documents and the AI will find them, or add them below.</p>}
       <ol className="relative">

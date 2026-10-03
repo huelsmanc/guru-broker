@@ -1,6 +1,7 @@
 // New: everything an agent (or broker) needs today, in one call, using the caller's own
 // access rules: cap progress, pending commissions, upcoming deadlines, documents to upload
 // or fix, checklist tasks due, offers in play, and (for admins) what's waiting on them.
+import { doneFields } from '../../shared/dealTimeline.js';
 import { createClientFromRequest } from '../lib/base44.js';
 import { isAdminRole, can } from '../lib/team.js';
 import { agentContext, calculateForTransaction } from '../lib/backoffice.js';
@@ -27,7 +28,7 @@ export default async (req) => {
     for (const t of txs) {
       for (const [k, label] of DATES) {
         const d = t[k];
-        if (!d || (t.completed_dates || {})[k]) continue;
+        if (!d || doneFields(t).has(k)) continue;
         if (d <= in14) deadlines.push({ transaction_id: t.id, property: t.property_address, label, date: d, overdue: d < today });
       }
     }

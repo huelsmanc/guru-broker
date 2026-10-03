@@ -78,6 +78,7 @@ export default function Settings() {
           cda_direct_agent_pay: s.cda_direct_agent_pay === true,
           require_2fa_all: s.require_2fa_all === true,
           stories_auto: s.stories_auto !== false,
+          autopilot_parties: s.autopilot_parties !== false,
           tech_links: s.tech_links || [],
           primary_color: s.primary_color || '#667eea',
           sidebar_color: s.sidebar_color || '#1c231f',
@@ -215,6 +216,11 @@ export default function Settings() {
           <div className="sm:col-span-2 border-t pt-5">
             <h3 className="font-semibold mb-2">Stories</h3>
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.stories_auto !== false} onChange={(e) => setForm({ ...form, stories_auto: e.target.checked })} /> Celebration stories: closings, new listings, certificates, work anniversaries and new agents are posted automatically</label>
+          </div>
+          <div className="sm:col-span-2 border-t pt-5">
+            <h3 className="font-semibold mb-2">Deal autopilot</h3>
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.autopilot_parties !== false} onChange={(e) => setForm({ ...form, autopilot_parties: e.target.checked })} /> Email clients, lenders, title and the other agent a reminder before their deadlines (agents can turn it off per deal)</label>
+            <p className="text-xs text-muted-foreground mt-1 ml-6">Agents and TCs are always reminded, and get a 7am list of what's due.</p>
           </div>
           <div className="sm:col-span-2 border-t pt-5">
             <h3 className="font-semibold mb-2">Commission disbursements</h3>

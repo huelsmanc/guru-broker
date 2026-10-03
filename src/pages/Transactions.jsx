@@ -25,6 +25,7 @@ import { isAdminRole, normalizeRole, can } from '../../shared/permissions.genera
 import AddressAutocomplete from '@/components/AddressAutocomplete';
 import { supabase } from '@/api/base44Client';
 import { dealAppend } from '../../shared/dealAppend.js';
+import { DEADLINES } from '../../shared/dealTimeline.js';
 
 
 const MILESTONES = [
@@ -108,13 +109,8 @@ export default function Transactions() {
       buyers: r.buyers?.length ? r.buyers : f.buyers,
       sellers: r.sellers?.length ? r.sellers : f.sellers,
       sale_price: r.purchase_price ?? f.sale_price,
-      closing_date: d.closing_date || f.closing_date,
-      inspection_date: d.inspection_date || f.inspection_date,
-      appraisal_date: d.appraisal_date || f.appraisal_date,
-      financing_contingency_date: d.financing_contingency_date || f.financing_contingency_date,
-      inspection_contingency_date: d.inspection_contingency_date || f.inspection_contingency_date,
-      loan_approval_date: d.loan_approval_date || f.loan_approval_date,
-      title_deadline_date: d.title_deadline_date || f.title_deadline_date,
+      // Every timeline date the contract gives (accepted, inspection, earnest money, walk-through, closing...).
+      ...Object.fromEntries(DEADLINES.map((x) => [x.field, d[x.field] || f[x.field]]).filter(([, v]) => v !== undefined)),
       documents: files.map((x) => ({ name: x.name, url: x.url, uploaded_at: new Date().toISOString(), uploaded_by: user?.full_name })),
       scan_issues: r.issues || [],
     }));

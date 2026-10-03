@@ -3,12 +3,14 @@
 
 export const DEADLINES = [
   { field: 'acceptance_date', label: 'Contract accepted', short: 'Accepted', stage: 'under_contract' },
+  { field: 'earnest_money_due_date', label: 'Earnest money due', short: 'Earnest money', stage: 'under_contract' },
   { field: 'inspection_date', label: 'Home inspection', short: 'Inspection', stage: 'inspection' },
   { field: 'inspection_contingency_date', label: 'Inspection contingency ends', short: 'Inspection contingency', stage: 'inspection' },
   { field: 'appraisal_date', label: 'Appraisal', short: 'Appraisal', stage: 'financing' },
   { field: 'financing_contingency_date', label: 'Financing contingency ends', short: 'Financing contingency', stage: 'financing' },
   { field: 'loan_approval_date', label: 'Loan commitment', short: 'Loan commitment', stage: 'financing' },
   { field: 'title_deadline_date', label: 'Title commitment', short: 'Title', stage: 'title' },
+  { field: 'final_walkthrough_date', label: 'Final walk-through', short: 'Walk-through', stage: 'closing' },
   { field: 'closing_date', label: 'Closing', short: 'Closing', stage: 'closing' },
 ];
 
@@ -41,8 +43,16 @@ const isDate = (v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v);
  * Every deadline on the deal, in date order, with countdowns.
  * [{ field, label, short, stage, date, done, daysLeft, overdue, soon }]
  */
+/** Which deadlines are marked done. Stored as a list of fields; very old deals used an object. */
+export function doneFields(tx) {
+  const c = tx?.completed_dates;
+  if (Array.isArray(c)) return new Set(c);
+  if (c && typeof c === 'object') return new Set(Object.keys(c).filter((k) => c[k]));
+  return new Set();
+}
+
 export function dealDeadlines(tx, today = todayStr()) {
-  const done = new Set(tx?.completed_dates || []);
+  const done = doneFields(tx);
   const closed = tx?.status === 'closed';
   return DEADLINES
     .filter((d) => isDate(tx?.[d.field]))

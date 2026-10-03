@@ -1,5 +1,6 @@
 // New: admin reports. Every report returns { columns, rows, summary } so the Reports page
 // can show a table, totals and a CSV download the same way for all of them.
+import { doneFields } from '../../shared/dealTimeline.js';
 import { createClientFromRequest } from '../lib/base44.js';
 import { isAdminRole, can } from '../lib/team.js';
 import { agentContext } from '../lib/backoffice.js';
@@ -104,7 +105,7 @@ async function run(entities, brokerageId, { report, from, to, agent, status }) {
     const keys = ['inspection_contingency_date', 'appraisal_date', 'financing_contingency_date', 'loan_approval_date', 'title_deadline_date', 'closing_date'];
     const txs = (await E.Transaction.filter({ brokerage_id: brokerageId, status: { $in: ['active', 'clear_to_close'] } }, 'closing_date', 5000)).filter((t) => agentOk(t.agent_email));
     const rows = txs.map((t) => {
-      const next = keys.map((k) => [k, t[k]]).filter(([k, v]) => v && v >= today && !(t.completed_dates || {})[k]).sort((a, b) => a[1].localeCompare(b[1]))[0];
+      const next = keys.map((k) => [k, t[k]]).filter(([k, v]) => v && v >= today && !doneFields(t).has(k)).sort((a, b) => a[1].localeCompare(b[1]))[0];
       return { property: t.property_address, agent: t.agent_name || t.agent_email, tc: t.tc_name || '', status: t.status, price: n(t.sale_price), next_deadline: next ? next[0].replace(/_/g, ' ').replace(' date', '') : '', due: next ? next[1] : '', closing: t.closing_date || '' };
     }).sort((a, b) => (a.due || '9').localeCompare(b.due || '9'));
     return {

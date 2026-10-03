@@ -1,5 +1,6 @@
 // New: client-facing status page for a deal (/status?token=...). Read-only and limited
 // to what the agent chose to share: progress, key dates, checklist progress, agent contact.
+import { doneFields } from '../../shared/dealTimeline.js';
 import { createClientFromRequest } from '../lib/base44.js';
 
 const DATES = [['inspection_contingency_date', 'Inspection deadline'], ['appraisal_date', 'Appraisal'], ['financing_contingency_date', 'Financing deadline'],
@@ -21,11 +22,11 @@ export default async (req) => {
       progress = { done: items.filter((i) => ['approved', 'exempt', 'done'].includes(i.status)).length, total: items.length,
         steps: items.filter((i) => !i.requires_document).map((i) => ({ title: i.title, done: ['done', 'approved', 'exempt'].includes(i.status) })) };
     }
-    const done = tx.completed_dates || {};
+    const done = doneFields(tx);
     return Response.json({
       property: tx.property_address,
       status: tx.status,
-      dates: opts.dates ? DATES.filter(([k]) => tx[k]).map(([k, label]) => ({ label, date: tx[k], done: !!done[k] })) : [],
+      dates: opts.dates ? DATES.filter(([k]) => tx[k]).map(([k, label]) => ({ label, date: tx[k], done: done.has(k) })) : [],
       progress,
       agent: opts.agent && agent ? { name: agent.display_name || agent.full_name, email: agent.email, phone: agent.phone || null, photo: agent.headshot || null } : null,
     });

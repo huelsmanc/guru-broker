@@ -6,12 +6,13 @@ import { base44 } from '@/api/base44Client';
 import { enablePush, pushSupported, isIos, isInstalled } from '@/lib/push';
 import { isNative, nativePushPermission } from '@/lib/native';
 
-export const DEFAULT_PREFS = { push_messages: true, push_mentions: true, push_calls: true, push_updates: true, daily_digest: true };
+export const DEFAULT_PREFS = { push_messages: true, push_mentions: true, push_calls: true, push_updates: true, daily_digest: true, deal_digest: true };
 const ROWS = [
   ['push_messages', 'Direct and group messages', 'A notification for each new message sent to you.'],
   ['push_mentions', '@mentions and thread replies', 'When someone mentions you or replies in your thread.'],
   ['push_calls', 'Incoming calls', 'Rings your phone or computer.'],
   ['push_updates', 'Deal and back-office updates', 'Approvals, payouts, offers, checklists and deadlines.'],
+  ['deal_digest', 'Morning deal list', 'At 7am: deadlines and checklist items due today, overdue or coming up on your deals.'],
   ['daily_digest', 'Morning email digest', 'A short email at 8am if you have unread messages or mentions.'],
 ];
 
