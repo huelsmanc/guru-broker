@@ -59,6 +59,7 @@ export default function Sidebar({ user, brokerageId, onChannelClick, mobile }) {
     { to: '/Dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/BrokerMonitor', icon: Monitor, label: 'Monitor Chats' },
     { to: '/AgentLeaderboard', icon: Trophy, label: 'Agent Performance' },
+    { to: '/AgentPulse', icon: ActivityIcon, label: 'Agent Pulse' },
     { to: '/Culture', icon: Heart, label: 'Culture' },
     { to: '/FileRepository', icon: FolderOpen, label: 'File Repository' },
     { to: '/ComplianceTraining', icon: BookOpen, label: 'Compliance Training' },

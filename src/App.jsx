@@ -47,6 +47,7 @@ const PublicReview = page(() => import('@/pages/PublicReview'));
 const Transactions = page(() => import('@/pages/Transactions'));
 const Contacts = page(() => import('@/pages/Contacts'));
 const MyLeads = page(() => import('@/pages/MyLeads'));
+const AgentPulse = page(() => import('@/pages/AgentPulse'));
 const ClientPortal = page(() => import('@/pages/ClientPortal'));
 const Login = page(() => import('@/pages/Login'));
 const Offers = page(() => import('@/pages/Offers'));
@@ -179,6 +180,7 @@ const AuthenticatedApp = () => {
             <Route path="/Transactions" element={<Transactions />} />
             <Route path="/Contacts" element={<Contacts />} />
             <Route path="/MyLeads" element={<MyLeads />} />
+            <Route path="/AgentPulse" element={<AgentPulse />} />
             <Route path="/ClientPortal" element={<ClientPortal />} />
             <Route path="/MyCommissions" element={<MyCommissions />} />
             <Route path="/Marketing" element={<MarketingHub />} />

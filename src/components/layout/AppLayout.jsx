@@ -31,6 +31,13 @@ export default function AppLayout() {
   const inConversation = (pathname === '/DirectMessages' && /[?&](dm|group)=/.test(search)) || pathname === '/SocialChat';
   useEffect(() => { setMobileOpen(false); }, [pathname, search]);
   useEffect(() => { preloadPages(); }, []);
+  // Once a day: "using the app today", for the admins' Agent pulse.
+  useEffect(() => {
+    if (!user?.id) return;
+    const k = `gbh-ping:${user.id}`; const today = new Date().toISOString().slice(0, 10);
+    try { if (localStorage.getItem(k) === today) return; localStorage.setItem(k, today); } catch { /* storage blocked: ping anyway */ }
+    base44.functions.invoke('agentPulse', { action: 'ping' }).catch(() => {});
+  }, [user?.id]);
   const brand = useBranding(user?.brokerage_id);
   // Messaging screens are pinned to the visible screen: the page can't be dragged up, and when the
   // phone keyboard opens the conversation shrinks to the space above it instead of the page scrolling.
